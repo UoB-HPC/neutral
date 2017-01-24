@@ -29,10 +29,8 @@ void solve_transport_2d(
   int nparticles = *nlocal_particles;
 
   // Communication isn't required for edges
-  int comm_required[NNEIGHBOURS];
   int nparticles_sent[NNEIGHBOURS];
   for(int ii = 0; ii < NNEIGHBOURS; ++ii) {
-    comm_required[ii] = (neighbours[ii] != EDGE);
     nparticles_sent[ii] = 0;
   }
 
@@ -50,7 +48,6 @@ void solve_transport_2d(
 
 #ifdef MPI
   while(1) {
-    // Communicate the amount of data sent
     int nneighbours = 0;
     int nparticles_recv[NNEIGHBOURS];
     MPI_Request recv_req[NNEIGHBOURS];
@@ -59,8 +56,8 @@ void solve_transport_2d(
       // Initialise received particles
       nparticles_recv[ii] = 0;
 
-      // No communication if comm not required or at edge
-      if(!comm_required[ii]) {
+      // No communication required at edge
+      if(neighbours[ii] == EDGE) {
         continue;
       }
 
@@ -78,10 +75,9 @@ void solve_transport_2d(
     nneighbours = 0;
 
     // Manage all of the received particles
-    int comm_in_iteration = 0;
     const int unprocessed_start = nparticles;
     for(int ii = 0; ii < NNEIGHBOURS; ++ii) {
-      if(!comm_required[ii]) {
+      if(neighbours[ii] == EDGE) {
         continue;
       }
 
@@ -91,10 +87,6 @@ void solve_transport_2d(
             &particles[unprocessed_start+jj], 1, particle_type, neighbours[ii],
             TAG_PARTICLE, MPI_COMM_WORLD, MPI_STATUSES_IGNORE);
       }
-
-      // If we sent or received some data we will continue
-      comm_required[ii] = (nparticles_recv[ii] || nparticles_sent[ii]);
-      comm_in_iteration |= comm_required[ii];
 
       nparticles += nparticles_recv[ii];
       nparticles_recv[ii] = 0;
@@ -110,8 +102,13 @@ void solve_transport_2d(
           out_particles, cs_scatter_table, cs_absorb_table, energy_tally);
     }
 
-    // We didn't send any data, so this rank is free to break away.
-    if(!comm_in_iteration) {
+    int particles_to_process;
+    MPI_Allreduce(
+        &nunprocessed_particles, &particles_to_process, 
+        1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+
+    // All ranks have reached census
+    if(!particles_to_process) {
       break;
     }
   }
@@ -534,7 +531,8 @@ double get_cs_for_energy(
   // Center weighted is poor accuracy but might even out over enough particles
   const double microscopic_cs = (cs->value[ind-1] + cs->value[ind])/2.0;
 
-  // TODO: Need to work out how the density is stored globally, assuming SI
+  // This makes some assumption about the units of the data stored globally.
+  // Might be worth making this more explicit somewhere.
   const double macroscopic_cs = 
     (density*AVOGADROS/MOLAR_MASS)*(microscopic_cs*BARNS);
   return macroscopic_cs;

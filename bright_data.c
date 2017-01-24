@@ -62,9 +62,9 @@ void initialise_bright_data(
 
   // The area of the active region shaded by this rank
   const int local_particle_nx =
-    (local_nx-local_particle_left_off-local_particle_right_off);
+    max(0, (local_nx-local_particle_left_off-local_particle_right_off));
   const int local_particle_ny = 
-    (local_ny-local_particle_bottom_off-local_particle_top_off);
+    max(0, (local_ny-local_particle_bottom_off-local_particle_top_off));
 
   bright_data->nlocal_particles = NPARTICLES*
     ((double)local_particle_nx*local_particle_ny)/
