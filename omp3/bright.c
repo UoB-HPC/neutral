@@ -75,6 +75,7 @@ void solve_transport_2d(
     nneighbours = 0;
 
     // Manage all of the received particles
+    int nunprocessed_particles = 0;
     const int unprocessed_start = nparticles;
     for(int ii = 0; ii < NNEIGHBOURS; ++ii) {
       if(neighbours[ii] == EDGE) {
@@ -84,16 +85,17 @@ void solve_transport_2d(
       // Receive the particles from this neighbour
       for(int jj = 0; jj < nparticles_recv[ii]; ++jj) {
         MPI_Recv(
-            &particles[unprocessed_start+jj], 1, particle_type, neighbours[ii],
-            TAG_PARTICLE, MPI_COMM_WORLD, MPI_STATUSES_IGNORE);
+            &particles[unprocessed_start+nunprocessed_particles], 
+            1, particle_type, neighbours[ii], TAG_PARTICLE, 
+            MPI_COMM_WORLD, MPI_STATUSES_IGNORE);
+        nunprocessed_particles++;
       }
 
-      nparticles += nparticles_recv[ii];
       nparticles_recv[ii] = 0;
       nparticles_sent[ii] = 0;
     }
 
-    const int nunprocessed_particles = nparticles-unprocessed_start;
+    nparticles += nunprocessed_particles;
     if(nunprocessed_particles) {
       handle_particles(
           global_nx, global_ny, nx, ny, x_off, y_off, dt, neighbours,
@@ -347,7 +349,6 @@ int handle_facet_encounter(
         // Definitely moving to south cell
         celly -= 1;
         particle->cell = celly*global_nx+cellx;
-
 
         // Check if we need to pass to another process
         if(celly < y_off) {
