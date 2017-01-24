@@ -102,6 +102,7 @@ void solve_transport_2d(
           out_particles, cs_scatter_table, cs_absorb_table, energy_tally);
     }
 
+    // Check if any of the ranks had unprocessed particles
     int particles_to_process;
     MPI_Allreduce(
         &nunprocessed_particles, &particles_to_process, 
