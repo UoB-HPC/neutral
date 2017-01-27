@@ -179,7 +179,8 @@ void handle_particle(
   // (3) particle hits a boundary region and needs transferring to another process
 
   int x_facet = 0;
-  int num_iters = 0;
+  int facet_init = 0;
+  int collision_init = 0;
   double cs_absorb = 0.0;
   double cs_scatter = 0.0;
   double dt_till_facet = 0.0;
@@ -190,10 +191,10 @@ void handle_particle(
 
     // Check if our next event is a facet encounter
     if(dt_till_facet < particle->dt_till_collision &&
-        dt_till_facet < particle->dt_till_census) {
+       dt_till_facet < particle->dt_till_census) {
 
-      // Skip if first time through the loop
-      if(num_iters++ > 0) {
+      // Skip if distance to facet is not initialised
+      if(facet_init++) {
         particle->dt_till_collision -= dt_till_facet;
         particle->dt_till_census -= dt_till_facet;
 
@@ -217,8 +218,9 @@ void handle_particle(
     }
     // Check if our next event is a collision
     else if(particle->dt_till_collision < particle->dt_till_census) {
+
       // Skip if first time through the loop
-      if(num_iters++ > 0) {
+      if(collision_init++) {
         particle->dt_till_census -= particle->dt_till_collision;
         dt_till_facet -= particle->dt_till_collision;
 
@@ -232,12 +234,11 @@ void handle_particle(
       }
 
       // Update the cross sections, referencing into the padded mesh
-      const int cellx = (particle->cell%global_nx)-x_off;
-      const int celly = (particle->cell/global_nx)-y_off;
-      cs_scatter = get_cs_for_energy(
-          cs_scatter_table, particle->e, density[celly*(nx+2*PAD)+(cellx+PAD)]);
-      cs_absorb = get_cs_for_energy(
-          cs_absorb_table, particle->e, density[celly*(nx+2*PAD)+(cellx+PAD)]);
+      const int cellx = (particle->cell%global_nx)-x_off+PAD;
+      const int celly = (particle->cell/global_nx)-y_off+PAD;
+      const double rho = density[celly*(nx+2*PAD)+cellx];
+      cs_scatter = get_cs_for_energy(cs_scatter_table, particle->e, rho);
+      cs_absorb = get_cs_for_energy(cs_absorb_table, particle->e, rho);
 
       // Determine the number of mean free paths until collision
       const double path_length_to_collision = -log(genrand())/cs_scatter;
@@ -255,7 +256,6 @@ void handle_particle(
     else {
       handle_stream_to_census(
           particle, particle->dt_till_census, particle_velocity);
-      particle->dt_till_census = 0.0;
     }
   }
 }
@@ -397,6 +397,7 @@ void handle_stream_to_census(
   // We have not changed cell or energy level at this stage
   particle->x += dt_till_census*particle->omega_x*particle_velocity;
   particle->y += dt_till_census*particle->omega_y*particle_velocity;
+  particle->dt_till_census = 0.0;
 }
 
 // Handle the collision event, including absorption and scattering
@@ -406,56 +407,70 @@ void handle_collision(
     const double dt_till_collision, const double particle_velocity, 
     double* energy_tally)
 {
-  /* Model particle absorption */
-
-  const double p_scatter = cs_absorb/cs_total;
-  if(genrand() < p_scatter) {
-    particle->weight *= (1.0 - cs_absorb/cs_total);
-    // If the particle falls below the energy of interest then we will consider
-    // it dead and it will be garbage collected at some point
-    if(particle->e < MIN_ENERGY_OF_INTEREST) {
-      particle->dead = 1;
-    }
-    return;
-  }
-
-  /* Model particle scattering */
-
-  // Choose a random scattering angle between -1 and 1
-  const double mu_cm = 1.0 - 2.0*genrand();
-
-  // Calculate the new energy based on the relation to angle of incidence
-  // TODO: Could check here for the particular nuclide that was collided with
-  const double e_new = particle->e*
-    (MASS_NO*MASS_NO + 2.0*MASS_NO*mu_cm + 1.0)/((MASS_NO + 1.0)*(MASS_NO + 1.0));
-
-  // The change in energy experienced by the particle
-  const double e_delta = e_new-particle->e;
-
-  const int cellx = (particle->cell%global_nx)-x_off;
-  const int celly = (particle->cell/global_nx)-y_off;
-
-  // Remove the energy delta from the cell
-  energy_tally[celly*nx+cellx] -= e_delta; 
-
-  // Convert the angle into the laboratory frame of reference
-  double cos_theta =
-    0.5*((MASS_NO+1.0)*sqrt(e_new/particle->e) - 
-        (MASS_NO-1.0)*sqrt(particle->e/e_new));
-
-  // Set the new particle energy and location
-  particle->e = e_new;
+  // Moves the particle to the collision site
   particle->x += (dt_till_collision*particle_velocity)*particle->omega_x;
   particle->y += (dt_till_collision*particle_velocity)*particle->omega_y;
 
-  // Alter the direction of the velocities
-  const double sin_theta = sin(acos(cos_theta));
-  const double omega_x_new =
-    (particle->omega_x*cos_theta - particle->omega_y*sin_theta);
-  const double omega_y_new =
-    (particle->omega_x*sin_theta + particle->omega_y*cos_theta);
-  particle->omega_x = omega_x_new;
-  particle->omega_y = omega_y_new;
+  double de;
+  const double p_absorb = cs_absorb/cs_total;
+  if(0 && genrand() < p_absorb) {
+
+    /* Model particle absorption */
+
+    // Find the new particle weight after absorption, saving the energy change
+    const double new_weight = particle->weight*(1.0 - p_absorb);
+    de = particle->e*(particle->weight-new_weight); 
+    particle->weight = new_weight;
+
+#if 0
+    // Ignoring the particle death for now...
+    // TODO: Implement this properly...
+    //
+    // If the particle falls below the energy of interest then we will consider
+    // it dead and it will be garbage collected at some point
+    if(particle->weight*particle->e < MIN_ENERGY_OF_INTEREST) {
+      particle->dead = 1;
+    }
+#endif // if 0
+  }
+  else {
+
+    /* Model particle scattering */
+
+    // Choose a random scattering angle between -1 and 1
+    const double mu_cm = 1.0 - 2.0*genrand();
+
+    // Calculate the new energy based on the relation to angle of incidence
+    // TODO: Could check here for the particular nuclide that was collided with
+    const double e_new = particle->e*
+      (MASS_NO*MASS_NO + 2.0*MASS_NO*mu_cm + 1.0)/
+      ((MASS_NO + 1.0)*(MASS_NO + 1.0));
+
+    // The change in energy experienced by the particle
+    de = e_new-particle->e;
+
+    // Set the new particle energy and location
+    particle->e = e_new;
+
+    // Convert the angle into the laboratory frame of reference
+    double cos_theta =
+      0.5*((MASS_NO+1.0)*sqrt(e_new/particle->e) - 
+          (MASS_NO-1.0)*sqrt(particle->e/e_new));
+
+    // Alter the direction of the velocities
+    const double sin_theta = sin(acos(cos_theta));
+    const double omega_x_new =
+      (particle->omega_x*cos_theta - particle->omega_y*sin_theta);
+    const double omega_y_new =
+      (particle->omega_x*sin_theta + particle->omega_y*cos_theta);
+    particle->omega_x = omega_x_new;
+    particle->omega_y = omega_y_new;
+  }
+
+  // Remove the energy delta from the cell
+  const int cellx = (particle->cell%global_nx)-x_off;
+  const int celly = (particle->cell/global_nx)-y_off;
+  energy_tally[celly*nx+cellx] -= de; 
 }
 
 // Find out if we hit a facet
@@ -519,7 +534,7 @@ void calc_time_till_facet(
 
 // Fetch the cross section for a particular energy value
 double get_cs_for_energy(
-    const CrossSection* cs, const double energy, const double density)
+    const CrossSection* cs, const double energy, const double rho)
 {
   // Use a simple binary search
   int ind = cs->nentries/2;
@@ -536,7 +551,8 @@ double get_cs_for_energy(
   // This makes some assumption about the units of the data stored globally.
   // Might be worth making this more explicit somewhere.
   const double macroscopic_cs = 
-    (density*AVOGADROS/MOLAR_MASS)*(microscopic_cs*BARNS);
+    (rho*AVOGADROS/MOLAR_MASS)*(microscopic_cs*BARNS);
+
   return macroscopic_cs;
 }
 
