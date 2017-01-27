@@ -36,8 +36,8 @@ void solve_transport_2d(
 
   // Set initial dt for all particles
   for(int ii = 0; ii < nparticles; ++ii) {
-    particles[ii].dt_till_census = dt;
-    particles[ii].dt_till_collision = 0.0;
+    particles[ii].dt_to_census = dt;
+    particles[ii].mfp_to_collision = 0.0;
   }
 
   handle_particles(
@@ -183,25 +183,26 @@ void handle_particle(
   int collision_init = 0;
   double cs_absorb = 0.0;
   double cs_scatter = 0.0;
-  double dt_till_facet = 0.0;
+  double dt_to_facet = 0.0;
+  double cell_mfp = 0.0;
   double particle_velocity = sqrt((2.0*particle->e*eV)/PARTICLE_MASS);
 
   // Loop until we have reached census
-  while(particle->dt_till_census > 0.0) {
+  while(particle->dt_to_census > 0.0) {
 
     // Check if our next event is a facet encounter
-    if(dt_till_facet < particle->dt_till_collision &&
-       dt_till_facet < particle->dt_till_census) {
+    if(dt_to_facet < particle->mfp_to_collision &&
+        dt_to_facet < particle->dt_to_census) {
 
       // Skip if distance to facet is not initialised
       if(facet_init++) {
-        particle->dt_till_collision -= dt_till_facet;
-        particle->dt_till_census -= dt_till_facet;
+        particle->mfp_to_collision -= dt_to_facet;
+        particle->dt_to_census -= dt_to_facet;
 
         // Check if we hit a facet
         if(handle_facet_encounter(
               global_nx, global_ny, nx, ny, x_off, y_off, neighbours,
-              dt_till_facet, particle_velocity, x_facet, nparticles,
+              dt_to_facet, particle_velocity, x_facet, nparticles,
               nparticles_sent, particle, particles, out_particle)) {
 
           // The encountered facet leaves this rank's MPI domain
@@ -210,26 +211,26 @@ void handle_particle(
       }
 
       // Work out the dt until the particle's next facet encounter
-      calc_time_till_facet(
+      calc_time_to_facet(
           global_nx, particle->x, particle->y, x_off, y_off, particle->omega_x,
           particle->omega_y, particle_velocity, particle->cell,
-          &dt_till_facet, &x_facet, edgex, edgey);
+          &dt_to_facet, &x_facet, edgex, edgey);
       (*facets)++;
     }
     // Check if our next event is a collision
-    else if(particle->dt_till_collision < particle->dt_till_census) {
+    else if(particle->mfp_to_collision < particle->dt_to_census) {
 
       // Skip if first time through the loop
       if(collision_init++) {
-        particle->dt_till_census -= particle->dt_till_collision;
-        dt_till_facet -= particle->dt_till_collision;
+        particle->dt_to_census -= particle->mfp_to_collision;
+        dt_to_facet -= particle->mfp_to_collision;
 
         // The cross sections for scattering and absorbtion were calculated on 
         // a previous iteration for our given energy
         const double total_cross_section = cs_scatter+cs_absorb;
         handle_collision(
             particle, global_nx, nx, x_off, y_off, cs_absorb, 
-            total_cross_section, particle->dt_till_collision, particle_velocity, 
+            total_cross_section, particle->mfp_to_collision*particle_velocity, 
             energy_tally);
       }
 
@@ -265,7 +266,7 @@ void handle_particle(
 int handle_facet_encounter(
     const int global_nx, const int global_ny, const int nx,
     const int ny, const int x_off, const int y_off, const int* neighbours,
-    const double dt_till_facet, const double particle_velocity, int x_facet,
+    const double dt_to_facet, const double particle_velocity, int x_facet,
     int* nparticles, int* nparticles_sent, Particle* particle,
     Particle* particles, Particle* out_particle)
 {
@@ -275,8 +276,8 @@ int handle_facet_encounter(
 
   // TODO: Make sure that the roundoff is handled here, perhaps actually set it
   // fully to one of the edges here
-  particle->x += dt_till_facet*particle->omega_x*particle_velocity;
-  particle->y += dt_till_facet*particle->omega_y*particle_velocity;
+  particle->x += dt_to_facet*particle->omega_x*particle_velocity;
+  particle->y += dt_to_facet*particle->omega_y*particle_velocity;
 
   // This use of x_facet is a slight misnoma, as it is really a facet
   // along the y dimensions
@@ -391,29 +392,28 @@ void send_and_replace_particle(
 
 // Handles stream to census
 void handle_stream_to_census(
-    Particle* particle, const double dt_till_census, 
+    Particle* particle, const double dt_to_census, 
     const double particle_velocity)
 {
   // We have not changed cell or energy level at this stage
-  particle->x += dt_till_census*particle->omega_x*particle_velocity;
-  particle->y += dt_till_census*particle->omega_y*particle_velocity;
-  particle->dt_till_census = 0.0;
+  particle->x += dt_to_census*particle->omega_x*particle_velocity;
+  particle->y += dt_to_census*particle->omega_y*particle_velocity;
+  particle->dt_to_census = 0.0;
 }
 
 // Handle the collision event, including absorption and scattering
 void handle_collision(
     Particle* particle, const int global_nx, const int nx, const int x_off, 
     const int y_off, const double cs_absorb, const double cs_total, 
-    const double dt_till_collision, const double particle_velocity, 
-    double* energy_tally)
+    const double displacement, double* energy_tally)
 {
   // Moves the particle to the collision site
-  particle->x += (dt_till_collision*particle_velocity)*particle->omega_x;
-  particle->y += (dt_till_collision*particle_velocity)*particle->omega_y;
+  particle->x += displacement*particle->omega_x;
+  particle->y += displacement*particle->omega_y;
 
   double de;
   const double p_absorb = cs_absorb/cs_total;
-  if(0 && genrand() < p_absorb) {
+  if(genrand() < p_absorb) {
 
     /* Model particle absorption */
 
