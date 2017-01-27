@@ -34,14 +34,14 @@ typedef struct {
 
 // Represents an individual particle
 typedef struct {
-  double x;                 // x position in space
-  double y;                 // y position in space
-  double omega_x;           // x direction
-  double omega_y;           // y direction
-  double e;                 // energy
-  double weight;            // weight of the particle (Nphys/Nsim)
-  double dt_till_census;    // the time until census is reached
-  double dt_till_collision; // the time until a collision occurs
+  double x;                  // x position in space
+  double y;                  // y position in space
+  double omega_x;            // x direction
+  double omega_y;            // y direction
+  double e;                  // energy
+  double weight;             // weight of the particle (Nphys/Nsim)
+  double dt_to_census;       // the time until census is reached
+  double mfp_to_collision; // the mean free paths until a collision
 
   int tracer;
   int cell;
