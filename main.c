@@ -135,9 +135,10 @@ int main(int argc, char** argv)
         mesh.global_nx+2*PAD, mesh.global_ny+2*PAD, mesh.local_nx, mesh.local_ny, 
         mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, mesh.neighbours, 
         temp, particles_name, 0, elapsed_sim_time);
+    int dneighbours[NNEIGHBOURS] = { EDGE, EDGE,  EDGE,  EDGE,  EDGE,  EDGE }; // Fudges away padding
     write_all_ranks_to_visit(
         mesh.global_nx, mesh.global_ny, mesh.local_nx-2*PAD, mesh.local_ny-2*PAD,
-        mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, mesh.neighbours, 
+        mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, dneighbours, 
         bright_data.energy_tally, tally_name, 0, elapsed_sim_time);
   }
 

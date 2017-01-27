@@ -8,7 +8,7 @@
 #define MIN_ENERGY_OF_INTEREST 1.0e-5               // Artificially low value
 #define PARTICLE_MASS          1.674927471213e-27   // Mass taken from wiki
 #define MASS_NO                100.0                
-#define OPEN_BOUND_CORRECTION  1.0e-14
+#define OPEN_BOUND_CORRECTION  1.0e-13
 #define BARNS                  1.0e-28              // The barns unit in m^2
 #define AVOGADROS              6.02214085774e23     // Avogadro's constant
 #define MOLAR_MASS             2.0e-2               // Dummy kg per mole
