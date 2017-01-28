@@ -166,7 +166,7 @@ void initialise_particle(
   // Set a weight for the particle to track absorption
   particle->weight = 1.0;
   particle->dt_to_census = dt;
-  particle->mfp_till_collision = 0.0;
+  particle->mfp_to_collision = 0.0;
   particle->dead = 0;
 }
 
