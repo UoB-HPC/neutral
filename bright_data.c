@@ -32,7 +32,7 @@ void initialise_bright_data(
 
   // SMALL 1/5 SQUARE AT LEFT OF MESH
   const int global_particle_start_x = 0;
-  const int global_particle_start_y = (4*mesh->global_ny/10);
+  const int global_particle_start_y = (2*mesh->global_ny/10);
   const int global_particle_nx = (2*mesh->global_nx/10);
   const int global_particle_ny = (2*mesh->global_ny/10);
 #if 0
@@ -117,6 +117,12 @@ void inject_particles(
         mesh->edgey[local_particle_bottom_off+PAD], 
         local_particle_nx, local_particle_ny, mesh->x_off, 
         mesh->y_off, mesh->dt, mesh->edgex, mesh->edgey, &particles[ii]);
+
+
+
+
+
+    particles[ii].tracer = ii;
   }
   STOP_PROFILING(&compute_profile, "initialising particles");
 }
