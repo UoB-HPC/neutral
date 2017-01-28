@@ -209,11 +209,6 @@ void handle_particle(
     const double distance_to_collision = particle->mfp_to_collision*cell_mfp;
     const double distance_to_census = particle_velocity*particle->dt_to_census;
 
-#if 0
-    printf("%.12e %.12e %.12e\n", 
-        distance_to_collision, distance_to_facet, distance_to_census);
-#endif // if 0
-
     // Check if our next event is a collision
     if(distance_to_collision < distance_to_facet &&
         distance_to_collision < distance_to_census) {
@@ -422,7 +417,7 @@ void handle_collision(
 
   double de;
   const double p_absorb = cs_absorb/cs_total;
-  if(genrand() < p_absorb) {
+  if(0&&genrand() < p_absorb) {
 
     /* Model particle absorption */
 
@@ -454,9 +449,6 @@ void handle_collision(
     // The change in energy experienced by the particle
     de = e_new-particle->e;
 
-    // Set the new particle energy and location
-    particle->e = e_new;
-
     // Convert the angle into the laboratory frame of reference
     double cos_theta =
       0.5*((MASS_NO+1.0)*sqrt(e_new/particle->e) - 
@@ -470,6 +462,7 @@ void handle_collision(
       (particle->omega_x*sin_theta + particle->omega_y*cos_theta);
     particle->omega_x = omega_x_new;
     particle->omega_y = omega_y_new;
+    particle->e = e_new;
   }
 
   // Remove the energy delta from the cell
