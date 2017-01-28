@@ -57,7 +57,7 @@ int main(int argc, char** argv)
       &bright_data, &mesh);
 
   // Seed the mersenne twister
-  sgenrand(100UL);
+  sgenrand(mesh.rank*100UL+123UL);
 
   // TODO: Currently considering that we have a time dependent system where
   // there are no secondary particles, and reflective boundary conditions.
