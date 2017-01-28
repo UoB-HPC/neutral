@@ -195,18 +195,6 @@ void handle_particle(
   // Determine the number of mean free paths until the next collision
   particle->mfp_to_collision = -log(genrand())/cs_scatter;
 
-
-
-
-#if 0
-  if(particle->tracer != 3733)
-    return;
-#endif // if 0
-
-
-
-
-
   // Loop until we have reached census
   while(particle->dt_to_census > 0.0) {
     const double total_cross_section = cs_scatter+cs_absorb;
@@ -301,7 +289,7 @@ void handle_collision(
 
   double de;
   const double p_absorb = cs_absorb/cs_total;
-  if(0&&genrand() < p_absorb) {
+  if(genrand() < p_absorb) {
 
     /* Model particle absorption */
 
