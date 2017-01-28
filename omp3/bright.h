@@ -17,12 +17,11 @@ void handle_particles(
 // Handles an individual particle.
 void handle_particle(
     const int global_nx, const int global_ny, const int nx, const int ny, 
-    const int x_off, const int y_off, const double dt, const int* neighbours, 
-    Particle* particles, int* nparticles, int* nparticles_sent, int* facets, 
-    int* collisions, Particle* particle, const double* density, 
-    const double* edgex, const double* edgey, Particle* out_particle,
-    CrossSection* cs_scatter_table, CrossSection* cs_absorb_table,
-    double* energy_tally);
+    const int x_off, const int y_off, const int* neighbours, const double* density, 
+    const double* edgex, const double* edgey, const CrossSection* cs_scatter_table, 
+    const CrossSection* cs_absorb_table, Particle* particles_end, 
+    int* nparticles_sent, int* facets, int* collisions, Particle* particle, 
+    Particle* particle_out, double* energy_tally);
 
 // Calculate the distance to the next facet
 void calc_distance_to_facet(
@@ -36,9 +35,8 @@ void calc_distance_to_facet(
 int handle_facet_encounter(
     const int global_nx, const int global_ny, const int nx, const int ny, 
     const int x_off, const int y_off, const int* neighbours, 
-    const double distance_to_facet, int x_facet, int* nparticles, 
-    int* nparticles_sent, Particle* particle, Particle* particles, 
-    Particle* out_particle);
+    const double distance_to_facet, int x_facet, int* nparticles_sent, 
+    Particle* particle, Particle* particles_end, Particle* particle_out);
 
 // Performs a binary search.
 int binary_search(
@@ -52,6 +50,6 @@ void handle_collision(
 
 // Sends a particle to a neighbour and replaces in the particle list
 void send_and_replace_particle(
-    int* nparticles, const int destination, Particle* particles, 
-    Particle* particle_to_replace, Particle* out_particle);
+    const int destination, Particle* particles_end, 
+    Particle* particle_to_replace, Particle* particle_out);
 
