@@ -4,7 +4,7 @@
 #include "../comms.h"
 
 #define eV                     1.60217646e-19       // eV in C
-#define INITIAL_ENERGY         1.0e+3               // random test eV
+#define INITIAL_ENERGY         1.0e+5               // random test eV
 #define MIN_ENERGY_OF_INTEREST 1.0e-5               // Artificially low value
 #define PARTICLE_MASS          1.674927471213e-27   // Mass taken from wiki
 #define MASS_NO                100.0                
