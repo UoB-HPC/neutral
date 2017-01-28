@@ -217,6 +217,9 @@ void handle_particle(
     // Check if our next event is a collision
     if(distance_to_collision < distance_to_facet &&
         distance_to_collision < distance_to_census) {
+
+      START_PROFILING(&compute_profile);
+
       // The cross sections for scattering and absorbtion were calculated on 
       // a previous iteration for our given energy
       handle_collision(
@@ -233,9 +236,13 @@ void handle_particle(
       particle_velocity = sqrt((2.0*particle->e*eV)/PARTICLE_MASS);
 
       (*collisions)++;
+
+      STOP_PROFILING(&compute_profile, "collision");
     }
     // Check if we have reached facet
     else if(distance_to_facet < distance_to_census) {
+      START_PROFILING(&compute_profile);
+
       // Check if we hit a facet, and jump out if particle left this rank's domain
       if(handle_facet_encounter(
             global_nx, global_ny, nx, ny, x_off, y_off, neighbours, 
@@ -260,6 +267,8 @@ void handle_particle(
       particle->dt_to_census -= distance_to_facet/particle_velocity;
 
       (*facets)++;
+
+      STOP_PROFILING(&compute_profile, "facet");
     }
     // Check if we have reached census
     else {
