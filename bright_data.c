@@ -75,6 +75,10 @@ void initialise_bright_data(
   bright_data->out_particles = (Particle*)malloc(sizeof(Particle)*NPARTICLES);
   bright_data->energy_tally = (double*)malloc(sizeof(double)*local_nx*local_ny);
 
+  for(int ii = 0; ii < local_nx*local_ny; ++ii) {
+    bright_data->energy_tally[ii] = 0.0;
+  }
+
   // Check we are injecting some particle into this part of the mesh
   if(global_particle_start_x+global_particle_nx >= mesh->x_off && 
       global_particle_start_x < mesh->x_off+local_nx &&
@@ -93,7 +97,7 @@ void initialise_bright_data(
 #ifdef MPI
   // Had to initialise this in the package directly as the data structure is not
   // general enough to place in the multi-package 
-  int blocks[2] = { 8, 3 };
+  int blocks[2] = { 8, 1 };
   MPI_Datatype types[2] = { MPI_DOUBLE, MPI_INT };
   MPI_Aint displacements[2] = { 0, blocks[0]*sizeof(double) };
   MPI_Type_create_struct(
@@ -117,12 +121,6 @@ void inject_particles(
         mesh->edgey[local_particle_bottom_off+PAD], 
         local_particle_nx, local_particle_ny, mesh->x_off, 
         mesh->y_off, mesh->dt, mesh->edgex, mesh->edgey, &particles[ii]);
-
-
-
-
-
-    particles[ii].tracer = ii;
   }
   STOP_PROFILING(&compute_profile, "initialising particles");
 }
@@ -173,7 +171,6 @@ void initialise_particle(
   particle->weight = 1.0;
   particle->dt_to_census = dt;
   particle->mfp_to_collision = 0.0;
-  particle->dead = 0;
 }
 
 // Reads in a cross-sectional data file

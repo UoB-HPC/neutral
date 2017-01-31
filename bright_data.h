@@ -16,7 +16,7 @@
 #define CS_CAPTURE_FILENAME    "capture.cs"
 #define TAG_SEND_RECV          100
 #define TAG_PARTICLE           1
-#define NPARTICLES             100000
+#define NPARTICLES             1e7
 
 #ifdef MPI
 #include "mpi.h"
@@ -39,13 +39,10 @@ typedef struct {
   double omega_x;            // x direction
   double omega_y;            // y direction
   double e;                  // energy
-  double weight;             // weight of the particle (Nphys/Nsim)
+  double weight;             // weight of the particle
   double dt_to_census;       // the time until census is reached
-  double mfp_to_collision; // the mean free paths until a collision
-
-  int tracer;
+  double mfp_to_collision;   // the mean free paths until a collision
   int cell;
-  int dead;
 
 } Particle;
 
