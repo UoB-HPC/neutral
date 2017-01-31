@@ -20,7 +20,7 @@ void solve_transport_2d(
 // Validates the results of the simulation
 void validate(
     const int nx, const int ny, const int nglobal_particles, const double dt,
-    const int niters, double* energy_tally);
+    const int niters, const int rank, double* energy_tally);
 
 #ifdef __cplusplus
 }

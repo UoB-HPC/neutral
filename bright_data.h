@@ -16,13 +16,11 @@
 #define CS_CAPTURE_FILENAME    "capture.cs"
 #define TAG_SEND_RECV          100
 #define TAG_PARTICLE           1
-#define NPARTICLES             1e7
+#define NPARTICLES             1e5
 
 #ifdef MPI
 #include "mpi.h"
 #endif
-
-typedef enum { CENSUS = 0, COLLISION = 1, FACET_CROSS = 2 } MostRecentEvent;
 
 // Represents a cross sectional table for resonance data
 typedef struct {
