@@ -142,6 +142,10 @@ int main(int argc, char** argv)
         bright_data.energy_tally, tally_name, 0, elapsed_sim_time);
   }
 
+  validate(
+      mesh.local_nx-2*PAD, mesh.local_ny-2*PAD, NPARTICLES, mesh.dt, mesh.niters,
+      bright_data.energy_tally);
+
   if(mesh.rank == MASTER) {
     PRINT_PROFILING_RESULTS(&compute_profile);
 

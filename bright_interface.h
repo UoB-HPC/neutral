@@ -17,6 +17,11 @@ void solve_transport_2d(
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
     double* energy_tally);
 
+// Validates the results of the simulation
+void validate(
+    const int nx, const int ny, const int nglobal_particles, const double dt,
+    const int niters, double* energy_tally);
+
 #ifdef __cplusplus
 }
 #endif
