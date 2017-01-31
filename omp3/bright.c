@@ -340,7 +340,7 @@ void handle_collision(
   // Remove the energy delta from the cell
   const int cellx = (particle->cell%global_nx)-x_off;
   const int celly = (particle->cell/global_nx)-y_off;
-  energy_tally[celly*nx+cellx] -= -1.0;//de; 
+  energy_tally[celly*nx+cellx] -= de; 
 }
 
 // Makes the necessary updates to the particle given that
