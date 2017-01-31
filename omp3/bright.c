@@ -132,6 +132,7 @@ void handle_particles(
     Particle* particles_out, CrossSection* cs_scatter_table, 
     CrossSection* cs_absorb_table, double* energy_tally)
 {
+  int nparticles_out = 0;
   int nparticles_deleted = 0;
 
   // Start by handling all of the initial local particles
@@ -139,13 +140,17 @@ void handle_particles(
   for(int pp = 0; pp < nparticles_to_process; ++pp) {
     // Current particle
     Particle* particle = &particles_start[pp-nparticles_deleted];
+    Particle* particles_end = 
+      &particles_start[(nparticles_to_process-1)-nparticles_deleted];
 
-    handle_particle(
+    int result = handle_particle(
         global_nx, global_ny, nx, ny, x_off, y_off, neighbours, dt, initial,
         density, edgex, edgey, cs_scatter_table, cs_absorb_table,
-        &particles_start[nparticles_to_process-nparticles_deleted], nparticles_sent, 
-        facets, collisions, particle, &particles_out[nparticles_deleted], 
-        energy_tally, &nparticles_deleted);
+        particles_end, nparticles_sent, facets, collisions, particle, 
+        &particles_out[nparticles_out], energy_tally);
+
+    nparticles_out += (result == PARTICLE_SENT);
+    nparticles_deleted += (result == PARTICLE_DEAD || result == PARTICLE_SENT);
   }
 
   // Correct the new total number of particle
@@ -155,14 +160,14 @@ void handle_particles(
 }
 
 // Handles an individual particle.
-void handle_particle(
+int handle_particle(
     const int global_nx, const int global_ny, const int nx, const int ny, 
     const int x_off, const int y_off, const int* neighbours, const double dt,
     const int initial, const double* density, const double* edgex, 
     const double* edgey, const CrossSection* cs_scatter_table, 
     const CrossSection* cs_absorb_table, Particle* particles_end, 
     int* nparticles_sent, int* facets, int* collisions, Particle* particle, 
-    Particle* particle_out, double* energy_tally, int* nparticles_deleted)
+    Particle* particle_out, double* energy_tally)
 {
   // (1) particle can stream and reach census
   // (2) particle can collide and either
@@ -209,13 +214,15 @@ void handle_particle(
         distance_to_collision < distance_to_census) {
 
       START_PROFILING(&compute_profile);
+      (*collisions)++;
 
       // The cross sections for scattering and absorbtion were calculated on 
       // a previous iteration for our given energy
-      handle_collision(
-          particle, particles_end, global_nx, nx, x_off, y_off, cs_absorb, 
-          total_cross_section, distance_to_collision, energy_tally, 
-          nparticles_deleted);
+      if(handle_collision(
+            particle, particles_end, global_nx, nx, x_off, y_off, cs_absorb, 
+            total_cross_section, distance_to_collision, energy_tally)) {
+        return PARTICLE_DEAD;
+      }
 
       // Energy has changed so update the cross-sections
       cs_scatter = total_cs_for_energy(cs_scatter_table, particle->e, local_density);
@@ -226,20 +233,19 @@ void handle_particle(
       particle->dt_to_census -= distance_to_collision/particle_velocity;
       particle_velocity = sqrt((2.0*particle->e*eV)/PARTICLE_MASS);
 
-      (*collisions)++;
-
       STOP_PROFILING(&compute_profile, "collision");
     }
     // Check if we have reached facet
     else if(distance_to_facet < distance_to_census) {
       START_PROFILING(&compute_profile);
+      (*facets)++;
 
       // Check if we hit a facet, and jump out if particle left this rank's domain
       if(handle_facet_encounter(
             global_nx, global_ny, nx, ny, x_off, y_off, neighbours, 
             distance_to_facet, x_facet, nparticles_sent, particle, 
-            particles_end, particle_out, nparticles_deleted)) {
-        break;
+            particles_end, particle_out)) {
+        return PARTICLE_SENT;
       }
 
       // Update the local density and cross-sections
@@ -257,8 +263,6 @@ void handle_particle(
       particle->mfp_to_collision -= (distance_to_facet/cell_mfp);
       particle->dt_to_census -= distance_to_facet/particle_velocity;
 
-      (*facets)++;
-
       STOP_PROFILING(&compute_profile, "facet");
     }
     // Check if we have reached census
@@ -270,14 +274,16 @@ void handle_particle(
       particle->dt_to_census = 0.0;
     }
   }
+
+  return PARTICLE_CENSUS;
 }
 
 // Handle the collision event, including absorption and scattering
-void handle_collision(
+int handle_collision(
     Particle* particle, Particle* particles_end, const int global_nx, 
     const int nx, const int x_off, const int y_off, const double cs_absorb, 
     const double cs_total, const double distance_to_collision, 
-    double* energy_tally, int* nparticles_deleted)
+    double* energy_tally)
 {
   // Moves the particle to the collision site
   particle->x += distance_to_collision*particle->omega_x;
@@ -298,9 +304,8 @@ void handle_collision(
     // it dead and it will be garbage collected at some point
     if(particle->e < MIN_ENERGY_OF_INTEREST) {
       // Overwrite the particle
-      (*nparticles_deleted)++;
       *particle = *particles_end;
-      return;
+      return TRUE;
     }
   }
   else {
@@ -339,6 +344,8 @@ void handle_collision(
   const int cellx = (particle->cell%global_nx)-x_off;
   const int celly = (particle->cell/global_nx)-y_off;
   energy_tally[celly*nx+cellx] -= de; 
+
+  return FALSE;
 }
 
 // Makes the necessary updates to the particle given that
@@ -347,8 +354,7 @@ int handle_facet_encounter(
     const int global_nx, const int global_ny, const int nx, const int ny, 
     const int x_off, const int y_off, const int* neighbours, 
     const double distance_to_facet, int x_facet, int* nparticles_sent, 
-    Particle* particle, Particle* particles_end, Particle* particle_out, 
-    int* nparticles_deleted)
+    Particle* particle, Particle* particles_end, Particle* particle_out)
 {
   // We don't need to consider the halo regions in this package
   int cellx = particle->cell%global_nx;
@@ -375,8 +381,7 @@ int handle_facet_encounter(
         // Check if we need to pass to another process
         if(cellx >= nx+x_off) {
           send_and_replace_particle(
-              neighbours[EAST], particles_end, particle, particle_out, 
-              nparticles_deleted);
+              neighbours[EAST], particles_end, particle, particle_out);
           nparticles_sent[EAST]++;
           return TRUE;
         }
@@ -395,8 +400,7 @@ int handle_facet_encounter(
         // Check if we need to pass to another process
         if(cellx < x_off) {
           send_and_replace_particle(
-              neighbours[WEST], particles_end, particle, particle_out,
-              nparticles_deleted);
+              neighbours[WEST], particles_end, particle, particle_out);
           nparticles_sent[WEST]++;
           return TRUE;
         }
@@ -417,8 +421,7 @@ int handle_facet_encounter(
         // Check if we need to pass to another process
         if(celly >= ny+y_off) {
           send_and_replace_particle(
-              neighbours[NORTH], particles_end, particle, particle_out,
-              nparticles_deleted);
+              neighbours[NORTH], particles_end, particle, particle_out);
           nparticles_sent[NORTH]++;
           return TRUE;
         }
@@ -437,8 +440,7 @@ int handle_facet_encounter(
         // Check if we need to pass to another process
         if(celly < y_off) {
           send_and_replace_particle(
-              neighbours[SOUTH], particles_end, particle, particle_out,
-              nparticles_deleted);
+              neighbours[SOUTH], particles_end, particle, particle_out);
           nparticles_sent[SOUTH]++;
           return TRUE;
         }
@@ -451,17 +453,16 @@ int handle_facet_encounter(
 
 // Sends a particle to a neighbour and replaces in the particle list
 void send_and_replace_particle(
-    const int destination, Particle* particles_end, Particle* particle_to_replace, 
-    Particle* particle_out, int* nparticles_deleted)
+    const int destination, Particle* particles_end, Particle* particle, 
+    Particle* particle_out)
 {
 #ifdef MPI
   if(destination == EDGE)
     return;
 
-  // Place the particle in the out buffer and replace in list
-  (*nparticles_deleted)++;
-  *particle_out = *particle_to_replace;
-  *particle_to_replace = *particles_end;
+  // Place the particle in the out buffer and replace
+  *particle_out = *particle;
+  *particle = *particles_end;
 
   // Send the particle
   MPI_Send(
@@ -556,14 +557,19 @@ double total_cs_for_energy(
 // Validates the results of the simulation
 void validate(
     const int nx, const int ny, const int nglobal_particles, const double dt,
-    const int niters, double* energy_tally)
+    const int niters, const int rank, double* energy_tally)
 {
   double local_energy_tally = 0.0;
   for(int ii = 0; ii < nx*ny; ++ii) {
-    local_energy_tally += energy_tally[ii]/nglobal_particles;
+    local_energy_tally += energy_tally[ii];
   }
 
   double global_energy_tally = reduce_all_sum(local_energy_tally);
+
+  if(rank != MASTER) {
+    return;
+  }
+
   printf("Final global_energy_tally %f\n", global_energy_tally);
 
   FILE* fp = fopen("test.results", "r");
@@ -594,7 +600,7 @@ void validate(
     printf("Validation and test problem do not match on dt.\n");
   }
 
-  if(global_energy_tally == val_result) {
+  if(global_energy_tally/nglobal_particles == val_result) {
     printf("PASSED validation.\n");
   }
   else {
