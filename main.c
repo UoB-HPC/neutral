@@ -1,4 +1,5 @@
 #include <string.h>
+#include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <limits.h>
@@ -74,6 +75,20 @@ int main(int argc, char** argv)
   struct Profile wallclock = {0};
   double elapsed_sim_time = 0.0;
 
+  int dneighbours[NNEIGHBOURS] = { EDGE, EDGE,  EDGE,  EDGE,  EDGE,  EDGE }; // Fudges away padding
+  double* temp = (double*)malloc(sizeof(double)*mesh.local_nx*mesh.local_ny);
+  for(int ii = 0; ii < bright_data.nlocal_particles; ++ii) {
+    Particle* particle = &bright_data.local_particles[ii];
+    const int cellx = (particle->cell%mesh.global_nx)-mesh.x_off;
+    const int celly = (particle->cell/mesh.global_nx)-mesh.y_off;
+    temp[celly*(mesh.local_nx-2*PAD)+cellx] = particle->e;
+  }
+
+  write_all_ranks_to_visit(
+      mesh.global_nx, mesh.global_ny, mesh.local_nx-2*PAD, mesh.local_ny-2*PAD, 
+      mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, dneighbours, 
+      temp, "particles0", 0, elapsed_sim_time);
+
   // Main timestep loop where we will track each particle through time
   int tt;
   for(tt = 0; tt < mesh.niters; ++tt) {
@@ -100,63 +115,16 @@ int main(int argc, char** argv)
         printf("reached end of simulation time\n");
       break;
     }
-    for(int pp = 0; pp < nparticles; ++pp) {
-      // TODO: handle the different particle events
-      //
-      // (1) particle can stream and reach census
-      // (2) particle can collide and either
-      //      - the particle will be absorbed
-      //      - the particle will scatter (this presumably means the energy changes)
-      // (3) particle hits a boundary region and needs transferring to another process
+    STOP_PROFILING(&wallclock, "wallclock");
 
-      // Check the timestep required to move the particle aint a single axis
-      // If the velocity is positive then the top or right boundary will be hit
-      double u_x_inv = 1.0/particles[pp].u_x;
-      double u_y_inv = 1.0/particles[pp].u_y;
-      double dt_a = (particles[pp].u_x > 0.0) 
-        ? (mesh.edgex[particles[pp].cellx+1]-particles[pp].x)*u_x_inv
-        : (mesh.edgex[particles[pp].cellx]-particles[pp].x)*u_x_inv;
-      double dt_b = (particles[pp].u_y > 0.0) 
-        ? (mesh.edgey[particles[pp].celly+1]-particles[pp].y)*u_y_inv
-        : (mesh.edgey[particles[pp].celly]-particles[pp].y)*u_y_inv;
+    barrier();
 
-      printf("dt_a %.12e dt_b %.12e\n", dt_a, dt_b);
-
-      double mag_u0 = 
-        sqrt(particles[pp].u_x*particles[pp].u_x+particles[pp].u_y*particles[pp].u_y);
-
-      // Calculated the projection to be 
-      // a = vector on first edge to be hit
-      // u = velocity vector
-      double mag_u1;
-      if(dt_a < dt_b) {
-        // cos(theta) = ||(x, 0)||/||(u_x', u_y')|| - u' is u at boundary
-        // cos(theta) = (x.u)/(||x||.||u||)
-        // x_x/||u'|| = (x_x, 0)*(u_x, u_y) / (x_x.||u||)
-        // x_x/||u'|| = (x_x.u_x / x_x.||u||)
-        // x_x/||u'|| = u_x/||u||
-        // ||u'|| = (x_x.||u||)/u_x
-        // We are centered on the origin, so the y component is 0 after travelling
-        // aint the x axis to the edge (ax, 0).(x, y)
-        mag_u1 = (particles[pp].u_x > 0.0) 
-          ? (mesh.edgex[particles[pp].cellx+1]-particles[pp].x)*mag_u0*u_x_inv
-          : (mesh.edgex[particles[pp].cellx]-particles[pp].x)*mag_u0*u_x_inv;
-      }
-      else {
-        // We are centered on the origin, so the x component is 0 after travelling
-        // aint the y axis to the edge (0, ay).(x, y)
-        mag_u1 = (particles[pp].u_y > 0.0) 
-          ? (mesh.edgey[particles[pp].celly+1]-particles[pp].y)*mag_u0*u_y_inv
-          : (mesh.edgey[particles[pp].celly]-particles[pp].y)*mag_u0*u_y_inv;
-      }
-
-      // Scale the velocity by the scaling factor
-      double dx = (particles[pp].u_x)*(mag_u1/mag_u0);
-      double dy = (particles[pp].u_y)*(mag_u1/mag_u0);
-
-      printf("u_x %.12e u_y %.12e\n", particles[pp].u_x, particles[pp].u_y);
-      printf("x0 %.12e y0 %.12e\n", particles[pp].x, particles[pp].y);
-      printf("x1 %.12e y1 %.12e\n", particles[pp].x+dx, particles[pp].y+dy);
+    temp = (double*)malloc(sizeof(double)*mesh.local_nx*mesh.local_ny);
+    for(int ii = 0; ii < bright_data.nlocal_particles; ++ii) {
+      Particle* particle = &bright_data.local_particles[ii];
+      const int cellx = (particle->cell%mesh.global_nx)-mesh.x_off;
+      const int celly = (particle->cell/mesh.global_nx)-mesh.y_off;
+      temp[celly*(mesh.local_nx-2*PAD)+cellx] = particle->e;
     }
 
     char particles_name[100];
@@ -164,10 +132,9 @@ int main(int argc, char** argv)
     sprintf(particles_name, "particles%d", tt+1);
     sprintf(tally_name, "energy%d", tt+1);
     write_all_ranks_to_visit(
-        mesh.global_nx+2*PAD, mesh.global_ny+2*PAD, mesh.local_nx, mesh.local_ny, 
-        mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, mesh.neighbours, 
+        mesh.global_nx, mesh.global_ny, mesh.local_nx-2*PAD, mesh.local_ny-2*PAD, 
+        mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, dneighbours, 
         temp, particles_name, 0, elapsed_sim_time);
-    int dneighbours[NNEIGHBOURS] = { EDGE, EDGE,  EDGE,  EDGE,  EDGE,  EDGE }; // Fudges away padding
     write_all_ranks_to_visit(
         mesh.global_nx, mesh.global_ny, mesh.local_nx-2*PAD, mesh.local_ny-2*PAD,
         mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, dneighbours, 
