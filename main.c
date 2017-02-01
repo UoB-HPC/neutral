@@ -76,17 +76,18 @@ int main(int argc, char** argv)
   struct Profile wallclock = {0};
   double elapsed_sim_time = 0.0;
 
+  int dneighbours[NNEIGHBOURS] = { EDGE, EDGE,  EDGE,  EDGE,  EDGE,  EDGE }; // Fudges away padding
   double* temp = (double*)malloc(sizeof(double)*mesh.local_nx*mesh.local_ny);
   for(int ii = 0; ii < bright_data.nlocal_particles; ++ii) {
     Particle* particle = &bright_data.local_particles[ii];
-    const int cellx = (particle->cell%mesh.global_nx)-mesh.x_off+PAD;
-    const int celly = (particle->cell/mesh.global_nx)-mesh.y_off+PAD;
-    temp[celly*mesh.local_nx+cellx] = particle->e;
+    const int cellx = (particle->cell%mesh.global_nx)-mesh.x_off;
+    const int celly = (particle->cell/mesh.global_nx)-mesh.y_off;
+    temp[celly*(mesh.local_nx-2*PAD)+cellx] = particle->e;
   }
 
   write_all_ranks_to_visit(
-      mesh.global_nx+2*PAD, mesh.global_ny+2*PAD, mesh.local_nx, mesh.local_ny, 
-      mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, mesh.neighbours, 
+      mesh.global_nx, mesh.global_ny, mesh.local_nx-2*PAD, mesh.local_ny-2*PAD, 
+      mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, dneighbours, 
       temp, "particles0", 0, elapsed_sim_time);
 
   // Main timestep loop where we will track each particle through time
@@ -122,9 +123,9 @@ int main(int argc, char** argv)
     temp = (double*)malloc(sizeof(double)*mesh.local_nx*mesh.local_ny);
     for(int ii = 0; ii < bright_data.nlocal_particles; ++ii) {
       Particle* particle = &bright_data.local_particles[ii];
-      const int cellx = (particle->cell%mesh.global_nx)-mesh.x_off+PAD;
-      const int celly = (particle->cell/mesh.global_nx)-mesh.y_off+PAD;
-      temp[celly*mesh.local_nx+cellx] = particle->e;
+      const int cellx = (particle->cell%mesh.global_nx)-mesh.x_off;
+      const int celly = (particle->cell/mesh.global_nx)-mesh.y_off;
+      temp[celly*(mesh.local_nx-2*PAD)+cellx] = particle->e;
     }
 
     char particles_name[100];
@@ -132,10 +133,9 @@ int main(int argc, char** argv)
     sprintf(particles_name, "particles%d", tt+1);
     sprintf(tally_name, "energy%d", tt+1);
     write_all_ranks_to_visit(
-        mesh.global_nx+2*PAD, mesh.global_ny+2*PAD, mesh.local_nx, mesh.local_ny, 
-        mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, mesh.neighbours, 
+        mesh.global_nx, mesh.global_ny, mesh.local_nx-2*PAD, mesh.local_ny-2*PAD, 
+        mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, dneighbours, 
         temp, particles_name, 0, elapsed_sim_time);
-    int dneighbours[NNEIGHBOURS] = { EDGE, EDGE,  EDGE,  EDGE,  EDGE,  EDGE }; // Fudges away padding
     write_all_ranks_to_visit(
         mesh.global_nx, mesh.global_ny, mesh.local_nx-2*PAD, mesh.local_ny-2*PAD,
         mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, dneighbours, 

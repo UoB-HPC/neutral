@@ -13,6 +13,9 @@
 #include "mpi.h"
 #endif
 
+int trace_cell = 501141;
+int trace_particle = 47577;
+
 // Performs a solve of dependent variables for particle transport.
 void solve_transport_2d(
     const int nx, const int ny, const int global_nx, const int global_ny, 
@@ -31,12 +34,10 @@ void solve_transport_2d(
   int nparticles = *nlocal_particles;
   int nparticles_sent[NNEIGHBOURS];
 
-#ifdef MPI
   // Communication isn't required for edges
   for(int ii = 0; ii < NNEIGHBOURS; ++ii) {
     nparticles_sent[ii] = 0;
   }
-#endif
 
   handle_particles(
       global_nx, global_ny, nx, ny, x_off, y_off, 1, dt, neighbours,
@@ -140,13 +141,13 @@ void handle_particles(
   for(int pp = 0; pp < nparticles_to_process; ++pp) {
     // Current particle
     Particle* particle = &particles_start[pp-nparticles_deleted];
-    Particle* particles_end = 
+    Particle* particle_end = 
       &particles_start[(nparticles_to_process-1)-nparticles_deleted];
 
-    int result = handle_particle(
+    const int result = handle_particle(
         global_nx, global_ny, nx, ny, x_off, y_off, neighbours, dt, initial,
         density, edgex, edgey, cs_scatter_table, cs_absorb_table,
-        particles_end, nparticles_sent, facets, collisions, particle, 
+        particle_end, nparticles_sent, facets, collisions, particle, 
         &particles_out[nparticles_out], energy_tally);
 
     nparticles_out += (result == PARTICLE_SENT);
@@ -165,7 +166,7 @@ int handle_particle(
     const int x_off, const int y_off, const int* neighbours, const double dt,
     const int initial, const double* density, const double* edgex, 
     const double* edgey, const CrossSection* cs_scatter_table, 
-    const CrossSection* cs_absorb_table, Particle* particles_end, 
+    const CrossSection* cs_absorb_table, Particle* particle_end, 
     int* nparticles_sent, int* facets, int* collisions, Particle* particle, 
     Particle* particle_out, double* energy_tally)
 {
@@ -178,27 +179,36 @@ int handle_particle(
   int x_facet = 0;
   double cell_mfp = 0.0;
 
-  // Initially set the time to census
-  if(initial) {
-    particle->dt_to_census = dt;
-  }
-
   // Update the cross sections, referencing into the padded mesh
   int cellx = (particle->cell%global_nx)-x_off+PAD;
   int celly = (particle->cell/global_nx)-y_off+PAD;
   double local_density = density[celly*(nx+2*PAD)+cellx];
+
   double cs_scatter = total_cs_for_energy(cs_scatter_table, particle->e, local_density);
   double cs_absorb = total_cs_for_energy(cs_absorb_table, particle->e, local_density);
   double particle_velocity = sqrt((2.0*particle->e*eV)/PARTICLE_MASS);
 
-  // Determine the number of mean free paths until the next collision
-  particle->mfp_to_collision = -log(genrand())/cs_scatter;
+  if(initial) {
+    // Set time to census and mean free paths until collision
+    particle->dt_to_census = dt;
+    particle->mfp_to_collision = -log(genrand())/cs_scatter;
+  }
+
+  if(particle->tracer == trace_particle) {
+    printf("**new iter\n");
+  }
 
   // Loop until we have reached census
   while(particle->dt_to_census > 0.0) {
+    if(particle->cell == trace_cell) {
+      printf("** tracer %d\n", particle->tracer);
+    }
     const double total_cross_section = cs_scatter+cs_absorb;
     cell_mfp = 1.0/total_cross_section;
 
+    if(particle->tracer == trace_particle) {
+      printf("particle loc %.15e %.15e %d %.15e\n", particle->x, particle->y, particle->cell, particle->dt_to_census);
+    }
     // Work out the distance until the particle hits a facet
     double distance_to_facet = 0.0;
     calc_distance_to_facet(
@@ -219,7 +229,7 @@ int handle_particle(
       // The cross sections for scattering and absorbtion were calculated on 
       // a previous iteration for our given energy
       if(handle_collision(
-            particle, particles_end, global_nx, nx, x_off, y_off, cs_absorb, 
+            particle, particle_end, global_nx, nx, x_off, y_off, cs_absorb, 
             total_cross_section, distance_to_collision, energy_tally)) {
         return PARTICLE_DEAD;
       }
@@ -233,23 +243,23 @@ int handle_particle(
       particle->dt_to_census -= distance_to_collision/particle_velocity;
       particle_velocity = sqrt((2.0*particle->e*eV)/PARTICLE_MASS);
 
-  if(particle->cell == trace_cell && particle->tracer == trace_particle) {
-    printf("collided\n");
-    printf("distance to collision %.15e\n", distance_to_collision);
-    printf("new omega %.15e %.15e\n", particle->omega_x, particle->omega_y);
-  }
+      if(particle->cell == trace_cell && particle->tracer == trace_particle) {
+        printf("collided\n");
+        printf("distance to collision %.15e\n", distance_to_collision);
+        printf("new omega %.15e %.15e\n", particle->omega_x, particle->omega_y);
+      }
 
 
       STOP_PROFILING(&compute_profile, "collision");
     }
     // Check if we have reached facet
     else if(distance_to_facet < distance_to_census) {
-  if(particle->cell == trace_cell && particle->tracer == trace_particle) {
-    printf("hit facet\n");
-    printf("distance to facet %.15e\n", distance_to_facet);
-    printf("facet %.15e %.15e %.15e %.15e %d\n", 
-        particle->x, particle->y, particle->omega_x, particle->omega_y, particle->cell);
-  }
+      if(particle->cell == trace_cell && particle->tracer == trace_particle) {
+        printf("hit facet\n");
+        printf("distance to facet %.15e\n", distance_to_facet);
+        printf("facet %.15e %.15e %.15e %.15e %d\n", 
+            particle->x, particle->y, particle->omega_x, particle->omega_y, particle->cell);
+      }
       START_PROFILING(&compute_profile);
       (*facets)++;
 
@@ -262,9 +272,9 @@ int handle_particle(
             global_nx, global_ny, nx, ny, x_off, y_off, neighbours, 
             distance_to_facet, x_facet, nparticles_sent, particle, 
             particle_end, particle_out)) {
-  if(particle->tracer == trace_particle) {
-    printf("sending facet\n");
-  }
+        if(particle->tracer == trace_particle) {
+          printf("sending facet\n");
+        }
         return PARTICLE_SENT;
       }
 
@@ -300,7 +310,7 @@ int handle_particle(
 
 // Handle the collision event, including absorption and scattering
 int handle_collision(
-    Particle* particle, Particle* particles_end, const int global_nx, 
+    Particle* particle, Particle* particle_end, const int global_nx, 
     const int nx, const int x_off, const int y_off, const double cs_absorb, 
     const double cs_total, const double distance_to_collision, 
     double* energy_tally)
@@ -311,7 +321,15 @@ int handle_collision(
 
   double de;
   const double p_absorb = cs_absorb/cs_total;
-  if(genrand() < p_absorb) {
+
+  if(particle->cell == trace_cell && particle->tracer == trace_particle) {
+    printf("p_absorb %.12e\n", p_absorb);
+  }
+  const double rn = genrand();
+  if(rn < p_absorb) {
+    if(particle->cell == trace_cell && particle->tracer == trace_particle) {
+      printf("absorbing %.12e\n", rn);
+    }
 
     /* Model particle absorption */
 
@@ -324,7 +342,7 @@ int handle_collision(
     // it dead and it will be garbage collected at some point
     if(particle->e < MIN_ENERGY_OF_INTEREST) {
       // Overwrite the particle
-      *particle = *particles_end;
+      *particle = *particle_end;
       return TRUE;
     }
   }
@@ -363,7 +381,7 @@ int handle_collision(
   // Remove the energy delta from the cell
   const int cellx = (particle->cell%global_nx)-x_off;
   const int celly = (particle->cell/global_nx)-y_off;
-  energy_tally[celly*nx+cellx] -= de; 
+  energy_tally[celly*nx+cellx] += de; 
 
   return FALSE;
 }
@@ -374,7 +392,7 @@ int handle_facet_encounter(
     const int global_nx, const int global_ny, const int nx, const int ny, 
     const int x_off, const int y_off, const int* neighbours, 
     const double distance_to_facet, int x_facet, int* nparticles_sent, 
-    Particle* particle, Particle* particles_end, Particle* particle_out)
+    Particle* particle, Particle* particle_end, Particle* particle_out)
 {
   // We don't need to consider the halo regions in this package
   int cellx = particle->cell%global_nx;
@@ -392,6 +410,9 @@ int handle_facet_encounter(
       // Reflect at the boundary
       if(cellx >= (global_nx-1)) {
         particle->omega_x = -(particle->omega_x);
+        if(particle->tracer == trace_particle) {
+          printf("reflect\n");
+        }
       }
       else {
         // Definitely moving to right cell
@@ -401,7 +422,7 @@ int handle_facet_encounter(
         // Check if we need to pass to another process
         if(cellx >= nx+x_off) {
           send_and_replace_particle(
-              neighbours[EAST], particles_end, particle, particle_out);
+              neighbours[EAST], particle_end, particle, particle_out);
           nparticles_sent[EAST]++;
           return TRUE;
         }
@@ -411,6 +432,9 @@ int handle_facet_encounter(
       if(cellx <= 0) {
         // Reflect at the boundary
         particle->omega_x = -(particle->omega_x);
+        if(particle->tracer == trace_particle) {
+          printf("reflect\n");
+        }
       }
       else {
         // Definitely moving to left cell
@@ -420,7 +444,7 @@ int handle_facet_encounter(
         // Check if we need to pass to another process
         if(cellx < x_off) {
           send_and_replace_particle(
-              neighbours[WEST], particles_end, particle, particle_out);
+              neighbours[WEST], particle_end, particle, particle_out);
           nparticles_sent[WEST]++;
           return TRUE;
         }
@@ -432,16 +456,25 @@ int handle_facet_encounter(
       // Reflect at the boundary
       if(celly >= (global_ny-1)) {
         particle->omega_y = -(particle->omega_y);
+        if(particle->tracer == trace_particle) {
+          printf("reflect\n");
+        }
       }
       else {
         // Definitely moving to north cell
         celly += 1;
         particle->cell = celly*global_nx+cellx;
+        if(particle->tracer == trace_particle) {
+          printf("moving cell up %d\n", particle->cell);
+        }
 
         // Check if we need to pass to another process
         if(celly >= ny+y_off) {
+          if(particle->tracer == trace_particle) {
+            printf("sending up %d\n", particle->cell);
+          }
           send_and_replace_particle(
-              neighbours[NORTH], particles_end, particle, particle_out);
+              neighbours[NORTH], particle_end, particle, particle_out);
           nparticles_sent[NORTH]++;
           return TRUE;
         }
@@ -451,6 +484,9 @@ int handle_facet_encounter(
       // Reflect at the boundary
       if(celly <= 0) {
         particle->omega_y = -(particle->omega_y);
+        if(particle->tracer == trace_particle) {
+          printf("reflect\n");
+        }
       }
       else {
         // Definitely moving to south cell
@@ -460,7 +496,7 @@ int handle_facet_encounter(
         // Check if we need to pass to another process
         if(celly < y_off) {
           send_and_replace_particle(
-              neighbours[SOUTH], particles_end, particle, particle_out);
+              neighbours[SOUTH], particle_end, particle, particle_out);
           nparticles_sent[SOUTH]++;
           return TRUE;
         }
@@ -473,7 +509,7 @@ int handle_facet_encounter(
 
 // Sends a particle to a neighbour and replaces in the particle list
 void send_and_replace_particle(
-    const int destination, Particle* particles_end, Particle* particle, 
+    const int destination, Particle* particle_end, Particle* particle, 
     Particle* particle_out)
 {
 #ifdef MPI
@@ -482,7 +518,7 @@ void send_and_replace_particle(
 
   // Place the particle in the out buffer and replace
   *particle_out = *particle;
-  *particle = *particles_end;
+  *particle = *particle_end;
 
   // Send the particle
   MPI_Send(
@@ -507,15 +543,18 @@ void calc_distance_to_facet(
   double u_x_inv = 1.0/(omega_x*particle_velocity);
   double u_y_inv = 1.0/(omega_y*particle_velocity);
 
+  if(cell == trace_cell) {
+    printf("calc %.15e %.15e particle_vel %.15e\n", omega_x, omega_y, particle_velocity);
+  }
   // The bound is open on the left and bottom so we have to correct for this and
   // required the movement to the facet to go slightly further than the edge
   // in the calculated values, using OPEN_BOUND_CORRECTION, which is the smallest
   // possible distance we can be from the closed bound e.g. 1.0e-14.
-  double dt_x = (omega_x > 0.0)
-    ? (edgex[cellx+1]-x)*u_x_inv
+  double dt_x = (omega_x >= 0.0)
+    ? ((edgex[cellx+1])-x)*u_x_inv
     : ((edgex[cellx]-OPEN_BOUND_CORRECTION)-x)*u_x_inv;
-  double dt_y = (omega_y > 0.0)
-    ? (edgey[celly+1]-y)*u_y_inv
+  double dt_y = (omega_y >= 0.0)
+    ? ((edgey[celly+1])-y)*u_y_inv
     : ((edgey[celly]-OPEN_BOUND_CORRECTION)-y)*u_y_inv;
   *x_facet = (dt_x < dt_y) ? 1 : 0;
 
@@ -534,15 +573,15 @@ void calc_distance_to_facet(
     // ||u'|| = (x_x.||u||)/u_x
     // We are centered on the origin, so the y component is 0 after travelling
     // aint the x axis to the edge (ax, 0).(x, y)
-    *distance_to_facet = (omega_x > 0.0)
-      ? (edgex[cellx+1]-x)*mag_u0*u_x_inv
+    *distance_to_facet = (omega_x >= 0.0)
+      ? ((edgex[cellx+1])-x)*mag_u0*u_x_inv
       : ((edgex[cellx]-OPEN_BOUND_CORRECTION)-x)*mag_u0*u_x_inv;
   }
   else {
     // We are centered on the origin, so the x component is 0 after travelling
     // aint the y axis to the edge (0, ay).(x, y)
-    *distance_to_facet = (omega_y > 0.0)
-      ? (edgey[celly+1]-y)*mag_u0*u_y_inv
+    *distance_to_facet = (omega_y >= 0.0)
+      ? ((edgey[celly+1])-y)*mag_u0*u_y_inv
       : ((edgey[celly]-OPEN_BOUND_CORRECTION)-y)*mag_u0*u_y_inv;
   }
 }
