@@ -233,18 +233,38 @@ int handle_particle(
       particle->dt_to_census -= distance_to_collision/particle_velocity;
       particle_velocity = sqrt((2.0*particle->e*eV)/PARTICLE_MASS);
 
+  if(particle->cell == trace_cell && particle->tracer == trace_particle) {
+    printf("collided\n");
+    printf("distance to collision %.15e\n", distance_to_collision);
+    printf("new omega %.15e %.15e\n", particle->omega_x, particle->omega_y);
+  }
+
+
       STOP_PROFILING(&compute_profile, "collision");
     }
     // Check if we have reached facet
     else if(distance_to_facet < distance_to_census) {
+  if(particle->cell == trace_cell && particle->tracer == trace_particle) {
+    printf("hit facet\n");
+    printf("distance to facet %.15e\n", distance_to_facet);
+    printf("facet %.15e %.15e %.15e %.15e %d\n", 
+        particle->x, particle->y, particle->omega_x, particle->omega_y, particle->cell);
+  }
       START_PROFILING(&compute_profile);
       (*facets)++;
 
-      // Check if we hit a facet, and jump out if particle left this rank's domain
+      // Update the mean free paths until collision
+      particle->mfp_to_collision -= (distance_to_facet/cell_mfp);
+      particle->dt_to_census -= distance_to_facet/particle_velocity;
+
+      // Encounter facet, and jump out if particle left this rank's domain
       if(handle_facet_encounter(
             global_nx, global_ny, nx, ny, x_off, y_off, neighbours, 
             distance_to_facet, x_facet, nparticles_sent, particle, 
-            particles_end, particle_out)) {
+            particle_end, particle_out)) {
+  if(particle->tracer == trace_particle) {
+    printf("sending facet\n");
+  }
         return PARTICLE_SENT;
       }
 
@@ -259,19 +279,19 @@ int handle_particle(
         cs_absorb = total_cs_for_energy(cs_absorb_table, particle->e, local_density);
       }
 
-      // Update the mean free paths until collision
-      particle->mfp_to_collision -= (distance_to_facet/cell_mfp);
-      particle->dt_to_census -= distance_to_facet/particle_velocity;
-
       STOP_PROFILING(&compute_profile, "facet");
     }
     // Check if we have reached census
     else {
+      if(particle->cell == trace_cell) {
+        printf("census in cell %d\n", particle->tracer);
+      }
       // We have not changed cell or energy level at this stage
       particle->x += distance_to_census*particle->omega_x;
       particle->y += distance_to_census*particle->omega_y;
       particle->mfp_to_collision -= (distance_to_census/cell_mfp);
       particle->dt_to_census = 0.0;
+      break;
     }
   }
 
