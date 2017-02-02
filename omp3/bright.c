@@ -42,6 +42,7 @@ void solve_transport_2d(
       &nparticles, particles, particles_out, cs_scatter_table, cs_absorb_table,
       energy_tally);
 
+  START_PROFILING(&compute_profile);
 #ifdef MPI
   while(1) {
     int nneighbours = 0;
@@ -112,6 +113,7 @@ void solve_transport_2d(
     }
   }
 #endif
+  STOP_PROFILING(&compute_profile, "mopping up particles");
 
   barrier();
 
@@ -174,6 +176,7 @@ int handle_particle(
   // (3) particle hits a boundary region and needs transferring to another process
 
   int x_facet = 0;
+  int cs_index = -1;
   double cell_mfp = 0.0;
 
   // Update the cross sections, referencing into the padded mesh
@@ -181,19 +184,29 @@ int handle_particle(
   int celly = (particle->cell/global_nx)-y_off+PAD;
   double local_density = density[celly*(nx+2*PAD)+cellx];
 
-  double cs_scatter = total_cs_for_energy(cs_scatter_table, particle->e, local_density);
-  double cs_absorb = total_cs_for_energy(cs_absorb_table, particle->e, local_density);
+  // This makes some assumption about the units of the data stored globally.
+  // Might be worth making this more explicit somewhere.
+  double microscopic_cs_scatter = 
+    microscopic_cs_for_energy(cs_scatter_table, particle->e, local_density, &cs_index);
+  double microscopic_cs_absorb = 
+    microscopic_cs_for_energy(cs_absorb_table, particle->e, local_density, &cs_index);
+  double macroscopic_cs_scatter = 
+    (local_density*AVOGADROS/MOLAR_MASS)*(microscopic_cs_scatter*BARNS);
+  double macroscopic_cs_absorb = 
+    (local_density*AVOGADROS/MOLAR_MASS)*(microscopic_cs_absorb*BARNS);
+
   double particle_velocity = sqrt((2.0*particle->e*eV)/PARTICLE_MASS);
 
   // Set time to census and mfps until collision, unless travelled particle
   if(initial) {
     particle->dt_to_census = dt;
-    particle->mfp_to_collision = -log(genrand())/cs_scatter;
+    particle->mfp_to_collision = -log(genrand())/macroscopic_cs_scatter;
   }
 
   // Loop until we have reached census
   while(particle->dt_to_census > 0.0) {
-    const double total_cross_section = cs_scatter+cs_absorb;
+    const double total_cross_section = 
+      macroscopic_cs_scatter+macroscopic_cs_absorb;
     cell_mfp = 1.0/total_cross_section;
 
     // Work out the distance until the particle hits a facet
@@ -208,7 +221,7 @@ int handle_particle(
 
     // Check if our next event is a collision
     if(distance_to_collision < distance_to_facet &&
-       distance_to_collision < distance_to_census) {
+        distance_to_collision < distance_to_census) {
 
       START_PROFILING(&compute_profile);
       (*collisions)++;
@@ -216,17 +229,24 @@ int handle_particle(
       // The cross sections for scattering and absorbtion were calculated on 
       // a previous iteration for our given energy
       if(handle_collision(
-            particle, particle_end, global_nx, nx, x_off, y_off, cs_absorb, 
-            total_cross_section, distance_to_collision, energy_tally)) {
+            particle, particle_end, global_nx, nx, x_off, y_off, 
+            macroscopic_cs_absorb, total_cross_section, distance_to_collision, 
+            energy_tally)) {
         return PARTICLE_DEAD;
       }
 
       // Energy has changed so update the cross-sections
-      cs_scatter = total_cs_for_energy(cs_scatter_table, particle->e, local_density);
-      cs_absorb = total_cs_for_energy(cs_absorb_table, particle->e, local_density);
+      microscopic_cs_scatter = 
+        microscopic_cs_for_energy(cs_scatter_table, particle->e, local_density, &cs_index);
+      microscopic_cs_absorb = 
+        microscopic_cs_for_energy(cs_absorb_table, particle->e, local_density, &cs_index);
+      macroscopic_cs_scatter = 
+        (local_density*AVOGADROS/MOLAR_MASS)*(microscopic_cs_scatter*BARNS);
+      macroscopic_cs_absorb = 
+        (local_density*AVOGADROS/MOLAR_MASS)*(microscopic_cs_absorb*BARNS);
 
       // Resample number of mean free paths to collision
-      particle->mfp_to_collision = -log(genrand())/cs_scatter;
+      particle->mfp_to_collision = -log(genrand())/macroscopic_cs_scatter;
       particle->dt_to_census -= distance_to_collision/particle_velocity;
       particle_velocity = sqrt((2.0*particle->e*eV)/PARTICLE_MASS);
       STOP_PROFILING(&compute_profile, "collision");
@@ -252,12 +272,14 @@ int handle_particle(
       cellx = (particle->cell%global_nx)-x_off+PAD;
       celly = (particle->cell/global_nx)-y_off+PAD;
 
-      // Check if we need to update the density and cross sections
-      if(local_density != density[celly*(nx+2*PAD)+cellx]) {
-        local_density = density[celly*(nx+2*PAD)+cellx];
-        cs_scatter = total_cs_for_energy(cs_scatter_table, particle->e, local_density);
-        cs_absorb = total_cs_for_energy(cs_absorb_table, particle->e, local_density);
-      }
+      /* We don't actually need to perform a cross sectional update here in the
+       * traditional sense as we do not have to lookup the energy profile
+       * in the data table, merely update it with the adjusted density. */
+      local_density = density[celly*(nx+2*PAD)+cellx];
+      macroscopic_cs_scatter = 
+        (local_density*AVOGADROS/MOLAR_MASS)*(microscopic_cs_scatter*BARNS);
+      macroscopic_cs_absorb = 
+        (local_density*AVOGADROS/MOLAR_MASS)*(microscopic_cs_absorb*BARNS);
 
       STOP_PROFILING(&compute_profile, "facet");
     }
@@ -525,30 +547,47 @@ void calc_distance_to_facet(
 }
 
 // Fetch the cross section for a particular energy value
-double total_cs_for_energy(
-    const CrossSection* cs, const double energy, const double local_density)
+double microscopic_cs_for_energy(
+    const CrossSection* cs, const double energy, const double local_density,
+    int* cs_index)
 {
+  /* Attempt an optimisation of the search by performing a linear operation
+   * if theere is an existing location. We assume that the energy has
+   * reduced rather than increased, which seems to be a legitimate 
+   * approximation in this particular case */
+
+  int ind = 0; 
   double* key = cs->key;
   double* value = cs->value;
 
-  // Use a simple binary search
-  int ind = cs->nentries/2;
-  int width = ind/2;
-  while(key[ind-1] > energy || key[ind] < energy) {
-    width = max(1, width/2); // To handle odd cases, allows one extra walk
-    ind += (key[ind] > energy) ? -width : width;
+  // TODO: Determine whether this is the best approach for all cases,
+  // are there situations where the linear search is not applicable, for instance
+  // are thre material properties that change the energy deltas enough 
+  // that the lookup jumps around? It might be worth organising the search under
+  // a cost model.
+  if(*cs_index > -1) {
+    for(int ind = *cs_index; ind >= 0; --ind) {
+      // Loop linearly until we find the energy group
+      if(key[ind-1] > energy || key[ind] < energy) {
+        break;
+      }
+    }
   }
+  else {
+    // Use a simple binary search to find the energy group
+    ind = cs->nentries/2;
+    int width = ind/2;
+    while(key[ind-1] > energy || key[ind] < energy) {
+      width = max(1, width/2); // To handle odd cases, allows one extra walk
+      ind += (key[ind] > energy) ? -width : width;
+    }
+  }
+
+  *cs_index = ind;
 
   // TODO: perform some interesting interpolation here
   // Center weighted is poor accuracy but might even out over enough particles
-  const double microscopic_cs = (value[ind-1] + value[ind])/2.0;
-
-  // This makes some assumption about the units of the data stored globally.
-  // Might be worth making this more explicit somewhere.
-  const double macroscopic_cs = 
-    (local_density*AVOGADROS/MOLAR_MASS)*(microscopic_cs*BARNS);
-
-  return macroscopic_cs;
+  return (value[ind-1] + value[ind])/2.0;
 }
 
 // Validates the results of the simulation
