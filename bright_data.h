@@ -16,7 +16,7 @@
 #define CS_CAPTURE_FILENAME    "capture.cs"
 #define TAG_SEND_RECV          100
 #define TAG_PARTICLE           1
-#define NPARTICLES             1e5
+#define NPARTICLES             1e7
 
 #ifdef MPI
 #include "mpi.h"
