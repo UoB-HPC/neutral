@@ -184,6 +184,8 @@ int handle_particle(
   int celly = (particle->cell/global_nx)-y_off+PAD;
   double local_density = density[celly*(nx+2*PAD)+cellx];
 
+  START_PROFILING(&compute_profile);
+
   // This makes some assumption about the units of the data stored globally.
   // Might be worth making this more explicit somewhere.
   double microscopic_cs_scatter = 
@@ -203,11 +205,15 @@ int handle_particle(
     particle->mfp_to_collision = -log(genrand())/macroscopic_cs_scatter;
   }
 
+  STOP_PROFILING(&compute_profile, "handle particle initial");
+
   // Loop until we have reached census
   while(particle->dt_to_census > 0.0) {
     const double total_cross_section = 
       macroscopic_cs_scatter+macroscopic_cs_absorb;
     cell_mfp = 1.0/total_cross_section;
+
+    START_PROFILING(&compute_profile);
 
     // Work out the distance until the particle hits a facet
     double distance_to_facet = 0.0;
@@ -218,6 +224,8 @@ int handle_particle(
 
     const double distance_to_collision = particle->mfp_to_collision*cell_mfp;
     const double distance_to_census = particle_velocity*particle->dt_to_census;
+
+    STOP_PROFILING(&compute_profile, "calc_distance_to_facet");
 
     // Check if our next event is a collision
     if(distance_to_collision < distance_to_facet &&
@@ -329,7 +337,7 @@ int handle_collision(
   }
   else {
 
-    /* Model particle scattering */
+    /* Model elastic particle scattering */
 
     // Choose a random scattering angle between -1 and 1
     const double mu_cm = 1.0 - 2.0*genrand();
@@ -560,14 +568,19 @@ double microscopic_cs_for_energy(
   double* key = cs->key;
   double* value = cs->value;
 
+  // Determine the correct search direction required to move towards the
+  // new energy
+  int direction = (energy-cs->value[*cs_index] > 0.0) ? 1 : -1; 
+
   // TODO: Determine whether this is the best approach for all cases,
   // are there situations where the linear search is not applicable, for instance
   // are thre material properties that change the energy deltas enough 
   // that the lookup jumps around? It might be worth organising the search under
   // a cost model.
   if(*cs_index > -1) {
-    for(int ind = *cs_index; ind >= 0; --ind) {
-      // Loop linearly until we find the energy group
+    // This search will move in the correct direction towards the new energy group
+    for(int ind = *cs_index; ind >= 0 && ind < cs->nentries; ind += direction) {
+      // Check if we have found the new energy group index
       if(key[ind-1] > energy || key[ind] < energy) {
         break;
       }
@@ -606,7 +619,7 @@ void validate(
     return;
   }
 
-  printf("Final global_energy_tally %f\n", global_energy_tally);
+  printf("Final global_energy_tally %f\n", global_energy_tally/nglobal_particles);
 
   FILE* fp = fopen("test.results", "r");
   if(fp == NULL) {
