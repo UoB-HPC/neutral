@@ -50,6 +50,7 @@ void initialise_bright_data(
     global_particle_start_y = (2*mesh->global_ny/10);
     global_particle_nx = (2*mesh->global_nx/10);
     global_particle_ny = (2*mesh->global_ny/10);
+    printf("Source is small square at left of mesh.\n");
   }
   else if(source_location == 1) {
     // RANDOM ACROSS WHOLE MESH
@@ -57,6 +58,7 @@ void initialise_bright_data(
     global_particle_start_y = 0;
     global_particle_nx = mesh->global_nx;
     global_particle_ny = mesh->global_ny;
+    printf("Source is uniformly distributed across mesh.\n");
   }
   else {
     TERMINATE("The 'source_location' parameter has been set incorrectly.\n");
