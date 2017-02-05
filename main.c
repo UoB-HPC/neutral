@@ -8,21 +8,14 @@
 #include "../profiler.h"
 #include "mt19937.h"
 
-
-
-
 #ifdef MPI
 #include "mpi.h"
 #endif
 
-
-
-
 int main(int argc, char** argv)
 {
   if(argc != 4) {
-    printf("usage: ./bright.exe <nx> <ny> <niters>\n");
-    exit(1);
+    TERMINATE("usage: ./bright.exe <nx> <ny> <niters>\n");
   }
 
   // Store the dimensions of the mesh
@@ -42,8 +35,6 @@ int main(int argc, char** argv)
   initialise_devices(mesh.rank);
   initialise_comms(&mesh);
   initialise_mesh_2d(&mesh);
-
-  mesh.dt *= 0.01;
 
   SharedData shared_data = {0};
   initialise_shared_data_2d(
