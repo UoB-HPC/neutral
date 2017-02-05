@@ -1,8 +1,8 @@
 #pragma once
 
+#include "bright_data.h"
 #include "../mesh.h"
 #include "../shared_data.h"
-#include "bright_data.h"
 
 #ifdef __cplusplus
 extern "C" {

@@ -2,9 +2,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "bright_data.h"
+#include "mt19937.h"
 #include "../profiler.h"
 #include "../shared.h"
-#include "mt19937.h"
+#include "../params.h"
 
 // Reads a cross section file
 void read_cs_file(
@@ -20,8 +21,8 @@ void initialise_particle(
     const int local_ny, const double mesh_width, const double mesh_height, 
     const double particle_off_x, const double particle_off_y, 
     const int local_particle_nx, const int local_particle_ny, 
-    const int x_off, const int y_off, const double dt, 
-    const double* edgex, const double* edgey, Particle* particle);
+    const int x_off, const int y_off, const double dt, const double* edgex, 
+    const double* edgey, const double initial_energy, Particle* particle);
 
 // Initialises all of the Bright-specific data structures.
 void initialise_bright_data(
@@ -30,25 +31,36 @@ void initialise_bright_data(
   const int local_nx = mesh->local_nx-2*PAD;
   const int local_ny = mesh->local_ny-2*PAD;
 
-  // SMALL 1/5 SQUARE AT LEFT OF MESH
-  const int global_particle_start_x = 0;
-  const int global_particle_start_y = (2*mesh->global_ny/10);
-  const int global_particle_nx = (2*mesh->global_nx/10);
-  const int global_particle_ny = (2*mesh->global_ny/10);
-#if 0
-  // SMALL 1/5 SQUARE IN MIDDLE OF MESH
-  const int global_particle_start_x = (4*mesh->global_nx/10);
-  const int global_particle_start_y = (4*mesh->global_ny/10);
-  const int global_particle_nx = (2*mesh->global_nx/10);
-  const int global_particle_ny = (2*mesh->global_ny/10);
-#endif // if 0
-#if 0
-  // RANDOM ACROSS WHOLE MESH
-  const int global_particle_start_x = 0;
-  const int global_particle_nx = mesh->global_nx;
-  const int global_particle_start_y = 0;
-  const int global_particle_ny = mesh->global_ny;
-#endif // if 0
+  bright_data->nparticles = 
+    get_int_parameter("nparticles", NEUTRAL_PARAMS);
+  bright_data->initial_energy = 
+    get_double_parameter("initial_energy", NEUTRAL_PARAMS);
+
+  int global_particle_start_x;
+  int global_particle_start_y;
+  int global_particle_nx;
+  int global_particle_ny;
+
+  const int source_location = 
+    get_int_parameter("source_location", NEUTRAL_PARAMS);
+
+  if(source_location == 0) {
+    // SMALL 1/5 SQUARE AT LEFT OF MESH
+    global_particle_start_x = 0;
+    global_particle_start_y = (2*mesh->global_ny/10);
+    global_particle_nx = (2*mesh->global_nx/10);
+    global_particle_ny = (2*mesh->global_ny/10);
+  }
+  else if(source_location == 1) {
+    // RANDOM ACROSS WHOLE MESH
+    global_particle_start_x = 0;
+    global_particle_start_y = 0;
+    global_particle_nx = mesh->global_nx;
+    global_particle_ny = mesh->global_ny;
+  }
+  else {
+    TERMINATE("The 'source_location' parameter has been set incorrectly.\n");
+  }
 
   // Check if the start of data region is before or after our patch starts
   const int local_particle_left_off = 
@@ -66,15 +78,24 @@ void initialise_bright_data(
   const int local_particle_ny = 
     max(0, (local_ny-local_particle_bottom_off-local_particle_top_off));
 
-  bright_data->nlocal_particles = NPARTICLES*
+  bright_data->nlocal_particles = bright_data->nparticles*
     ((double)local_particle_nx*local_particle_ny)/
     ((double)global_particle_nx*global_particle_ny);
 
   // TODO: FIX THE OVERESTIMATED PARTICLE POPULATION MAXIMUMS
-  bright_data->local_particles = (Particle*)malloc(sizeof(Particle)*NPARTICLES*2);
-  bright_data->out_particles = (Particle*)malloc(sizeof(Particle)*NPARTICLES);
-  bright_data->energy_tally = (double*)malloc(sizeof(double)*local_nx*local_ny);
+  bright_data->local_particles = 
+    (Particle*)malloc(sizeof(Particle)*bright_data->nparticles*2);
+  if(!bright_data->local_particles) {
+    TERMINATE("Could not allocate particle array.\n");
+  }
 
+  bright_data->out_particles = 
+    (Particle*)malloc(sizeof(Particle)*bright_data->nparticles);
+  if(!bright_data->out_particles) {
+    TERMINATE("Could not allocate particle array.\n");
+  }
+
+  allocate_data(&bright_data->energy_tally, local_nx*local_ny);
   for(int ii = 0; ii < local_nx*local_ny; ++ii) {
     bright_data->energy_tally[ii] = 0.0;
   }
@@ -88,7 +109,8 @@ void initialise_bright_data(
     inject_particles(
         mesh, local_nx, local_ny, local_particle_left_off, 
         local_particle_bottom_off, local_particle_nx, local_particle_ny, 
-        bright_data->nlocal_particles, bright_data->local_particles);
+        bright_data->nlocal_particles, bright_data->initial_energy, 
+        bright_data->local_particles);
   }
 
   initialise_cross_sections(
@@ -111,16 +133,16 @@ void inject_particles(
     Mesh* mesh, const int local_nx, const int local_ny, 
     const int local_particle_left_off, const int local_particle_bottom_off,
     const int local_particle_nx, const int local_particle_ny, 
-    const int nparticles, Particle* particles)
+    const int nparticles, const double initial_energy, Particle* particles)
 {
   START_PROFILING(&compute_profile);
   for(int ii = 0; ii < nparticles; ++ii) {
     initialise_particle(
         mesh->global_nx, mesh->global_ny, local_nx, local_ny, mesh->width, 
         mesh->height, mesh->edgex[local_particle_left_off+PAD], 
-        mesh->edgey[local_particle_bottom_off+PAD], 
-        local_particle_nx, local_particle_ny, mesh->x_off, 
-        mesh->y_off, mesh->dt, mesh->edgex, mesh->edgey, &particles[ii]);
+        mesh->edgey[local_particle_bottom_off+PAD], local_particle_nx, 
+        local_particle_ny, mesh->x_off, mesh->y_off, mesh->dt, mesh->edgex, 
+        mesh->edgey, initial_energy, &particles[ii]);
   }
   STOP_PROFILING(&compute_profile, "initialising particles");
 }
@@ -131,8 +153,8 @@ void initialise_particle(
     const int local_ny, const double mesh_width, const double mesh_height, 
     const double particle_off_x, const double particle_off_y, 
     const int local_particle_nx, const int local_particle_ny, 
-    const int x_off, const int y_off, const double dt, 
-    const double* edgex, const double* edgey, Particle* particle)
+    const int x_off, const int y_off, const double dt, const double* edgex, 
+    const double* edgey, const double initial_energy, Particle* particle)
 {
   // Set the initial random location of the particle inside the source region
   particle->x = particle_off_x + 
@@ -165,7 +187,7 @@ void initialise_particle(
   particle->omega_y = sin(theta);
 
   // This approximation sets mono-energetic initial state for source particles  
-  particle->e = INITIAL_ENERGY;
+  particle->e = initial_energy;
 
   // Set a weight for the particle to track absorption
   particle->weight = 1.0;
@@ -186,8 +208,9 @@ void read_cs_file(
   int ch;
   cs->nentries = 0;
   while ((ch = fgetc(fp)) != EOF) {
-    if(ch == '\n')
+    if(ch == '\n') {
       cs->nentries++;
+    }
   }
   printf("File %s contains %d entries\n", filename, cs->nentries);
 
