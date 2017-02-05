@@ -2,16 +2,22 @@
 #include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <omp.h>
 #include "bright_interface.h"
+#include "mt19937.h"
 #include "../mesh.h"
 #include "../shared_data.h"
 #include "../comms.h"
 #include "../profiler.h"
-#include "mt19937.h"
+#include "../params.h"
 
 #ifdef MPI
 #include "mpi.h"
 #endif
+
+void dump_particle_data(
+    BrightData* bright_data, Mesh* mesh, const int tt, 
+    const double elapsed_sim_time);
 
 int main(int argc, char** argv)
 {
@@ -19,12 +25,24 @@ int main(int argc, char** argv)
     TERMINATE("usage: ./bright.exe <nx> <ny> <niters>\n");
   }
 
+#ifdef ENABLE_PROFILING
+  /* The timing code has to be called so many times that the API calls 
+   * actually begin to influence the performance dramatically. */
+  fprintf(stderr, "Warning. Profiling is enabled and will increase the runtime.\n\n");
+#endif
+
   // Store the dimensions of the mesh
   Mesh mesh = {0};
   mesh.global_nx = atoi(argv[1]);
   mesh.global_ny = atoi(argv[2]);
   mesh.local_nx = atoi(argv[1]) + 2*PAD;
   mesh.local_ny = atoi(argv[2]) + 2*PAD;
+  mesh.width = get_double_parameter("width", ARCH_ROOT_PARAMS);
+  mesh.height = get_double_parameter("height", ARCH_ROOT_PARAMS);
+  mesh.max_dt = get_double_parameter("max_dt", ARCH_ROOT_PARAMS);
+  mesh.sim_end = get_double_parameter("sim_end", ARCH_ROOT_PARAMS);
+  mesh.dt = mesh.max_dt;
+  mesh.rank = MASTER;
   mesh.niters = atoi(argv[3]);
   mesh.rank = MASTER;
   mesh.nranks = 1;
@@ -41,10 +59,10 @@ int main(int argc, char** argv)
       mesh.x_off, mesh.y_off, &shared_data);
 
   BrightData bright_data = {0};
-  bright_data.nparticles = NPARTICLES;
-
   initialise_bright_data(
       &bright_data, &mesh);
+
+  double ninitial_particles = bright_data.nparticles;
 
   // Seed the mersenne twister
   sgenrand(mesh.rank*100UL+123UL);
@@ -68,34 +86,22 @@ int main(int argc, char** argv)
   // Presumably the timestep will have been set by the fluid dynamics,
   // given that it has the tightest timestep control requirements
   //set_timestep();
+  
+  dump_particle_data(
+      &bright_data, &mesh, 0, 0.0);
 
-  // Prepare for solve
-  struct Profile p = {0};
-  struct Profile wallclock = {0};
-  double elapsed_sim_time = 0.0;
-
-  int dneighbours[NNEIGHBOURS] = { EDGE, EDGE,  EDGE,  EDGE,  EDGE,  EDGE }; // Fudges away padding
-  double* temp = (double*)malloc(sizeof(double)*mesh.local_nx*mesh.local_ny);
-  for(int ii = 0; ii < bright_data.nlocal_particles; ++ii) {
-    Particle* particle = &bright_data.local_particles[ii];
-    const int cellx = (particle->cell%mesh.global_nx)-mesh.x_off;
-    const int celly = (particle->cell/mesh.global_nx)-mesh.y_off;
-    temp[celly*(mesh.local_nx-2*PAD)+cellx] = particle->e;
-  }
-
-  write_all_ranks_to_visit(
-      mesh.global_nx, mesh.global_ny, mesh.local_nx-2*PAD, mesh.local_ny-2*PAD, 
-      mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, dneighbours, 
-      temp, "particles0", 0, elapsed_sim_time);
+  // Make sure initialisation phase is complete
+  barrier();
 
   // Main timestep loop where we will track each particle through time
-  int tt;
-  for(tt = 0; tt < mesh.niters; ++tt) {
-
-    if(mesh.rank == MASTER) 
+  double wallclock = 0.0;
+  double elapsed_sim_time = 0.0;
+  for(int tt = 0; tt < mesh.niters; ++tt) {
+    if(mesh.rank == MASTER) {
       printf("Iteration %d\n", tt+1);
+    }
 
-    START_PROFILING(&wallclock);
+    double w0 = omp_get_wtime();
 
     // At this stage all of the particles have been moved for their timestep
     // and the tallying of the energy deposition throughout the system must
@@ -109,7 +115,7 @@ int main(int argc, char** argv)
         bright_data.energy_tally);
 
     elapsed_sim_time += mesh.dt;
-    if(elapsed_sim_time >= SIM_END) {
+    if(elapsed_sim_time >= mesh.sim_end) {
       if(mesh.rank == MASTER)
         printf("reached end of simulation time\n");
       break;
@@ -117,39 +123,30 @@ int main(int argc, char** argv)
     STOP_PROFILING(&wallclock, "wallclock");
 
     barrier();
+    wallclock += omp_get_wtime()-w0;
 
-    temp = (double*)malloc(sizeof(double)*mesh.local_nx*mesh.local_ny);
-    for(int ii = 0; ii < bright_data.nlocal_particles; ++ii) {
-      Particle* particle = &bright_data.local_particles[ii];
-      const int cellx = (particle->cell%mesh.global_nx)-mesh.x_off;
-      const int celly = (particle->cell/mesh.global_nx)-mesh.y_off;
-      temp[celly*(mesh.local_nx-2*PAD)+cellx] = particle->e;
-    }
+    dump_particle_data(
+        &bright_data, &mesh, tt+1, elapsed_sim_time);
 
-    char particles_name[100];
     char tally_name[100];
-    sprintf(particles_name, "particles%d", tt+1);
     sprintf(tally_name, "energy%d", tt+1);
-    write_all_ranks_to_visit(
-        mesh.global_nx, mesh.global_ny, mesh.local_nx-2*PAD, mesh.local_ny-2*PAD, 
-        mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, dneighbours, 
-        temp, particles_name, 0, elapsed_sim_time);
+    int dneighbours[NNEIGHBOURS] = { EDGE, EDGE,  EDGE,  EDGE,  EDGE,  EDGE }; 
     write_all_ranks_to_visit(
         mesh.global_nx, mesh.global_ny, mesh.local_nx-2*PAD, mesh.local_ny-2*PAD,
         mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, dneighbours, 
         bright_data.energy_tally, tally_name, 0, elapsed_sim_time);
   }
 
+  // TODO: WHAT SHOULD THE VALUE OF NINITIALPARTICLES BE IF FISSION ETC.
   validate(
-      mesh.local_nx-2*PAD, mesh.local_ny-2*PAD, NPARTICLES, mesh.dt, mesh.niters,
-      mesh.rank, bright_data.energy_tally);
+      mesh.local_nx-2*PAD, mesh.local_ny-2*PAD, ninitial_particles, mesh.dt, 
+      mesh.niters, mesh.rank, bright_data.energy_tally);
 
   if(mesh.rank == MASTER) {
     PRINT_PROFILING_RESULTS(&p);
 
-    struct ProfileEntry pe = profiler_get_profile_entry(&wallclock, "wallclock");
     printf("Wallclock %.2fs, Elapsed Simulation Time %.4fs\n", 
-        pe.time, elapsed_sim_time);
+        wallclock, elapsed_sim_time);
   }
 
 #if 0
@@ -161,112 +158,29 @@ int main(int argc, char** argv)
   return 0;
 }
 
-// Initialises a new particle ready for tracking
-static inline void initialise_particle(Particle* particle, Mesh* mesh)
+void dump_particle_data(
+    BrightData* bright_data, Mesh* mesh, const int tt, 
+    const double elapsed_sim_time)
 {
-  // Set the initial random location of the particle
-  particle->x = (double)prng(particle->seed)*mesh->discrete_step_x;
-  particle->y = (double)prng(particle->seed)*mesh->discrete_step_y;
-
-  for(int ii = 0; ii < mesh->local_nx; ++ii) {
-    if(particle->x >= mesh->edgex[ii] && particle->x < mesh->edgex[ii+1]) {
-      particle->cellx = ii;
-      break;
-    }
-  }
-  for(int ii = 0; ii < mesh->local_ny; ++ii) {
-    if(particle->y >= mesh->edgey[ii] && particle->y < mesh->edgey[ii+1]) {
-      particle->celly = ii;
-      break;
-    }
-  }
-  printf("cellx %d celly %d\n", particle->cellx, particle->celly);
-
-  // TODO: Work out how the velocities can be calculated
-  // It feels like it might be possible to look at the mean free path of a particle
-  // Also, it is probable that a particle starting at a particular energy level will
-  // have a specific velocity to begin with, perhaps this can then be weighted 
-  // randomly in a particular direction
-  // For testing purposes just going to set this to some simple fixed value
-  // for the modulo
-  const double upper_bound_vel = 1.0;
-  const double discrete_step_u_x = (upper_bound_vel / (double)INT_MAX);
-  const double discrete_step_u_y = (upper_bound_vel / (double)INT_MAX);
-  particle->u_x = (double)prng(particle->seed)*discrete_step_u_x;
-  particle->u_y = (double)prng(particle->seed)*discrete_step_u_y;
-
-  // TODO: Again, how does the particle energy get initialised
-  // Presumably neutrons can start in any continuous energy, but it's not
-  // clear how we decide this at initialisation. Going to set an upper and lower
-  // bound for the short term, the unit seemed to be meV...
-  const double lower_bound_e = 1.0;
-  const double upper_bound_e = 10.0;
-  const double discrete_step_e = (upper_bound_e-lower_bound_e)/(double)INT_MAX;
-  particle->e = lower_bound_e + (double)prng(particle->seed)*discrete_step_e;
-
-  // TODO: What are we meant to initialise the number of physical particles
-  // per simulated particle, 10 is an arbitrary default
-  particle->nparticles = 10;
-
-  // Important to store aint with the particle in case the particle gets sent across
-  // boundaries, when it will need to continue on another process
-  // TODO: It seems logical to initialise this to the current timestep, which 
-  // will be coupled with the timestep provided by the fluid dynamics solver
-  particle->dt_till_census = mesh->dt;
-
-  // Initilise the most recent even to be a census event, which counts as the 
-  // default starting state for a particle
-  particle->most_recent_event = CENSUS;
-}
-
-// Initialises the mesh for particle transportation
-// TODO: Work out if this can be complementarily stored with the other applications
-// data for meshes etc.
-static inline void initialise_mesh(Mesh* mesh) 
-{
-  mesh->width = 10.0;
-  mesh->height = 10.0;
-  mesh->local_nx = 100; 
-  mesh->local_ny = 100; 
-  mesh->x_off = 0;
-  mesh->y_off = 0;
-
-  const double cell_dx = mesh->width / (double)mesh->local_nx;
-  const double cell_dy = mesh->height / (double)mesh->local_ny;
-
-  mesh->edgex = (double*)malloc(sizeof(double)*(mesh->local_nx+1));
-  mesh->edgey = (double*)malloc(sizeof(double)*(mesh->local_ny+1));
-  mesh->cellx = (double*)malloc(sizeof(double)*(mesh->local_nx+1));
-  mesh->celly = (double*)malloc(sizeof(double)*(mesh->local_ny+1));
-
-
-  // Calculate the mesh positions, currently equal, but should be capable of 
-  // having differing values, eventually with grid motion
-  for(int ii = 0; ii < mesh->local_nx+1; ++ii) {
-    mesh->edgex[ii] = (mesh->x_off+ii)*cell_dx;
-    mesh->cellx[ii] = (mesh->x_off+ii+0.5)*cell_dx;
-  }
-  for(int ii = 0; ii < mesh->local_ny+1; ++ii) {
-    mesh->edgey[ii] = (mesh->y_off+ii)*cell_dy;
-    mesh->celly[ii] = (mesh->y_off+ii+0.5)*cell_dy;
+  double* temp = (double*)malloc(sizeof(double)*mesh->local_nx*mesh->local_ny);
+  for(int ii = 0; ii < bright_data->nlocal_particles; ++ii) {
+    Particle* particle = &bright_data->local_particles[ii];
+    const int cellx = (particle->cell%mesh->global_nx)-mesh->x_off;
+    const int celly = (particle->cell/mesh->global_nx)-mesh->y_off;
+    temp[celly*(mesh->local_nx-2*PAD)+cellx] = particle->e;
   }
 
-  // Calculate the discrete steps that the particles can be initialised onto
-  // TODO: Check whether this is an acceptable idea, given that it potentially
-  // limits the random-ness of the positioning of the particles at initialisation
-  mesh->discrete_step_x = (mesh->width / (double)INT_MAX);
-  mesh->discrete_step_y = (mesh->height / (double)INT_MAX);
-  printf("dsx %.12e dsy %.12e\n", mesh->discrete_step_x, mesh->discrete_step_y);
-}
+  // Dummy neighbours that stops any padding from happening
+  int neighbours[NNEIGHBOURS] = { EDGE, EDGE,  EDGE,  EDGE,  EDGE,  EDGE }; 
 
-static inline void initialise_cross_section()
-{
+  char particles_name[100];
+  sprintf(particles_name, "particles%d", tt);
+  write_all_ranks_to_visit(
+      mesh->global_nx, mesh->global_ny, mesh->local_nx-2*PAD, mesh->local_ny-2*PAD, 
+      mesh->x_off, mesh->y_off, mesh->rank, mesh->nranks, neighbours, 
+      temp, particles_name, 0, elapsed_sim_time);
+  barrier();
 
-}
-
-static inline int prng(int seed)
-{
-  // Get a random number for a particular coin flip
-  return rand();
+  free(temp);
 }
 

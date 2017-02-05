@@ -9,13 +9,11 @@ CFLAGS_INTEL_KNL = -O3 -qopenmp -no-prec-div -std=gnu99 -DINTEL \
 									 -xMIC-AVX512 -Wall -qopt-report=5
 CFLAGS_GCC       = -O3 -g -std=gnu99 -fopenmp -march=native -Wall #-std=gnu99
 CFLAGS_CRAY      = -lrt -hlist=a
-OPTIONS          = -DTILES -DENABLE_PROFILING 
+OPTIONS         += -DTILES #-DENABLE_PROFILING 
 
-MPI     = no
-OPTIONS = -g -DENABLE_PROFILING -qopt-report=5
-CFLAGS  = -O3 -std=gnu99 -xhost #-qopenmp
-LDFLAGS = #-lrt
-EXE			= bright
+ifeq ($(DEBUG), yes)
+  OPTIONS += -O0 -g -DDEBUG 
+endif
 
 ifeq ($(MPI), yes)
 	CC = mpiicc
@@ -24,8 +22,27 @@ else
 	CC = icc
 endif
 
-all:
-	$(CC) $(CFLAGS) $(OPTIONS) $(LDFLAGS) main.c profiler.c -o $(EXE).exe
+# Get specialised kernels
+SRC  			 = $(wildcard *.c)
+SRC  			+= $(wildcard $(KERNELS)/*.c)
+SRC  			+= $(wildcard $(MULTI_DIR)/$(KERNELS)/*.c)
+SRC 			+= $(subst main.c,, $(wildcard $(MULTI_DIR)/*.c))
+SRC_CLEAN  = $(subst $(MULTI_DIR)/,,$(SRC))
+OBJS 			+= $(patsubst %.c, $(MULTI_BUILD_DIR)/%.o, $(SRC_CLEAN))
+
+bright: make_build_dir $(OBJS) Makefile
+	$(MULTI_LINKER) $(OBJS) $(OPTIONS) $(MULTI_LDFLAGS) -o bright.$(KERNELS)
+
+# Rule to make controlling code
+$(MULTI_BUILD_DIR)/%.o: %.c Makefile 
+	$(MULTI_COMPILER_CC) $(MULTI_FLAGS) $(OPTIONS) -c $< -o $@
+
+$(MULTI_BUILD_DIR)/%.o: $(MULTI_DIR)/%.c Makefile 
+	$(MULTI_COMPILER_CC) $(MULTI_FLAGS) $(OPTIONS) -c $< -o $@
+
+make_build_dir:
+	@mkdir -p $(MULTI_BUILD_DIR)/
+	@mkdir -p $(MULTI_BUILD_DIR)/$(KERNELS)
 
 clean:
 	rm -rf $(EXE).exe *.bov *.dat

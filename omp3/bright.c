@@ -42,7 +42,7 @@ void solve_transport_2d(
       &nparticles, particles, particles_out, cs_scatter_table, cs_absorb_table,
       energy_tally);
 
-  //START_PROFILING(&compute_profile);
+  START_PROFILING(&compute_profile);
 #ifdef MPI
   while(1) {
     int nneighbours = 0;
@@ -113,7 +113,7 @@ void solve_transport_2d(
     }
   }
 #endif
-  //STOP_PROFILING(&compute_profile, "mopping up particles");
+  STOP_PROFILING(&compute_profile, "mopping up particles");
 
   barrier();
 
@@ -152,15 +152,13 @@ void handle_particles(
 
     nparticles_out += (result == PARTICLE_SENT);
     nparticles_deleted += (result == PARTICLE_DEAD || result == PARTICLE_SENT);
-    if(pp && pp%100000 == 0) {
-      printf("resolved particles up to %d\n", pp);
-    }
   }
 
   // Correct the new total number of particle
   *nparticles -= nparticles_deleted;
 
-  printf("handled %d particles\n", nparticles_to_process);
+  printf("handled %d particles, with %d particles deleted\n", 
+      nparticles_to_process, nparticles_deleted);
 }
 
 // Handles an individual particle.
@@ -179,7 +177,7 @@ int handle_particle(
   //      - the particle will scatter (this presumably means the energy changes)
   // (3) particle hits a boundary region and needs transferring to another process
 
-  //START_PROFILING(&compute_profile);
+  START_PROFILING(&compute_profile);
 
   int x_facet = 0;
   int cs_index = -1;
@@ -201,7 +199,7 @@ int handle_particle(
   double macroscopic_cs_absorb = 
     (local_density*AVOGADROS/MOLAR_MASS)*(microscopic_cs_absorb*BARNS);
 
-  double particle_velocity = sqrt((2.0*particle->e*eV)/PARTICLE_MASS);
+  double particle_velocity = sqrt((2.0*particle->e*eV_TO_J)/PARTICLE_MASS);
 
   // Set time to census and mfps until collision, unless travelled particle
   if(initial) {
@@ -209,11 +207,11 @@ int handle_particle(
     particle->mfp_to_collision = -log(genrand())/macroscopic_cs_scatter;
   }
 
-  //STOP_PROFILING(&compute_profile, "handle particle initial");
+  STOP_PROFILING(&compute_profile, "handle particle initial");
 
   // Loop until we have reached census
   while(particle->dt_to_census > 0.0) {
-    //START_PROFILING(&compute_profile);
+    START_PROFILING(&compute_profile);
 
     const double total_cross_section = 
       macroscopic_cs_scatter+macroscopic_cs_absorb;
@@ -229,13 +227,13 @@ int handle_particle(
     const double distance_to_collision = particle->mfp_to_collision*cell_mfp;
     const double distance_to_census = particle_velocity*particle->dt_to_census;
 
-    //STOP_PROFILING(&compute_profile, "calc_distance_to_facet");
+    STOP_PROFILING(&compute_profile, "calc_distance_to_facet");
 
     // Check if our next event is a collision
     if(distance_to_collision < distance_to_facet &&
         distance_to_collision < distance_to_census) {
 
-      //START_PROFILING(&compute_profile);
+      START_PROFILING(&compute_profile);
       (*collisions)++;
 
       // The cross sections for scattering and absorbtion were calculated on 
@@ -260,12 +258,12 @@ int handle_particle(
       // Resample number of mean free paths to collision
       particle->mfp_to_collision = -log(genrand())/macroscopic_cs_scatter;
       particle->dt_to_census -= distance_to_collision/particle_velocity;
-      particle_velocity = sqrt((2.0*particle->e*eV)/PARTICLE_MASS);
-      //STOP_PROFILING(&compute_profile, "collision");
+      particle_velocity = sqrt((2.0*particle->e*eV_TO_J)/PARTICLE_MASS);
+      STOP_PROFILING(&compute_profile, "collision");
     }
     // Check if we have reached facet
     else if(distance_to_facet < distance_to_census) {
-      //START_PROFILING(&compute_profile);
+      START_PROFILING(&compute_profile);
       (*facets)++;
 
       // Update the mean free paths until collision
@@ -293,17 +291,17 @@ int handle_particle(
       macroscopic_cs_absorb = 
         (local_density*AVOGADROS/MOLAR_MASS)*(microscopic_cs_absorb*BARNS);
 
-      //STOP_PROFILING(&compute_profile, "facet");
+      STOP_PROFILING(&compute_profile, "facet");
     }
     // Check if we have reached census
     else {
-      //START_PROFILING(&compute_profile);
+      START_PROFILING(&compute_profile);
       // We have not changed cell or energy level at this stage
       particle->x += distance_to_census*particle->omega_x;
       particle->y += distance_to_census*particle->omega_y;
       particle->mfp_to_collision -= (distance_to_census/cell_mfp);
       particle->dt_to_census = 0.0;
-      //STOP_PROFILING(&compute_profile, "stream");
+      STOP_PROFILING(&compute_profile, "stream");
       break;
     }
   }
@@ -340,7 +338,6 @@ int handle_collision(
       // Overwrite the particle
       *particle = *particle_end;
       is_particle_dead = TRUE;
-      printf("particle dead\n");
     }
   }
   else {
@@ -356,8 +353,8 @@ int handle_collision(
       (MASS_NO*MASS_NO + 2.0*MASS_NO*mu_cm + 1.0)/
       ((MASS_NO + 1.0)*(MASS_NO + 1.0));
 
-    // The change in energy experienced by the particle
-    de = particle->e-e_new;
+    // The weighted change in energy experienced by the particle
+    de = (particle->e-e_new)*particle->weight;
 
     // Convert the angle into the laboratory frame of reference
     double cos_theta =
@@ -627,9 +624,9 @@ void validate(
     return;
   }
 
-  printf("Final global_energy_tally %f\n", global_energy_tally/nglobal_particles);
+  printf("Final global_energy_tally %.15e\n", global_energy_tally/nglobal_particles);
 
-  FILE* fp = fopen("test.results", "r");
+  FILE* fp = fopen(NEUTRAL_TESTS, "r");
   if(!fp) {
     TERMINATE("Couldn't open the test.results file.\n");
   }

@@ -3,24 +3,29 @@
 #include "../mesh.h"
 #include "../comms.h"
 
-#define eV                     1.60217646e-19       // eV in C
-#define INITIAL_ENERGY         5.0e+2               // random test eV
-#define MIN_ENERGY_OF_INTEREST 1.0e-5               // Artificially low value
-#define PARTICLE_MASS          1.674927471213e-27   // Mass taken from wiki
-#define MASS_NO                100.0                
-#define OPEN_BOUND_CORRECTION  1.0e-13
-#define BARNS                  1.0e-28              // The barns unit in m^2
-#define AVOGADROS              6.02214085774e23     // Avogadro's constant
-#define MOLAR_MASS             2.0e-2               // Dummy kg per mole
-#define CS_SCATTER_FILENAME    "elastic_scatter.cs"
-#define CS_CAPTURE_FILENAME    "capture.cs"
-#define TAG_SEND_RECV          100
-#define TAG_PARTICLE           1
-#define NPARTICLES             1e5
-
 #ifdef MPI
 #include "mpi.h"
 #endif
+
+/* Problem-Independent Constants */
+#define eV_TO_J                1.60217646e-19       // 1 eV to Joules
+#define AVOGADROS              6.02214085774e23     // Avogadro's constant
+#define BARNS                  1.0e-28              // The barns unit in m^2
+#define PARTICLE_MASS          1.674927471213e-27   // Mass taken from wiki
+#define MASS_NO                100.0                // Mass num of the particle
+#define MOLAR_MASS             2.0e-2               // Dummy kg per mole
+#define MIN_ENERGY_OF_INTEREST 1.0e-1               // Energy to kill particles
+#define OPEN_BOUND_CORRECTION  1.0e-13              // Lower mesh coord
+#define TAG_SEND_RECV          100
+#define TAG_PARTICLE           1
+
+/* Data tables */
+#define CS_SCATTER_FILENAME    "elastic_scatter.cs" // Elastic scattering cs file
+#define CS_CAPTURE_FILENAME    "capture.cs"         // Capture cs file
+
+#define NEUTRAL_PARAMS   "neutral.params"
+#define ARCH_ROOT_PARAMS "../arch.params"
+#define NEUTRAL_TESTS    "neutral.tests"
 
 // Represents a cross sectional table for resonance data
 typedef struct {
@@ -44,11 +49,7 @@ typedef struct {
 
 } Particle;
 
-#ifdef MPI
-  // Global MPI particle type
-  MPI_Datatype particle_type;
-#endif
-
+// Contains the configuration and state data for the application
 typedef struct {
   CrossSection* cs_scatter_table;
   CrossSection* cs_absorb_table;
@@ -56,11 +57,18 @@ typedef struct {
   Particle* out_particles;
 
   int nparticles;
+  double initial_energy;
+
   int nlocal_particles;
 
   double* energy_tally;
 
 } BrightData;
+
+#ifdef MPI
+  // Global MPI particle type
+  MPI_Datatype particle_type;
+#endif
 
 // Initialises all of the Bright-specific data structures.
 void initialise_bright_data(
@@ -71,5 +79,5 @@ void inject_particles(
     Mesh* mesh, const int local_nx, const int local_ny, 
     const int local_particle_left_off, const int local_particle_bottom_off,
     const int local_particle_nx, const int local_particle_ny, 
-    const int nparticles, Particle* particles);
+    const int nparticles, const double initial_energy, Particle* particles);
 
