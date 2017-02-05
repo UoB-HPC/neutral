@@ -97,7 +97,7 @@ void initialise_bright_data(
 #ifdef MPI
   // Had to initialise this in the package directly as the data structure is not
   // general enough to place in the multi-package 
-  int blocks[2] = { 8, 2 };
+  const int blocks[2] = { 8, 1 };
   MPI_Datatype types[2] = { MPI_DOUBLE, MPI_INT };
   MPI_Aint displacements[2] = { 0, blocks[0]*sizeof(double) };
   MPI_Type_create_struct(
@@ -121,12 +121,6 @@ void inject_particles(
         mesh->edgey[local_particle_bottom_off+PAD], 
         local_particle_nx, local_particle_ny, mesh->x_off, 
         mesh->y_off, mesh->dt, mesh->edgex, mesh->edgey, &particles[ii]);
-
-
-
-
-
-    particles[ii].tracer = ii;
   }
   STOP_PROFILING(&compute_profile, "initialising particles");
 }
@@ -184,8 +178,12 @@ void read_cs_file(
     const char* filename, CrossSection* cs) 
 {
   FILE* fp = fopen(filename, "r");
-  int ch;
+  if(!fp) {
+    TERMINATE("Could not open the cross section file: %s\n", filename);
+  }
 
+  // Count the number of entries in the file
+  int ch;
   cs->nentries = 0;
   while ((ch = fgetc(fp)) != EOF) {
     if(ch == '\n')
@@ -199,7 +197,7 @@ void read_cs_file(
   cs->value = (double*)malloc(sizeof(double)*cs->nentries);
 
   for(int ii = 0; ii < cs->nentries; ++ii) {
-    // Skip tokens
+    // Skip whitespace tokens
     while((ch = fgetc(fp)) == ' ' || ch == '\n' || ch == '\r'){};
 
     // Jump out if we reach the end of the file early

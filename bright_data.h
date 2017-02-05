@@ -4,7 +4,7 @@
 #include "../comms.h"
 
 #define eV                     1.60217646e-19       // eV in C
-#define INITIAL_ENERGY         1.0e+5               // random test eV
+#define INITIAL_ENERGY         5.0e+2               // random test eV
 #define MIN_ENERGY_OF_INTEREST 1.0e-5               // Artificially low value
 #define PARTICLE_MASS          1.674927471213e-27   // Mass taken from wiki
 #define MASS_NO                100.0                
@@ -16,7 +16,7 @@
 #define CS_CAPTURE_FILENAME    "capture.cs"
 #define TAG_SEND_RECV          100
 #define TAG_PARTICLE           1
-#define NPARTICLES             1e7
+#define NPARTICLES             1e5
 
 #ifdef MPI
 #include "mpi.h"
@@ -41,7 +41,6 @@ typedef struct {
   double dt_to_census;       // the time until census is reached
   double mfp_to_collision;   // the mean free paths until a collision
   int cell;
-  int tracer;
 
 } Particle;
 
