@@ -14,9 +14,9 @@
 #include "mpi.h"
 #endif
 
-void dump_particle_data(
+void plot_particle_density(
     BrightData* bright_data, Mesh* mesh, const int tt, 
-    const double elapsed_sim_time);
+    const int ninitial_particles, const double elapsed_sim_time);
 
 int main(int argc, char** argv)
 {
@@ -59,8 +59,6 @@ int main(int argc, char** argv)
   initialise_bright_data(
       &bright_data, &mesh);
 
-  double ninitial_particles = bright_data.nparticles;
-
   // Seed the mersenne twister
   sgenrand(mesh.rank*100UL+123UL);
 
@@ -77,19 +75,22 @@ int main(int argc, char** argv)
   // given that it has the tightest timestep control requirements
   //set_timestep();
   
-  dump_particle_data(
-      &bright_data, &mesh, 0, 0.0);
-
   // Make sure initialisation phase is complete
   barrier();
 
+  const int ninitial_particles = bright_data.nparticles;
+
   // Main timestep loop where we will track each particle through time
+  int tt;
   double wallclock = 0.0;
   double elapsed_sim_time = 0.0;
-  for(int tt = 0; tt < mesh.niters; ++tt) {
+  for(tt = 1; tt <= mesh.niters; ++tt) {
     if(mesh.rank == MASTER) {
-      printf("Iteration %d\n", tt+1);
+      printf("Iteration %d\n", tt);
     }
+
+    plot_particle_density(
+        &bright_data, &mesh, tt, ninitial_particles, elapsed_sim_time);
 
     double w0 = omp_get_wtime();
 
@@ -104,27 +105,29 @@ int main(int argc, char** argv)
         bright_data.cs_scatter_table, bright_data.cs_absorb_table, 
         bright_data.energy_tally);
 
-    elapsed_sim_time += mesh.dt;
-    if(elapsed_sim_time >= mesh.sim_end) {
-      if(mesh.rank == MASTER)
-        printf("reached end of simulation time\n");
-      break;
-    }
-
     barrier();
-    wallclock += omp_get_wtime()-w0;
 
-    dump_particle_data(
-        &bright_data, &mesh, tt+1, elapsed_sim_time);
+    wallclock += omp_get_wtime()-w0;
+    elapsed_sim_time += mesh.dt;
 
     char tally_name[100];
-    sprintf(tally_name, "energy%d", tt+1);
+    sprintf(tally_name, "energy%d", tt);
     int dneighbours[NNEIGHBOURS] = { EDGE, EDGE,  EDGE,  EDGE,  EDGE,  EDGE }; 
     write_all_ranks_to_visit(
         mesh.global_nx, mesh.global_ny, mesh.local_nx-2*PAD, mesh.local_ny-2*PAD,
         mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, dneighbours, 
         bright_data.energy_tally, tally_name, 0, elapsed_sim_time);
+
+    // Leave the simulation if we have reached the simulation end time
+    if(elapsed_sim_time >= mesh.sim_end) {
+      if(mesh.rank == MASTER)
+        printf("reached end of simulation time\n");
+      break;
+    }
   }
+
+  plot_particle_density(
+      &bright_data, &mesh, tt, ninitial_particles, elapsed_sim_time);
 
   // TODO: WHAT SHOULD THE VALUE OF NINITIALPARTICLES BE IF FISSION ETC.
   validate(
@@ -141,29 +144,28 @@ int main(int argc, char** argv)
   return 0;
 }
 
-void dump_particle_data(
+
+// This is a bit hacky and temporary for now
+void plot_particle_density(
     BrightData* bright_data, Mesh* mesh, const int tt, 
-    const double elapsed_sim_time)
+    const int ninitial_particles, const double elapsed_sim_time)
 {
   double* temp = (double*)malloc(sizeof(double)*mesh->local_nx*mesh->local_ny);
-  for(int ii = 0; ii < bright_data->nlocal_particles; ++ii) {
+  for(int ii = 0; ii < ninitial_particles; ++ii) {
     Particle* particle = &bright_data->local_particles[ii];
     const int cellx = (particle->cell%mesh->global_nx)-mesh->x_off;
     const int celly = (particle->cell/mesh->global_nx)-mesh->y_off;
-    temp[celly*(mesh->local_nx-2*PAD)+cellx] = particle->e;
+    temp[celly*(mesh->local_nx-2*PAD)+cellx] += 1.0;
   }
 
   // Dummy neighbours that stops any padding from happening
   int neighbours[NNEIGHBOURS] = { EDGE, EDGE,  EDGE,  EDGE,  EDGE,  EDGE }; 
-
   char particles_name[100];
   sprintf(particles_name, "particles%d", tt);
   write_all_ranks_to_visit(
       mesh->global_nx, mesh->global_ny, mesh->local_nx-2*PAD, mesh->local_ny-2*PAD, 
       mesh->x_off, mesh->y_off, mesh->rank, mesh->nranks, neighbours, 
       temp, particles_name, 0, elapsed_sim_time);
-  barrier();
-
   free(temp);
 }
 
