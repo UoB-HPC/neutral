@@ -48,13 +48,17 @@ int binary_search(
 
 // Handle the collision event, including absorption and scattering
 int handle_collision(
-    Particle* particle, Particle* particles_end, const int global_nx, 
-    const int nx, const int x_off, const int y_off, const double cs_absorb, 
-    const double cs_total, const double distance_to_collision, 
-    double* energy_tally);
+    Particle* particle, Particle* particle_end, const double cs_absorb, 
+    const double cs_total, const double distance_to_collision);
 
 // Sends a particle to a neighbour and replaces in the particle list
 void send_and_replace_particle(
     const int destination, Particle* particles_end, Particle* particle_to_replace, 
     Particle* particle_out);
+
+// Tallies both the scalar flux and energy deposition in the cell
+void update_tallies(
+    const int global_nx, const int x_off, const int y_off, Particle* particle, 
+    const double path_length, const double V, const double dt, 
+    double* scalar_flux_tally, double* energy_deposition_tally);
 

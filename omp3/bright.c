@@ -169,7 +169,8 @@ int handle_particle(
     const double* edgey, const CrossSection* cs_scatter_table, 
     const CrossSection* cs_absorb_table, Particle* particle_end, 
     int* nparticles_sent, int* facets, int* collisions, Particle* particle, 
-    Particle* particle_out, double* energy_tally)
+    Particle* particle_out, double* scalar_flux_tally, 
+    double* energy_deposition_tally)
 {
   // (1) particle can stream and reach census
   // (2) particle can collide and either
@@ -236,12 +237,17 @@ int handle_particle(
       START_PROFILING(&compute_profile);
       (*collisions)++;
 
+      // Update the tallies before the energy is updated
+      const double V = edgex[cellx]*edgey[celly];
+      update_tallies(
+          global_nx, x_off, y_off, particle, distance_to_collision,
+          V, dt, scalar_flux_tally, energy_deposition_tally);
+
       // The cross sections for scattering and absorbtion were calculated on 
       // a previous iteration for our given energy
       if(handle_collision(
-            particle, particle_end, global_nx, nx, x_off, y_off, 
-            macroscopic_cs_absorb, total_cross_section, distance_to_collision, 
-            energy_tally)) {
+            particle, particle_end, macroscopic_cs_absorb, total_cross_section, 
+            distance_to_collision)) {
         return PARTICLE_DEAD;
       }
 
@@ -269,6 +275,12 @@ int handle_particle(
       // Update the mean free paths until collision
       particle->mfp_to_collision -= (distance_to_facet/cell_mfp);
       particle->dt_to_census -= distance_to_facet/particle_velocity;
+
+      // Update the tallies in this zone
+      const double V = edgex[cellx]*edgey[celly];
+      update_tallies(
+          global_nx, x_off, y_off, particle, distance_to_facet,
+          V, dt, scalar_flux_tally, energy_deposition_tally);
 
       // Encounter facet, and jump out if particle left this rank's domain
       if(handle_facet_encounter(
@@ -300,6 +312,13 @@ int handle_particle(
       particle->x += distance_to_census*particle->omega_x;
       particle->y += distance_to_census*particle->omega_y;
       particle->mfp_to_collision -= (distance_to_census/cell_mfp);
+
+      // Update the tallies in this zone
+      const double V = edgex[cellx]*edgey[celly];
+      update_tallies(
+          global_nx, x_off, y_off, particle, distance_to_census,
+          V, dt, scalar_flux_tally, energy_deposition_tally);
+
       particle->dt_to_census = 0.0;
       STOP_PROFILING(&compute_profile, "stream");
       break;
@@ -311,16 +330,13 @@ int handle_particle(
 
 // Handle the collision event, including absorption and scattering
 int handle_collision(
-    Particle* particle, Particle* particle_end, const int global_nx, 
-    const int nx, const int x_off, const int y_off, const double cs_absorb, 
-    const double cs_total, const double distance_to_collision, 
-    double* energy_tally)
+    Particle* particle, Particle* particle_end, const double cs_absorb, 
+    const double cs_total, const double distance_to_collision)
 {
   // Moves the particle to the collision site
   particle->x += distance_to_collision*particle->omega_x;
   particle->y += distance_to_collision*particle->omega_y;
 
-  double de;
   const double p_absorb = cs_absorb/cs_total;
   int is_particle_dead = FALSE;
 
@@ -329,7 +345,7 @@ int handle_collision(
 
     // Find the new particle weight after absorption, saving the energy change
     const double new_weight = particle->weight*(1.0 - p_absorb);
-    de = particle->e*(particle->weight-new_weight); 
+    const double de = particle->e*(particle->weight-new_weight); 
     particle->weight = new_weight;
 
     // If the particle falls below the energy of interest then we will consider
@@ -353,9 +369,6 @@ int handle_collision(
       (MASS_NO*MASS_NO + 2.0*MASS_NO*mu_cm + 1.0)/
       ((MASS_NO + 1.0)*(MASS_NO + 1.0));
 
-    // The weighted change in energy experienced by the particle
-    de = (particle->e-e_new)*particle->weight;
-
     // Convert the angle into the laboratory frame of reference
     double cos_theta =
       0.5*((MASS_NO+1.0)*sqrt(e_new/particle->e) - 
@@ -371,11 +384,6 @@ int handle_collision(
     particle->omega_y = omega_y_new;
     particle->e = e_new;
   }
-
-  // Remove the energy delta from the cell
-  const int cellx = (particle->cell%global_nx)-x_off;
-  const int celly = (particle->cell/global_nx)-y_off;
-  energy_tally[celly*nx+cellx] += de; 
 
   return is_particle_dead;
 }
@@ -557,6 +565,27 @@ void calc_distance_to_facet(
       ? ((edgey[celly+1])-y)*mag_u0*u_y_inv
       : ((edgey[celly]-OPEN_BOUND_CORRECTION)-y)*mag_u0*u_y_inv;
   }
+}
+
+// Tallies both the scalar flux and energy deposition in the cell
+void update_tallies(
+    const int global_nx, const int x_off, const int y_off, Particle* particle, 
+    const double path_length, const double V, const double dt, 
+    double* scalar_flux_tally, double* energy_deposition_tally)
+{
+  // Store the scalar flux
+  const int cellx = (particle->cell%global_nx)-x_off;
+  const int celly = (particle->cell/global_nx)-y_off;
+  const double scalar_flux = (particle->weight*distance_to_collision)/(V*dt);
+  scalar_flux_tally[celly*nx+cellx] += scalar_flux; 
+
+  // The leaving energy of a capture event is 0
+  const double absorption_heating = (cs_absorb/cs_total)*0.0;
+  const double scattering_heating = 
+    ((1.0-cs_absorb)/cs_total)*particle->e*
+    (MASS_NO*MASS_NO+2)/(MASS_NO+1)*(MASS_NO+1);
+  energy_deposition_tally[celly*nx+cellx] +=
+    scalar_flux*(particle->e-scattering_heating-absorption_heating);
 }
 
 // Fetch the cross section for a particular energy value
