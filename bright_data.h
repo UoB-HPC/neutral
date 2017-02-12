@@ -61,7 +61,8 @@ typedef struct {
 
   int nlocal_particles;
 
-  double* energy_tally;
+  double* scalar_flux_tally;
+  double* heating_tally;
 
 } BrightData;
 
