@@ -20,7 +20,7 @@ void solve_transport_2d(
     const int* neighbours, Particle* particles, const double* density, 
     const double* edgex, const double* edgey, Particle* particles_out, 
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
-    double* energy_tally)
+    double* scalar_flux_tally, double* energy_deposition_tally)
 {
   // Initial idea is to use a kind of queue for handling the particles. Presumably
   // this doesn't have to be a carefully ordered queue but lets see how that goes.
@@ -40,7 +40,7 @@ void solve_transport_2d(
       global_nx, global_ny, nx, ny, x_off, y_off, 1, dt, neighbours,
       density, edgex, edgey, &facets, &collisions, nparticles_sent, nparticles,
       &nparticles, particles, particles_out, cs_scatter_table, cs_absorb_table,
-      energy_tally);
+      scalar_flux_tally, energy_deposition_tally);
 
   START_PROFILING(&compute_profile);
 #ifdef MPI
@@ -98,7 +98,8 @@ void solve_transport_2d(
           global_nx, global_ny, nx, ny, x_off, y_off, 0, dt, neighbours,
           density, edgex, edgey, &facets, &collisions, nparticles_sent,
           nunprocessed_particles, &nparticles, &particles[unprocessed_start],
-          particles_out, cs_scatter_table, cs_absorb_table, energy_tally);
+          particles_out, cs_scatter_table, cs_absorb_table, 
+          scalar_flux_tally, energy_deposition_tally);
     }
 
     // Check if any of the ranks had unprocessed particles
@@ -130,7 +131,8 @@ void handle_particles(
     const double* edgey, int* facets, int* collisions, int* nparticles_sent, 
     const int nparticles_to_process, int* nparticles, Particle* particles_start, 
     Particle* particles_out, CrossSection* cs_scatter_table, 
-    CrossSection* cs_absorb_table, double* energy_tally)
+    CrossSection* cs_absorb_table, double* scalar_flux_tally, 
+    double* energy_deposition_tally)
 {
   int nparticles_out = 0;
   int nparticles_deleted = 0;
@@ -139,16 +141,18 @@ void handle_particles(
   //#pragma omp parallel for reduction(+: facets, collisions)
   for(int pp = 0; pp < nparticles_to_process; ++pp) {
     // Current particle
-    Particle* particle = &particles_start[pp-nparticles_deleted];
+    Particle* particle = 
+      &particles_start[pp-nparticles_deleted];
     Particle* particle_end = 
       &particles_start[(nparticles_to_process-1)-nparticles_deleted];
-    Particle* particle_out = &particles_out[nparticles_out];
+    Particle* particle_out = 
+      &particles_out[nparticles_out];
 
     const int result = handle_particle(
         global_nx, global_ny, nx, ny, x_off, y_off, neighbours, dt, initial,
         density, edgex, edgey, cs_scatter_table, cs_absorb_table,
         particle_end, nparticles_sent, facets, collisions, particle, 
-        particle_out, energy_tally);
+        particle_out, scalar_flux_tally, energy_deposition_tally);
 
     nparticles_out += (result == PARTICLE_SENT);
     nparticles_deleted += (result == PARTICLE_DEAD || result == PARTICLE_SENT);
@@ -214,9 +218,9 @@ int handle_particle(
   while(particle->dt_to_census > 0.0) {
     START_PROFILING(&compute_profile);
 
-    const double total_cross_section = 
+    const double macroscopic_cs_total = 
       macroscopic_cs_scatter+macroscopic_cs_absorb;
-    cell_mfp = 1.0/total_cross_section;
+    cell_mfp = 1.0/macroscopic_cs_total;
 
     // Work out the distance until the particle hits a facet
     double distance_to_facet = 0.0;
@@ -240,13 +244,14 @@ int handle_particle(
       // Update the tallies before the energy is updated
       const double V = edgex[cellx]*edgey[celly];
       update_tallies(
-          global_nx, x_off, y_off, particle, distance_to_collision,
-          V, dt, scalar_flux_tally, energy_deposition_tally);
+          global_nx, nx, x_off, y_off, particle, distance_to_collision,
+          V, dt, macroscopic_cs_absorb, macroscopic_cs_total, scalar_flux_tally, 
+          energy_deposition_tally);
 
       // The cross sections for scattering and absorbtion were calculated on 
       // a previous iteration for our given energy
       if(handle_collision(
-            particle, particle_end, macroscopic_cs_absorb, total_cross_section, 
+            particle, particle_end, macroscopic_cs_absorb, macroscopic_cs_total, 
             distance_to_collision)) {
         return PARTICLE_DEAD;
       }
@@ -279,8 +284,9 @@ int handle_particle(
       // Update the tallies in this zone
       const double V = edgex[cellx]*edgey[celly];
       update_tallies(
-          global_nx, x_off, y_off, particle, distance_to_facet,
-          V, dt, scalar_flux_tally, energy_deposition_tally);
+          global_nx, nx, x_off, y_off, particle, distance_to_facet,
+          V, dt, macroscopic_cs_absorb, macroscopic_cs_total, scalar_flux_tally, 
+          energy_deposition_tally);
 
       // Encounter facet, and jump out if particle left this rank's domain
       if(handle_facet_encounter(
@@ -297,7 +303,8 @@ int handle_particle(
       /* We don't actually need to perform a cross sectional update here in the
        * traditional sense as we do not have to lookup the energy profile
        * in the data table, merely update it with the adjusted density. */
-      local_density = density[celly*(nx+2*PAD)+cellx];
+      local_density = 
+        density[celly*(nx+2*PAD)+cellx];
       macroscopic_cs_scatter = 
         (local_density*AVOGADROS/MOLAR_MASS)*(microscopic_cs_scatter*BARNS);
       macroscopic_cs_absorb = 
@@ -316,8 +323,9 @@ int handle_particle(
       // Update the tallies in this zone
       const double V = edgex[cellx]*edgey[celly];
       update_tallies(
-          global_nx, x_off, y_off, particle, distance_to_census,
-          V, dt, scalar_flux_tally, energy_deposition_tally);
+          global_nx, nx, x_off, y_off, particle, distance_to_census,
+          V, dt, macroscopic_cs_absorb, macroscopic_cs_total, scalar_flux_tally, 
+          energy_deposition_tally);
 
       particle->dt_to_census = 0.0;
       STOP_PROFILING(&compute_profile, "stream");
@@ -330,14 +338,15 @@ int handle_particle(
 
 // Handle the collision event, including absorption and scattering
 int handle_collision(
-    Particle* particle, Particle* particle_end, const double cs_absorb, 
-    const double cs_total, const double distance_to_collision)
+    Particle* particle, Particle* particle_end, 
+    const double macroscopic_cs_absorb, const double macroscopic_cs_total, 
+    const double distance_to_collision)
 {
   // Moves the particle to the collision site
   particle->x += distance_to_collision*particle->omega_x;
   particle->y += distance_to_collision*particle->omega_y;
 
-  const double p_absorb = cs_absorb/cs_total;
+  const double p_absorb = macroscopic_cs_absorb/macroscopic_cs_total;
   int is_particle_dead = FALSE;
 
   if(genrand() < p_absorb) {
@@ -507,9 +516,8 @@ void send_and_replace_particle(
   // Send the particle
   MPI_Send(
       particle_out, 1, particle_type, destination, TAG_PARTICLE, MPI_COMM_WORLD);
-
 #else
-#error "Unreachable - shouldn't send particles unless MPI enabled"
+  TERMINATE("Unreachable - shouldn't send particles unless MPI enabled.\n");
 #endif
 }
 
@@ -569,22 +577,24 @@ void calc_distance_to_facet(
 
 // Tallies both the scalar flux and energy deposition in the cell
 void update_tallies(
-    const int global_nx, const int x_off, const int y_off, Particle* particle, 
-    const double path_length, const double V, const double dt, 
+    const int global_nx, const int nx, const int x_off, const int y_off, 
+    Particle* particle, const double path_length, const double V, const double dt, 
+    const double macroscopic_cs_absorb, const double macroscopic_cs_total, 
     double* scalar_flux_tally, double* energy_deposition_tally)
 {
   // Store the scalar flux
   const int cellx = (particle->cell%global_nx)-x_off;
   const int celly = (particle->cell/global_nx)-y_off;
-  const double scalar_flux = (particle->weight*distance_to_collision)/(V*dt);
+  const double scalar_flux = (particle->weight*path_length)/(V*dt);
   scalar_flux_tally[celly*nx+cellx] += scalar_flux; 
 
   // The leaving energy of a capture event is 0
-  const double absorption_heating = (cs_absorb/cs_total)*0.0;
+  const double absorption_heating = 
+    (macroscopic_cs_absorb/macroscopic_cs_total)*0.0;
   const double scattering_heating = 
-    ((1.0-cs_absorb)/cs_total)*particle->e*
-    (MASS_NO*MASS_NO+2)/(MASS_NO+1)*(MASS_NO+1);
-  energy_deposition_tally[celly*nx+cellx] +=
+    ((1.0-macroscopic_cs_absorb)/macroscopic_cs_total)*particle->e*
+    (MASS_NO*MASS_NO+2)/((MASS_NO+1)*(MASS_NO+1));
+  energy_deposition_tally[celly*nx+cellx] += 
     scalar_flux*(particle->e-scattering_heating-absorption_heating);
 }
 
@@ -640,11 +650,11 @@ double microscopic_cs_for_energy(
 // Validates the results of the simulation
 void validate(
     const int nx, const int ny, const int nglobal_particles, const double dt,
-    const int niters, const int rank, double* energy_tally)
+    const int niters, const int rank, double* energy_deposition_tally)
 {
   double local_energy_tally = 0.0;
   for(int ii = 0; ii < nx*ny; ++ii) {
-    local_energy_tally += energy_tally[ii];
+    local_energy_tally += energy_deposition_tally[ii];
   }
 
   double global_energy_tally = reduce_all_sum(local_energy_tally);

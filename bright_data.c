@@ -98,10 +98,10 @@ void initialise_bright_data(
   }
 
   allocate_data(&bright_data->scalar_flux_tally, local_nx*local_ny);
-  allocate_data(&bright_data->heating_tally, local_nx*local_ny);
+  allocate_data(&bright_data->energy_deposition_tally, local_nx*local_ny);
   for(int ii = 0; ii < local_nx*local_ny; ++ii) {
     bright_data->scalar_flux_tally[ii] = 0.0;
-    bright_data->heating_tally[ii] = 0.0;
+    bright_data->energy_deposition_tally[ii] = 0.0;
   }
 
   // Check we are injecting some particle into this part of the mesh
