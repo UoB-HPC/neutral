@@ -23,8 +23,8 @@
 #define CS_SCATTER_FILENAME    "elastic_scatter.cs" // Elastic scattering cs file
 #define CS_CAPTURE_FILENAME    "capture.cs"         // Capture cs file
 
-#define NEUTRAL_PARAMS   "neutral.params"
 #define ARCH_ROOT_PARAMS "../arch.params"
+#define NEUTRAL_PARAMS   "neutral.params"
 #define NEUTRAL_TESTS    "neutral.tests"
 
 // Represents a cross sectional table for resonance data
@@ -62,7 +62,7 @@ typedef struct {
   int nlocal_particles;
 
   double* scalar_flux_tally;
-  double* heating_tally;
+  double* energy_deposition_tally;
 
 } BrightData;
 

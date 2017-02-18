@@ -15,7 +15,8 @@ void handle_particles(
     const double* edgey, int* facets, int* collisions, int* nparticles_sent, 
     const int nparticles_to_process, int* nparticles, Particle* particles_start, 
     Particle* particles_out, CrossSection* cs_scatter_table, 
-    CrossSection* cs_absorb_table, double* energy_tally);
+    CrossSection* cs_absorb_table, double* scalar_flux_tally, 
+    double* energy_deposition_tally);
 
 // Handles an individual particle.
 int handle_particle(
@@ -23,9 +24,10 @@ int handle_particle(
     const int x_off, const int y_off, const int* neighbours, const double dt,
     const int initial, const double* density, const double* edgex, 
     const double* edgey, const CrossSection* cs_scatter_table, 
-    const CrossSection* cs_absorb_table, Particle* particles_end, 
+    const CrossSection* cs_absorb_table, Particle* particle_end, 
     int* nparticles_sent, int* facets, int* collisions, Particle* particle, 
-    Particle* particle_out, double* energy_tally);
+    Particle* particle_out, double* scalar_flux_tally, 
+    double* energy_deposition_tally);
 
 // Calculate the distance to the next facet
 void calc_distance_to_facet(
@@ -48,8 +50,9 @@ int binary_search(
 
 // Handle the collision event, including absorption and scattering
 int handle_collision(
-    Particle* particle, Particle* particle_end, const double cs_absorb, 
-    const double cs_total, const double distance_to_collision);
+    Particle* particle, Particle* particle_end, 
+    const double macroscopic_cs_absorb, const double macroscopic_cs_total, 
+    const double distance_to_collision);
 
 // Sends a particle to a neighbour and replaces in the particle list
 void send_and_replace_particle(
@@ -58,7 +61,8 @@ void send_and_replace_particle(
 
 // Tallies both the scalar flux and energy deposition in the cell
 void update_tallies(
-    const int global_nx, const int x_off, const int y_off, Particle* particle, 
-    const double path_length, const double V, const double dt, 
+    const int global_nx, const int nx, const int x_off, const int y_off, 
+    Particle* particle, const double path_length, const double V, const double dt, 
+    const double macroscopic_cs_absorb, const double macroscopic_cs_total, 
     double* scalar_flux_tally, double* energy_deposition_tally);
 

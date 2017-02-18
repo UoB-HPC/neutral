@@ -39,9 +39,8 @@ int main(int argc, char** argv)
   mesh.local_ny = atoi(argv[2]) + 2*PAD;
   mesh.width = get_double_parameter("width", ARCH_ROOT_PARAMS);
   mesh.height = get_double_parameter("height", ARCH_ROOT_PARAMS);
-  mesh.max_dt = get_double_parameter("max_dt", ARCH_ROOT_PARAMS);
+  mesh.dt = get_double_parameter("dt", NEUTRAL_PARAMS);
   mesh.sim_end = get_double_parameter("sim_end", ARCH_ROOT_PARAMS);
-  mesh.dt = mesh.max_dt;
   mesh.rank = MASTER;
   mesh.niters = atoi(argv[3]);
   mesh.rank = MASTER;
@@ -113,7 +112,7 @@ int main(int argc, char** argv)
         mesh.neighbours, bright_data.local_particles, shared_data.rho, 
         mesh.edgex, mesh.edgey, bright_data.out_particles, 
         bright_data.cs_scatter_table, bright_data.cs_absorb_table, 
-        bright_data.energy_tally);
+        bright_data.scalar_flux_tally, bright_data.energy_deposition_tally);
 
     barrier();
 
@@ -126,7 +125,7 @@ int main(int argc, char** argv)
     write_all_ranks_to_visit(
         mesh.global_nx, mesh.global_ny, mesh.local_nx-2*PAD, mesh.local_ny-2*PAD,
         mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, dneighbours, 
-        bright_data.energy_tally, tally_name, 0, elapsed_sim_time);
+        bright_data.energy_deposition_tally, tally_name, 0, elapsed_sim_time);
 
     // Leave the simulation if we have reached the simulation end time
     if(elapsed_sim_time >= mesh.sim_end) {
@@ -142,7 +141,7 @@ int main(int argc, char** argv)
   // TODO: WHAT SHOULD THE VALUE OF NINITIALPARTICLES BE IF FISSION ETC.
   validate(
       mesh.local_nx-2*PAD, mesh.local_ny-2*PAD, ninitial_particles, mesh.dt, 
-      mesh.niters, mesh.rank, bright_data.energy_tally);
+      mesh.niters, mesh.rank, bright_data.energy_deposition_tally);
 
   if(mesh.rank == MASTER) {
     PRINT_PROFILING_RESULTS(&p);
