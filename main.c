@@ -100,9 +100,10 @@ int main(int argc, char** argv)
         mesh.local_nx-2*PAD, mesh.local_ny-2*PAD, mesh.global_nx, mesh.global_ny, 
         mesh.x_off, mesh.y_off, mesh.dt, &bright_data.nlocal_particles, 
         mesh.neighbours, bright_data.local_particles, shared_data.rho, 
-        mesh.edgex, mesh.edgey, bright_data.out_particles, 
-        bright_data.cs_scatter_table, bright_data.cs_absorb_table, 
-        bright_data.scalar_flux_tally, bright_data.energy_deposition_tally);
+        mesh.edgex, mesh.edgey, mesh.edgedx, mesh.edgedy, 
+        bright_data.out_particles, bright_data.cs_scatter_table, 
+        bright_data.cs_absorb_table, bright_data.scalar_flux_tally, 
+        bright_data.energy_deposition_tally);
 
     barrier();
 
@@ -136,13 +137,12 @@ int main(int argc, char** argv)
   if(mesh.rank == MASTER) {
     PRINT_PROFILING_RESULTS(&compute_profile);
 
-    printf("Wallclock %.2fs, Elapsed Simulation Time %.4fs\n", 
+    printf("Wallclock %.2fs, Elapsed Simulation Time %.6fs\n", 
         wallclock, elapsed_sim_time);
   }
 
   return 0;
 }
-
 
 // This is a bit hacky and temporary for now
 void plot_particle_density(
