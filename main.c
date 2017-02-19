@@ -97,13 +97,18 @@ int main(int argc, char** argv)
     // and the tallying of the energy deposition throughout the system must
     // have been resolved.
     solve_transport_2d(
-        mesh.local_nx-2*PAD, mesh.local_ny-2*PAD, mesh.global_nx, mesh.global_ny, 
-        mesh.x_off, mesh.y_off, mesh.dt, &bright_data.nlocal_particles, 
-        mesh.neighbours, bright_data.local_particles, shared_data.rho, 
-        mesh.edgex, mesh.edgey, mesh.edgedx, mesh.edgedy, 
-        bright_data.out_particles, bright_data.cs_scatter_table, 
-        bright_data.cs_absorb_table, bright_data.scalar_flux_tally, 
-        bright_data.energy_deposition_tally);
+        mesh.local_nx-2*PAD, mesh.local_ny-2*PAD, 
+        mesh.global_nx, mesh.global_ny, 
+        mesh.x_off, mesh.y_off, mesh.dt, 
+        bright_data.nparticles, &bright_data.nlocal_particles, 
+        mesh.neighbours, 
+        bright_data.local_particles, 
+        shared_data.rho, 
+        mesh.edgex, mesh.edgey, 
+        mesh.edgedx, mesh.edgedy, 
+        bright_data.out_particles, 
+        bright_data.cs_scatter_table, bright_data.cs_absorb_table, 
+        bright_data.scalar_flux_tally, bright_data.energy_deposition_tally);
 
     barrier();
 
@@ -114,8 +119,10 @@ int main(int argc, char** argv)
     sprintf(tally_name, "energy%d", tt);
     int dneighbours[NNEIGHBOURS] = { EDGE, EDGE,  EDGE,  EDGE,  EDGE,  EDGE }; 
     write_all_ranks_to_visit(
-        mesh.global_nx, mesh.global_ny, mesh.local_nx-2*PAD, mesh.local_ny-2*PAD,
-        mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, dneighbours, 
+        mesh.global_nx, mesh.global_ny, 
+        mesh.local_nx-2*PAD, mesh.local_ny-2*PAD,
+        mesh.x_off, mesh.y_off, 
+        mesh.rank, mesh.nranks, dneighbours, 
         bright_data.energy_deposition_tally, tally_name, 0, elapsed_sim_time);
 
     // Leave the simulation if we have reached the simulation end time

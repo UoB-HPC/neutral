@@ -14,8 +14,8 @@
 #define PARTICLE_MASS          1.674927471213e-27   // Mass taken from wiki
 #define MASS_NO                100.0                // Mass num of the particle
 #define MOLAR_MASS             2.0e-2               // Dummy kg per mole
-#define MIN_ENERGY_OF_INTEREST 1.0e-1               // Energy to kill particles
-#define OPEN_BOUND_CORRECTION  1.0e-13              // Lower mesh coord
+#define MIN_ENERGY_OF_INTEREST 1.0e0                // Energy to kill particles
+#define OPEN_BOUND_CORRECTION  1.0e-13              // Fixes open bounds
 #define TAG_SEND_RECV          100
 #define TAG_PARTICLE           1
 
@@ -56,9 +56,9 @@ typedef struct {
   Particle* local_particles;
   Particle* out_particles;
 
-  int nparticles;
   double initial_energy;
 
+  int nparticles;
   int nlocal_particles;
 
   double* scalar_flux_tally;
