@@ -18,9 +18,10 @@ void solve_transport_2d(
     const int nx, const int ny, const int global_nx, const int global_ny, 
     const int x_off, const int y_off, const double dt, int* nlocal_particles, 
     const int* neighbours, Particle* particles, const double* density, 
-    const double* edgex, const double* edgey, Particle* particles_out, 
-    CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
-    double* scalar_flux_tally, double* energy_deposition_tally)
+    const double* edgex, const double* edgey, const double* edgedx, 
+    const double* edgedy, Particle* particles_out, CrossSection* cs_scatter_table, 
+    CrossSection* cs_absorb_table, double* scalar_flux_tally, 
+    double* energy_deposition_tally)
 {
   // Initial idea is to use a kind of queue for handling the particles. Presumably
   // this doesn't have to be a carefully ordered queue but lets see how that goes.
@@ -38,8 +39,9 @@ void solve_transport_2d(
 
   handle_particles(
       global_nx, global_ny, nx, ny, x_off, y_off, 1, dt, neighbours,
-      density, edgex, edgey, &facets, &collisions, nparticles_sent, nparticles,
-      &nparticles, particles, particles_out, cs_scatter_table, cs_absorb_table,
+      density, edgex, edgey, edgedx, edgedy, &facets, &collisions, 
+      nparticles_sent, nparticles, &nparticles, particles, particles_out, 
+      cs_scatter_table, cs_absorb_table, 
       scalar_flux_tally, energy_deposition_tally);
 
   START_PROFILING(&compute_profile);
@@ -96,10 +98,10 @@ void solve_transport_2d(
     if(nunprocessed_particles) {
       handle_particles(
           global_nx, global_ny, nx, ny, x_off, y_off, 0, dt, neighbours,
-          density, edgex, edgey, &facets, &collisions, nparticles_sent,
-          nunprocessed_particles, &nparticles, &particles[unprocessed_start],
-          particles_out, cs_scatter_table, cs_absorb_table, 
-          scalar_flux_tally, energy_deposition_tally);
+          density, edgex, edgey, edgedx, edgedy, &facets, &collisions, 
+          nparticles_sent, nunprocessed_particles, &nparticles, 
+          &particles[unprocessed_start], particles_out, cs_scatter_table, 
+          cs_absorb_table, scalar_flux_tally, energy_deposition_tally);
     }
 
     // Check if any of the ranks had unprocessed particles
@@ -128,11 +130,11 @@ void handle_particles(
     const int global_nx, const int global_ny, const int nx, const int ny, 
     const int x_off, const int y_off, const int initial, const double dt, 
     const int* neighbours, const double* density, const double* edgex, 
-    const double* edgey, int* facets, int* collisions, int* nparticles_sent, 
-    const int nparticles_to_process, int* nparticles, Particle* particles_start, 
-    Particle* particles_out, CrossSection* cs_scatter_table, 
-    CrossSection* cs_absorb_table, double* scalar_flux_tally, 
-    double* energy_deposition_tally)
+    const double* edgey, const double* edgedx, const double* edgedy, int* facets, 
+    int* collisions, int* nparticles_sent, const int nparticles_to_process, 
+    int* nparticles, Particle* particles_start, Particle* particles_out, 
+    CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
+    double* scalar_flux_tally, double* energy_deposition_tally)
 {
   int nparticles_out = 0;
   int nparticles_deleted = 0;
@@ -150,7 +152,7 @@ void handle_particles(
 
     const int result = handle_particle(
         global_nx, global_ny, nx, ny, x_off, y_off, neighbours, dt, initial,
-        density, edgex, edgey, cs_scatter_table, cs_absorb_table,
+        density, edgex, edgey, edgedx, edgedy, cs_scatter_table, cs_absorb_table,
         particle_end, nparticles_sent, facets, collisions, particle, 
         particle_out, scalar_flux_tally, energy_deposition_tally);
 
@@ -158,7 +160,7 @@ void handle_particles(
     nparticles_deleted += (result == PARTICLE_DEAD || result == PARTICLE_SENT);
   }
 
-  // Correct the new total number of particle
+  // Correct the new total number of particles
   *nparticles -= nparticles_deleted;
 
   printf("handled %d particles, with %d particles deleted\n", 
@@ -170,10 +172,10 @@ int handle_particle(
     const int global_nx, const int global_ny, const int nx, const int ny, 
     const int x_off, const int y_off, const int* neighbours, const double dt,
     const int initial, const double* density, const double* edgex, 
-    const double* edgey, const CrossSection* cs_scatter_table, 
-    const CrossSection* cs_absorb_table, Particle* particle_end, 
-    int* nparticles_sent, int* facets, int* collisions, Particle* particle, 
-    Particle* particle_out, double* scalar_flux_tally, 
+    const double* edgey, const double* edgedx, const double* edgedy, 
+    const CrossSection* cs_scatter_table, const CrossSection* cs_absorb_table, 
+    Particle* particle_end, int* nparticles_sent, int* facets, int* collisions, 
+    Particle* particle, Particle* particle_out, double* scalar_flux_tally, 
     double* energy_deposition_tally)
 {
   // (1) particle can stream and reach census
@@ -242,7 +244,7 @@ int handle_particle(
       (*collisions)++;
 
       // Update the tallies before the energy is updated
-      const double V = edgex[cellx]*edgey[celly];
+      const double V = edgedx[cellx]*edgedy[celly];
       update_tallies(
           global_nx, nx, x_off, y_off, particle, distance_to_collision,
           V, dt, macroscopic_cs_absorb, macroscopic_cs_total, scalar_flux_tally, 
@@ -279,10 +281,10 @@ int handle_particle(
 
       // Update the mean free paths until collision
       particle->mfp_to_collision -= (distance_to_facet/cell_mfp);
-      particle->dt_to_census -= distance_to_facet/particle_velocity;
+      particle->dt_to_census -= (distance_to_facet/particle_velocity);
 
       // Update the tallies in this zone
-      const double V = edgex[cellx]*edgey[celly];
+      const double V = edgedx[cellx]*edgedy[celly];
       update_tallies(
           global_nx, nx, x_off, y_off, particle, distance_to_facet,
           V, dt, macroscopic_cs_absorb, macroscopic_cs_total, scalar_flux_tally, 
@@ -321,7 +323,7 @@ int handle_particle(
       particle->mfp_to_collision -= (distance_to_census/cell_mfp);
 
       // Update the tallies in this zone
-      const double V = edgex[cellx]*edgey[celly];
+      const double V = edgedx[cellx]*edgedy[celly];
       update_tallies(
           global_nx, nx, x_off, y_off, particle, distance_to_census,
           V, dt, macroscopic_cs_absorb, macroscopic_cs_total, scalar_flux_tally, 
@@ -588,11 +590,15 @@ void update_tallies(
   const double scalar_flux = (particle->weight*path_length)/(V*dt);
   scalar_flux_tally[celly*nx+cellx] += scalar_flux; 
 
+  if(isinf(scalar_flux)) {
+    TERMINATE("Scalar flux is infinite %d %d %.12e %.12e %.12e %.12e\n", cellx, celly, particle->weight, path_length, V, dt);
+  }
+
   // The leaving energy of a capture event is 0
   const double absorption_heating = 
     (macroscopic_cs_absorb/macroscopic_cs_total)*0.0;
   const double scattering_heating = 
-    ((1.0-macroscopic_cs_absorb)/macroscopic_cs_total)*particle->e*
+    (1.0-(macroscopic_cs_absorb/macroscopic_cs_total))*particle->e*
     (MASS_NO*MASS_NO+2)/((MASS_NO+1)*(MASS_NO+1));
   energy_deposition_tally[celly*nx+cellx] += 
     scalar_flux*(particle->e-scattering_heating-absorption_heating);
