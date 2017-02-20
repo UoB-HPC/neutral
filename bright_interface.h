@@ -16,7 +16,7 @@ extern "C" {
       const double* density, const double* edgex, const double* edgey, 
       const double* edgedx, const double* edgedy, Particle* particles_out, 
       CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
-      double* scalar_flux_tally, double* energy_deposition_tally);
+      double* scalar_flux_tally, double* energy_deposition_tally, RNPool* rn_pool);
 
   // Validates the results of the simulation
   void validate(

@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <omp.h>
 #include "bright_interface.h"
-#include "mt19937.h"
 #include "../mesh.h"
 #include "../shared_data.h"
 #include "../comms.h"
@@ -44,6 +43,12 @@ int main(int argc, char** argv)
   mesh.niters = atoi(argv[3]);
   mesh.nranks = 1;
 
+  int nthreads = 0;
+#pragma omp parallel
+  {
+    nthreads = omp_get_num_threads();
+  }
+
   initialise_mpi(argc, argv, &mesh.rank, &mesh.nranks);
   initialise_devices(mesh.rank);
   initialise_comms(&mesh);
@@ -54,12 +59,15 @@ int main(int argc, char** argv)
       mesh.global_nx, mesh.global_ny, mesh.local_nx, mesh.local_ny, 
       mesh.x_off, mesh.y_off, &shared_data);
 
+  RNPool* rn_pool = (RNPool*)malloc(sizeof(RNPool)*nthreads);
+#pragma omp parallel
+  {
+    init_rn_pool(&rn_pool[omp_get_thread_num()], omp_get_thread_num());
+  }
+
   BrightData bright_data = {0};
   initialise_bright_data(
-      &bright_data, &mesh);
-
-  // Seed the mersenne twister
-  sgenrand(mesh.rank*100UL+123UL);
+      &bright_data, &mesh, rn_pool);
 
   // TODO: Currently considering that we have a time dependent system where
   // there are no secondary particles, and reflective boundary conditions.
@@ -73,7 +81,7 @@ int main(int argc, char** argv)
   // Presumably the timestep will have been set by the fluid dynamics,
   // given that it has the tightest timestep control requirements
   //set_timestep();
-  
+
   // Make sure initialisation phase is complete
   barrier();
 
@@ -108,7 +116,8 @@ int main(int argc, char** argv)
         mesh.edgedx, mesh.edgedy, 
         bright_data.out_particles, 
         bright_data.cs_scatter_table, bright_data.cs_absorb_table, 
-        bright_data.scalar_flux_tally, bright_data.energy_deposition_tally);
+        bright_data.scalar_flux_tally, bright_data.energy_deposition_tally,
+        rn_pool);
 
     barrier();
 

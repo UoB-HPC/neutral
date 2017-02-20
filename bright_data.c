@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "bright_data.h"
-#include "mt19937.h"
 #include "../profiler.h"
 #include "../shared.h"
 #include "../params.h"
@@ -22,11 +21,12 @@ void initialise_particle(
     const double particle_off_x, const double particle_off_y, 
     const int local_particle_nx, const int local_particle_ny, 
     const int x_off, const int y_off, const double dt, const double* edgex, 
-    const double* edgey, const double initial_energy, Particle* particle);
+    const double* edgey, const double initial_energy, RNPool* rn_pool,
+    Particle* particle);
 
 // Initialises all of the Bright-specific data structures.
 void initialise_bright_data(
-    BrightData* bright_data, Mesh* mesh)
+    BrightData* bright_data, Mesh* mesh, RNPool* rn_pool)
 {
   const int local_nx = mesh->local_nx-2*PAD;
   const int local_ny = mesh->local_ny-2*PAD;
@@ -114,7 +114,7 @@ void initialise_bright_data(
         mesh, local_nx, local_ny, local_particle_left_off, 
         local_particle_bottom_off, local_particle_nx, local_particle_ny, 
         bright_data->nlocal_particles, bright_data->initial_energy, 
-        bright_data->local_particles);
+        rn_pool, bright_data->local_particles);
   }
 
   initialise_cross_sections(
@@ -137,7 +137,8 @@ void inject_particles(
     Mesh* mesh, const int local_nx, const int local_ny, 
     const int local_particle_left_off, const int local_particle_bottom_off,
     const int local_particle_nx, const int local_particle_ny, 
-    const int nparticles, const double initial_energy, Particle* particles)
+    const int nparticles, const double initial_energy, RNPool* rn_pool,
+    Particle* particles)
 {
   START_PROFILING(&compute_profile);
   for(int ii = 0; ii < nparticles; ++ii) {
@@ -146,7 +147,7 @@ void inject_particles(
         mesh->height, mesh->edgex[local_particle_left_off+PAD], 
         mesh->edgey[local_particle_bottom_off+PAD], local_particle_nx, 
         local_particle_ny, mesh->x_off, mesh->y_off, mesh->dt, mesh->edgex, 
-        mesh->edgey, initial_energy, &particles[ii]);
+        mesh->edgey, initial_energy, rn_pool, &particles[ii]);
   }
   STOP_PROFILING(&compute_profile, "initialising particles");
 }
@@ -158,13 +159,14 @@ void initialise_particle(
     const double particle_off_x, const double particle_off_y, 
     const int local_particle_nx, const int local_particle_ny, 
     const int x_off, const int y_off, const double dt, const double* edgex, 
-    const double* edgey, const double initial_energy, Particle* particle)
+    const double* edgey, const double initial_energy, RNPool* rn_pool, 
+    Particle* particle)
 {
   // Set the initial random location of the particle inside the source region
   particle->x = particle_off_x + 
-    genrand()*(((double)local_particle_nx/global_nx)*mesh_width);
+    genrand(rn_pool)*(((double)local_particle_nx/global_nx)*mesh_width);
   particle->y = particle_off_y +
-    genrand()*(((double)local_particle_ny/global_ny)*mesh_height);
+    genrand(rn_pool)*(((double)local_particle_ny/global_ny)*mesh_height);
 
   int cellx = 0;
   int celly = 0;
@@ -186,7 +188,7 @@ void initialise_particle(
 
   // Generating theta has uniform density, however 0.0 and 1.0 produce the same 
   // value which introduces very very very small bias...
-  const double theta = 2.0*M_PI*genrand();
+  const double theta = 2.0*M_PI*genrand(rn_pool);
   particle->omega_x = cos(theta);
   particle->omega_y = sin(theta);
 
