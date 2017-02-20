@@ -2,11 +2,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include "bright.h"
 #include "../bright_interface.h"
 #include "../../comms.h"
 #include "../../shared.h"
 #include "../../shared_data.h"
-#include "bright.h"
 
 #ifdef MPI
 #include "mpi.h"
