@@ -17,7 +17,7 @@ void handle_particles(
     const int nparticles_to_process, int* nparticles, Particle* particles_start, 
     Particle* particles_out, CrossSection* cs_scatter_table, 
     CrossSection* cs_absorb_table, double* scalar_flux_tally, 
-    double* energy_deposition_tally);
+    double* energy_deposition_tally, RNPool* rn_pool);
 
 // Handles an individual particle.
 int handle_particle(
@@ -29,7 +29,7 @@ int handle_particle(
     const CrossSection* cs_absorb_table, Particle* particle_end, 
     int* nparticles_sent, int* facets, int* collisions, Particle* particle, 
     Particle* particle_out, double* scalar_flux_tally, 
-    double* energy_deposition_tally);
+    double* energy_deposition_tally, RNPool* rn_pool);
 
 // Calculate the distance to the next facet
 void calc_distance_to_facet(
@@ -54,7 +54,7 @@ int binary_search(
 int handle_collision(
     Particle* particle, Particle* particle_end, 
     const double macroscopic_cs_absorb, const double macroscopic_cs_total, 
-    const double distance_to_collision);
+    const double distance_to_collision, RNPool* rn_pool);
 
 // Sends a particle to a neighbour and replaces in the particle list
 void send_and_replace_particle(

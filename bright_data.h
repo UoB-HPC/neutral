@@ -1,5 +1,6 @@
 #pragma once 
 
+#include "rand.h"
 #include "../mesh.h"
 #include "../comms.h"
 
@@ -67,18 +68,19 @@ typedef struct {
 } BrightData;
 
 #ifdef MPI
-  // Global MPI particle type
-  MPI_Datatype particle_type;
+// Global MPI particle type
+MPI_Datatype particle_type;
 #endif
 
 // Initialises all of the Bright-specific data structures.
 void initialise_bright_data(
-    BrightData* bright_data, Mesh* mesh);
+    BrightData* bright_data, Mesh* mesh, RNPool* rn_pool);
 
 // Acts as a particle source
 void inject_particles(
     Mesh* mesh, const int local_nx, const int local_ny, 
     const int local_particle_left_off, const int local_particle_bottom_off,
     const int local_particle_nx, const int local_particle_ny, 
-    const int nparticles, const double initial_energy, Particle* particles);
+    const int nparticles, const double initial_energy, RNPool* rn_pool,
+    Particle* particles);
 

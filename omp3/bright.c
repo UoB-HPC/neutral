@@ -1,13 +1,12 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "../mt19937.h"
+#include <assert.h>
 #include "../bright_interface.h"
 #include "../../comms.h"
 #include "../../shared.h"
 #include "../../shared_data.h"
 #include "bright.h"
-#include <assert.h>
 
 #ifdef MPI
 #include "mpi.h"
@@ -21,7 +20,7 @@ void solve_transport_2d(
     const double* density, const double* edgex, const double* edgey, 
     const double* edgedx, const double* edgedy, Particle* particles_out, 
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
-    double* scalar_flux_tally, double* energy_deposition_tally)
+    double* scalar_flux_tally, double* energy_deposition_tally, RNPool* rn_pool)
 {
   // Initial idea is to use a kind of queue for handling the particles. Presumably
   // this doesn't have to be a carefully ordered queue but lets see how that goes.
@@ -44,7 +43,8 @@ void solve_transport_2d(
       ntotal_particles, nparticles, &nparticles, 
       particles, particles_out, 
       cs_scatter_table, cs_absorb_table, 
-      scalar_flux_tally, energy_deposition_tally);
+      scalar_flux_tally, energy_deposition_tally,
+      rn_pool);
 
   START_PROFILING(&compute_profile);
 #ifdef MPI
@@ -103,7 +103,7 @@ void solve_transport_2d(
           density, edgex, edgey, edgedx, edgedy, &facets, &collisions, 
           nparticles_sent, ntotal_particles, nunprocessed_particles, &nparticles, 
           &particles[unprocessed_start], particles_out, cs_scatter_table, 
-          cs_absorb_table, scalar_flux_tally, energy_deposition_tally);
+          cs_absorb_table, scalar_flux_tally, energy_deposition_tally, rn_pool);
     }
 
     // Check if any of the ranks had unprocessed particles
@@ -137,7 +137,7 @@ void handle_particles(
     const int nparticles_to_process, int* nparticles, Particle* particles_start, 
     Particle* particles_out, CrossSection* cs_scatter_table, 
     CrossSection* cs_absorb_table, double* scalar_flux_tally, 
-    double* energy_deposition_tally)
+    double* energy_deposition_tally, RNPool* rn_pool)
 {
   int nparticles_out = 0;
   int nparticles_deleted = 0;
@@ -157,7 +157,8 @@ void handle_particles(
         global_nx, global_ny, nx, ny, x_off, y_off, neighbours, dt, initial,
         ntotal_particles, density, edgex, edgey, edgedx, edgedy, cs_scatter_table, 
         cs_absorb_table, particle_end, nparticles_sent, facets, collisions, 
-        particle, particle_out, scalar_flux_tally, energy_deposition_tally);
+        particle, particle_out, scalar_flux_tally, energy_deposition_tally, 
+        rn_pool);
 
     nparticles_out += (result == PARTICLE_SENT);
     nparticles_deleted += (result == PARTICLE_DEAD || result == PARTICLE_SENT);
@@ -180,7 +181,7 @@ int handle_particle(
     const CrossSection* cs_absorb_table, Particle* particle_end, 
     int* nparticles_sent, int* facets, int* collisions, Particle* particle, 
     Particle* particle_out, double* scalar_flux_tally, 
-    double* energy_deposition_tally)
+    double* energy_deposition_tally, RNPool* rn_pool)
 {
   // (1) particle can stream and reach census
   // (2) particle can collide and either
@@ -215,7 +216,7 @@ int handle_particle(
   // Set time to census and mfps until collision, unless travelled particle
   if(initial) {
     particle->dt_to_census = dt;
-    particle->mfp_to_collision = -log(genrand())/macroscopic_cs_scatter;
+    particle->mfp_to_collision = -log(genrand(rn_pool))/macroscopic_cs_scatter;
   }
 
   STOP_PROFILING(&compute_profile, "handle particle initial");
@@ -258,7 +259,7 @@ int handle_particle(
       // a previous iteration for our given energy
       if(handle_collision(
             particle, particle_end, macroscopic_cs_absorb, macroscopic_cs_total, 
-            distance_to_collision)) {
+            distance_to_collision, rn_pool)) {
         return PARTICLE_DEAD;
       }
 
@@ -273,7 +274,7 @@ int handle_particle(
         (local_density*AVOGADROS/MOLAR_MASS)*(microscopic_cs_absorb*BARNS);
 
       // Resample number of mean free paths to collision
-      particle->mfp_to_collision = -log(genrand())/macroscopic_cs_scatter;
+      particle->mfp_to_collision = -log(genrand(rn_pool))/macroscopic_cs_scatter;
       particle->dt_to_census -= distance_to_collision/particle_velocity;
       particle_velocity = sqrt((2.0*particle->e*eV_TO_J)/PARTICLE_MASS);
       STOP_PROFILING(&compute_profile, "collision");
@@ -346,7 +347,7 @@ int handle_particle(
 int handle_collision(
     Particle* particle, Particle* particle_end, 
     const double macroscopic_cs_absorb, const double macroscopic_cs_total, 
-    const double distance_to_collision)
+    const double distance_to_collision, RNPool* rn_pool)
 {
   // Moves the particle to the collision site
   particle->x += distance_to_collision*particle->omega_x;
@@ -355,7 +356,7 @@ int handle_collision(
   const double p_absorb = macroscopic_cs_absorb/macroscopic_cs_total;
   int is_particle_dead = FALSE;
 
-  if(genrand() < p_absorb) {
+  if(genrand(rn_pool) < p_absorb) {
     /* Model particle absorption */
 
     // Find the new particle weight after absorption, saving the energy change
@@ -376,7 +377,7 @@ int handle_collision(
     /* Model elastic particle scattering */
 
     // Choose a random scattering angle between -1 and 1
-    const double mu_cm = 1.0 - 2.0*genrand();
+    const double mu_cm = 1.0 - 2.0*genrand(rn_pool);
 
     // Calculate the new energy based on the relation to angle of incidence
     // TODO: Could check here for the particular nuclide that was collided with
