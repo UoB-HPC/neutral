@@ -81,8 +81,8 @@ void initialise_bright_data(
 // Acts as a particle source
 void inject_particles(
     Mesh* mesh, const int local_nx, const int local_ny, 
-    const int local_particle_left_off, const int local_particle_bottom_off,
-    const int local_particle_nx, const int local_particle_ny, 
+    const double local_particle_left_off, const double local_particle_bottom_off,
+    const double local_particle_width, const double local_particle_height, 
     const int nparticles, const double initial_energy, RNPool* rn_pool,
     Particle* particles);
 
