@@ -1,1 +1,4 @@
-neutral.params result=2.688727613801e-04
+params1 result=2.688230463244e-04 # 10000000 iters
+#neutral.params result=2.688727613801e-04 100000 iters
+#neutral.params result=2.688238722713e-04 1000000 iters
+params2 result=1.038854457674708e+01 #100000 iters

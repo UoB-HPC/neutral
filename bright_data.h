@@ -26,7 +26,6 @@
 #define CS_CAPTURE_FILENAME    "capture.cs"         // Capture cs file
 
 #define ARCH_ROOT_PARAMS "../arch.params"
-#define NEUTRAL_PARAMS   "neutral.params"
 #define NEUTRAL_TESTS    "neutral.tests"
 
 // Represents a cross sectional table for resonance data
@@ -65,6 +64,8 @@ typedef struct {
 
   double* scalar_flux_tally;
   double* energy_deposition_tally;
+
+  const char* neutral_params_filename;
 
 } BrightData;
 

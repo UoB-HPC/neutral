@@ -32,9 +32,9 @@ void initialise_bright_data(
   const int local_ny = mesh->local_ny-2*PAD;
 
   bright_data->nparticles = 
-    get_int_parameter("nparticles", NEUTRAL_PARAMS);
+    get_int_parameter("nparticles", bright_data->neutral_params_filename);
   bright_data->initial_energy = 
-    get_double_parameter("initial_energy", NEUTRAL_PARAMS);
+    get_double_parameter("initial_energy", bright_data->neutral_params_filename);
 
   int global_particle_start_x;
   int global_particle_start_y;
@@ -42,7 +42,7 @@ void initialise_bright_data(
   int global_particle_ny;
 
   const int source_location = 
-    get_int_parameter("source_location", NEUTRAL_PARAMS);
+    get_int_parameter("source_location", bright_data->neutral_params_filename);
 
   if(source_location == 0) {
     // SMALL 1/5 SQUARE AT LEFT OF MESH
