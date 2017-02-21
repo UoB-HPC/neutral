@@ -19,6 +19,7 @@
 #define OPEN_BOUND_CORRECTION  1.0e-13              // Fixes open bounds
 #define TAG_SEND_RECV          100
 #define TAG_PARTICLE           1
+#define VALIDATE_TOLERANCE     1.0e-5
 
 /* Data tables */
 #define CS_SCATTER_FILENAME    "elastic_scatter.cs" // Elastic scattering cs file

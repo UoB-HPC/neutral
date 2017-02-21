@@ -8,11 +8,11 @@
 
 // Reads a cross section file
 void read_cs_file(
-    const char* filename, CrossSection* cs);
+    const char* filename, CrossSection* cs, Mesh* mesh);
 
 // Initialises the set of cross sections
 void initialise_cross_sections(
-    BrightData* bright_data);
+    BrightData* bright_data, Mesh* mesh);
 
 // Initialises a new particle ready for tracking
 void initialise_particle(
@@ -50,7 +50,10 @@ void initialise_bright_data(
     global_particle_start_y = (2*mesh->global_ny/10);
     global_particle_nx = (2*mesh->global_nx/10);
     global_particle_ny = (2*mesh->global_ny/10);
-    printf("Source is small square at left of mesh.\n");
+
+    if(mesh->rank == MASTER) {
+      printf("Source is small square at left of mesh.\n");
+    }
   }
   else if(source_location == 1) {
     // RANDOM ACROSS WHOLE MESH
@@ -58,7 +61,10 @@ void initialise_bright_data(
     global_particle_start_y = 0;
     global_particle_nx = mesh->global_nx;
     global_particle_ny = mesh->global_ny;
-    printf("Source is uniformly distributed across mesh.\n");
+
+    if(mesh->rank == MASTER) {
+      printf("Source is uniformly distributed across mesh.\n");
+    }
   }
   else {
     TERMINATE("The 'source_location' parameter has been set incorrectly.\n");
@@ -118,7 +124,7 @@ void initialise_bright_data(
   }
 
   initialise_cross_sections(
-      bright_data);
+      bright_data, mesh);
 
 #ifdef MPI
   // Had to initialise this in the package directly as the data structure is not
@@ -203,7 +209,7 @@ void initialise_particle(
 
 // Reads in a cross-sectional data file
 void read_cs_file(
-    const char* filename, CrossSection* cs) 
+    const char* filename, CrossSection* cs, Mesh* mesh) 
 {
   FILE* fp = fopen(filename, "r");
   if(!fp) {
@@ -218,7 +224,10 @@ void read_cs_file(
       cs->nentries++;
     }
   }
-  printf("File %s contains %d entries\n", filename, cs->nentries);
+
+  if(mesh->rank == MASTER) {
+    printf("File %s contains %d entries\n", filename, cs->nentries);
+  }
 
   rewind(fp);
 
@@ -245,11 +254,11 @@ void read_cs_file(
 
 // Initialises the state 
 void initialise_cross_sections(
-    BrightData* bright_data)
+    BrightData* bright_data, Mesh* mesh)
 {
   bright_data->cs_scatter_table = (CrossSection*)malloc(sizeof(CrossSection));
   bright_data->cs_absorb_table = (CrossSection*)malloc(sizeof(CrossSection));
-  read_cs_file(CS_SCATTER_FILENAME, bright_data->cs_scatter_table);
-  read_cs_file(CS_CAPTURE_FILENAME, bright_data->cs_absorb_table);
+  read_cs_file(CS_SCATTER_FILENAME, bright_data->cs_scatter_table, mesh);
+  read_cs_file(CS_CAPTURE_FILENAME, bright_data->cs_absorb_table, mesh);
 }
 
