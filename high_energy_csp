@@ -5,4 +5,4 @@ source_location   0       # 0 - square left of mesh, 1 - even across mesh
 dt                1.0e-7
 nx                1000
 ny                1000
-iterations        5
+iterations        1
