@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <float.h>
 #include "bright.h"
 #include "../bright_interface.h"
 #include "../../comms.h"

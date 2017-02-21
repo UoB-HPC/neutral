@@ -1,2 +1,4 @@
-low_energy_csp result=0.0
-high_energy_csp result=0.0
+problems/low_energy_csp result=0.0
+problems/high_energy_csp result=0.0
+problems/vacuumish result=2.731592800900206e-04
+
