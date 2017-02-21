@@ -23,8 +23,6 @@ int main(int argc, char** argv)
     TERMINATE("usage: ./bright.exe <param_file>\n");
   }
 
-  char* neutral_params_filename = argv[1];
-
 #ifdef ENABLE_PROFILING
   /* The timing code has to be called so many times that the API calls 
    * actually begin to influence the performance dramatically. */
@@ -36,15 +34,17 @@ int main(int argc, char** argv)
 
   // Store the dimensions of the mesh
   Mesh mesh = {0};
-  mesh.global_nx = get_int_parameter("nx", neutral_params_filename);
-  mesh.global_ny = get_int_parameter("ny", neutral_params_filename);
+  BrightData bright_data = {0};
+  bright_data.neutral_params_filename = argv[1];
+  mesh.global_nx = get_int_parameter("nx", bright_data.neutral_params_filename);
+  mesh.global_ny = get_int_parameter("ny", bright_data.neutral_params_filename);
   mesh.local_nx = mesh.global_nx + 2*PAD;
   mesh.local_ny = mesh.global_ny + 2*PAD;
   mesh.width = get_double_parameter("width", ARCH_ROOT_PARAMS);
   mesh.height = get_double_parameter("height", ARCH_ROOT_PARAMS);
-  mesh.dt = get_double_parameter("dt", neutral_params_filename);
+  mesh.dt = get_double_parameter("dt", bright_data.neutral_params_filename);
   mesh.sim_end = get_double_parameter("sim_end", ARCH_ROOT_PARAMS);
-  mesh.niters = get_int_parameter("iterations", neutral_params_filename);
+  mesh.niters = get_int_parameter("iterations", bright_data.neutral_params_filename);
   mesh.rank = MASTER;
   mesh.nranks = 1;
   mesh.ndims = 2;
@@ -61,12 +61,13 @@ int main(int argc, char** argv)
   initialise_mesh_2d(&mesh);
 
   if(mesh.rank == MASTER) {
-    printf("Loading problem from %s.\n", neutral_params_filename);
+    printf("Loading problem from %s.\n", bright_data.neutral_params_filename);
   }
   SharedData shared_data = {0};
   initialise_shared_data_2d(
-      mesh.local_nx, mesh.local_ny, mesh.x_off, mesh.y_off, 
-      mesh.ndims, neutral_params_filename, mesh.edgex, mesh.edgey, &shared_data);
+      mesh.global_nx, mesh.global_ny, mesh.local_nx, mesh.local_ny, 
+      mesh.x_off, mesh.y_off, mesh.ndims, bright_data.neutral_params_filename, 
+      mesh.edgex, mesh.edgey, &shared_data);
 
   RNPool* rn_pool = (RNPool*)malloc(sizeof(RNPool)*nthreads);
 #pragma omp parallel
@@ -74,7 +75,6 @@ int main(int argc, char** argv)
     init_rn_pool(&rn_pool[omp_get_thread_num()], omp_get_thread_num());
   }
 
-  BrightData bright_data = {0};
   initialise_bright_data(
       &bright_data, &mesh, rn_pool);
 
@@ -156,8 +156,9 @@ int main(int argc, char** argv)
 
   // TODO: WHAT SHOULD THE VALUE OF NINITIALPARTICLES BE IF FISSION ETC.
   validate(
-      mesh.local_nx-2*PAD, mesh.local_ny-2*PAD, neutral_params_filename,
-      mesh.rank, bright_data.energy_deposition_tally);
+      mesh.local_nx-2*PAD, mesh.local_ny-2*PAD, 
+      bright_data.neutral_params_filename, mesh.rank, 
+      bright_data.energy_deposition_tally);
 
   if(mesh.rank == MASTER) {
     PRINT_PROFILING_RESULTS(&compute_profile);
