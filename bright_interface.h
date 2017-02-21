@@ -21,7 +21,6 @@ extern "C" {
   // Validates the results of the simulation
   void validate(
       const int nx, const int ny, const char* params_filename, 
-      const int nglobal_particles, const double dt, const int niters, 
       const int rank, double* energy_tally);
 
 #ifdef __cplusplus
