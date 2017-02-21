@@ -64,7 +64,7 @@ void send_and_replace_particle(
 void update_tallies(
     const int global_nx, const int nx, const int x_off, const int y_off, 
     Particle* particle, const int ntotal_particles, const double path_length, 
-    const double V, const double dt, 
+    const double cell_volume, const double dt, const double number_density,
     const double macroscopic_cs_absorb, const double macroscopic_cs_total, 
     double* scalar_flux_tally, double* energy_deposition_tally);
 

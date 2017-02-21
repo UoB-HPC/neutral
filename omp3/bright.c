@@ -208,10 +208,9 @@ int handle_particle(
     microscopic_cs_for_energy(cs_scatter_table, particle->e, &cs_index);
   double microscopic_cs_absorb = 
     microscopic_cs_for_energy(cs_absorb_table, particle->e, &cs_index);
-  double macroscopic_cs_scatter = 
-    (local_density*AVOGADROS/MOLAR_MASS)*(microscopic_cs_scatter*BARNS);
-  double macroscopic_cs_absorb = 
-    (local_density*AVOGADROS/MOLAR_MASS)*(microscopic_cs_absorb*BARNS);
+  double number_density = (local_density*AVOGADROS/MOLAR_MASS);
+  double macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
+  double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
 
   double particle_velocity = sqrt((2.0*particle->e*eV_TO_J)/PARTICLE_MASS);
 
@@ -246,8 +245,9 @@ int handle_particle(
       const double cell_volume = edgedx[cellx]*edgedy[celly];
       update_tallies(
           global_nx, nx, x_off, y_off, particle, ntotal_particles, 
-          distance_to_collision, cell_volume, dt, macroscopic_cs_absorb, 
-          macroscopic_cs_total, scalar_flux_tally, energy_deposition_tally);
+          distance_to_collision, cell_volume, dt, number_density, 
+          macroscopic_cs_absorb, macroscopic_cs_total, 
+          scalar_flux_tally, energy_deposition_tally);
 
       // The cross sections for scattering and absorbtion were calculated on 
       // a previous iteration for our given energy
@@ -262,10 +262,9 @@ int handle_particle(
         microscopic_cs_for_energy(cs_scatter_table, particle->e, &cs_index);
       microscopic_cs_absorb = 
         microscopic_cs_for_energy(cs_absorb_table, particle->e, &cs_index);
-      macroscopic_cs_scatter = 
-        (local_density*AVOGADROS/MOLAR_MASS)*(microscopic_cs_scatter*BARNS);
-      macroscopic_cs_absorb = 
-        (local_density*AVOGADROS/MOLAR_MASS)*(microscopic_cs_absorb*BARNS);
+      number_density = (local_density*AVOGADROS/MOLAR_MASS);
+      macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
+      macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
 
       // Resample number of mean free paths to collision
       particle->mfp_to_collision = -log(genrand(rn_pool))/macroscopic_cs_scatter;
@@ -284,8 +283,9 @@ int handle_particle(
       const double cell_volume = edgedx[cellx]*edgedy[celly];
       update_tallies(
           global_nx, nx, x_off, y_off, particle, ntotal_particles, 
-          distance_to_facet, cell_volume, dt, macroscopic_cs_absorb, 
-          macroscopic_cs_total, scalar_flux_tally, energy_deposition_tally);
+          distance_to_facet, cell_volume, dt, number_density,
+          macroscopic_cs_absorb, macroscopic_cs_total, 
+          scalar_flux_tally, energy_deposition_tally);
 
       // Encounter facet, and jump out if particle left this rank's domain
       if(handle_facet_encounter(
@@ -304,10 +304,10 @@ int handle_particle(
        * in the data table, merely update it with the adjusted density. */
       local_density = 
         density[celly*(nx+2*PAD)+cellx];
-      macroscopic_cs_scatter = 
-        (local_density*AVOGADROS/MOLAR_MASS)*(microscopic_cs_scatter*BARNS);
-      macroscopic_cs_absorb = 
-        (local_density*AVOGADROS/MOLAR_MASS)*(microscopic_cs_absorb*BARNS);
+
+      number_density = (local_density*AVOGADROS/MOLAR_MASS);
+      macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
+      macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
     }
     // Check if we have reached census
     else {
@@ -320,8 +320,9 @@ int handle_particle(
       const double cell_volume = edgedx[cellx]*edgedy[celly];
       update_tallies(
           global_nx, nx, x_off, y_off, particle, ntotal_particles, 
-          distance_to_census, cell_volume, dt, macroscopic_cs_absorb, 
-          macroscopic_cs_total, scalar_flux_tally, energy_deposition_tally);
+          distance_to_census, cell_volume, dt, number_density,
+          macroscopic_cs_absorb, macroscopic_cs_total, 
+          scalar_flux_tally, energy_deposition_tally);
 
       particle->dt_to_census = 0.0;
       break;
@@ -573,7 +574,7 @@ void calc_distance_to_facet(
 void update_tallies(
     const int global_nx, const int nx, const int x_off, const int y_off, 
     Particle* particle, const int ntotal_particles, const double path_length, 
-    const double cell_volume, const double dt, 
+    const double cell_volume, const double dt, const double number_density,
     const double macroscopic_cs_absorb, const double macroscopic_cs_total, 
     double* scalar_flux_tally, double* energy_deposition_tally)
 {
@@ -581,7 +582,8 @@ void update_tallies(
   const int cellx = (particle->cell%global_nx)-x_off;
   const int celly = (particle->cell/global_nx)-y_off;
   const double scalar_flux = 
-    (particle->weight*path_length)/(ntotal_particles*cell_volume*dt);
+    (number_density*particle->weight*path_length)/
+    (ntotal_particles*cell_volume*dt);
   scalar_flux_tally[celly*nx+cellx] += scalar_flux; 
 
   // The leaving energy of a capture event is 0
