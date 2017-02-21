@@ -242,10 +242,10 @@ int handle_particle(
       (*collisions)++;
 
       // Update the tallies before the energy is updated
-      const double V = edgedx[cellx]*edgedy[celly];
+      const double cell_volume = edgedx[cellx]*edgedy[celly];
       update_tallies(
           global_nx, nx, x_off, y_off, particle, ntotal_particles, 
-          distance_to_collision, V, dt, macroscopic_cs_absorb, 
+          distance_to_collision, cell_volume, dt, macroscopic_cs_absorb, 
           macroscopic_cs_total, scalar_flux_tally, energy_deposition_tally);
 
       // The cross sections for scattering and absorbtion were calculated on 
@@ -280,10 +280,10 @@ int handle_particle(
       particle->dt_to_census -= (distance_to_facet/particle_velocity);
 
       // Update the tallies in this zone
-      const double V = edgedx[cellx]*edgedy[celly];
+      const double cell_volume = edgedx[cellx]*edgedy[celly];
       update_tallies(
           global_nx, nx, x_off, y_off, particle, ntotal_particles, 
-          distance_to_facet, V, dt, macroscopic_cs_absorb, macroscopic_cs_total, 
+          distance_to_facet, cell_volume, dt, macroscopic_cs_absorb, macroscopic_cs_total, 
           scalar_flux_tally, energy_deposition_tally);
 
       // Encounter facet, and jump out if particle left this rank's domain
@@ -316,10 +316,10 @@ int handle_particle(
       particle->mfp_to_collision -= (distance_to_census/cell_mfp);
 
       // Update the tallies in this zone
-      const double V = edgedx[cellx]*edgedy[celly];
+      const double cell_volume = edgedx[cellx]*edgedy[celly];
       update_tallies(
           global_nx, nx, x_off, y_off, particle, ntotal_particles, 
-          distance_to_census, V, dt, macroscopic_cs_absorb, macroscopic_cs_total, 
+          distance_to_census, cell_volume, dt, macroscopic_cs_absorb, macroscopic_cs_total, 
           scalar_flux_tally, energy_deposition_tally);
 
       particle->dt_to_census = 0.0;
@@ -572,7 +572,7 @@ void calc_distance_to_facet(
 void update_tallies(
     const int global_nx, const int nx, const int x_off, const int y_off, 
     Particle* particle, const int ntotal_particles, const double path_length, 
-    const double V, const double dt, 
+    const double cell_volume, const double dt, 
     const double macroscopic_cs_absorb, const double macroscopic_cs_total, 
     double* scalar_flux_tally, double* energy_deposition_tally)
 {
@@ -580,7 +580,7 @@ void update_tallies(
   const int cellx = (particle->cell%global_nx)-x_off;
   const int celly = (particle->cell/global_nx)-y_off;
   const double scalar_flux = 
-    (particle->weight*path_length)/(ntotal_particles*V*dt);
+    (particle->weight*path_length)/(ntotal_particles*cell_volume*dt);
   scalar_flux_tally[celly*nx+cellx] += scalar_flux; 
 
   // The leaving energy of a capture event is 0
