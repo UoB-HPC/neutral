@@ -283,8 +283,8 @@ int handle_particle(
       const double cell_volume = edgedx[cellx]*edgedy[celly];
       update_tallies(
           global_nx, nx, x_off, y_off, particle, ntotal_particles, 
-          distance_to_facet, cell_volume, dt, macroscopic_cs_absorb, macroscopic_cs_total, 
-          scalar_flux_tally, energy_deposition_tally);
+          distance_to_facet, cell_volume, dt, macroscopic_cs_absorb, 
+          macroscopic_cs_total, scalar_flux_tally, energy_deposition_tally);
 
       // Encounter facet, and jump out if particle left this rank's domain
       if(handle_facet_encounter(
@@ -319,8 +319,8 @@ int handle_particle(
       const double cell_volume = edgedx[cellx]*edgedy[celly];
       update_tallies(
           global_nx, nx, x_off, y_off, particle, ntotal_particles, 
-          distance_to_census, cell_volume, dt, macroscopic_cs_absorb, macroscopic_cs_total, 
-          scalar_flux_tally, energy_deposition_tally);
+          distance_to_census, cell_volume, dt, macroscopic_cs_absorb, 
+          macroscopic_cs_total, scalar_flux_tally, energy_deposition_tally);
 
       particle->dt_to_census = 0.0;
       break;

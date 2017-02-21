@@ -16,12 +16,11 @@ void initialise_cross_sections(
 
 // Initialises a new particle ready for tracking
 void initialise_particle(
-    const int global_nx, const int global_ny, const int local_nx, 
-    const int local_ny, const double mesh_width, const double mesh_height, 
-    const double particle_off_x, const double particle_off_y, 
-    const int local_particle_nx, const int local_particle_ny, 
+    const int global_nx, const int local_nx, const int local_ny, 
+    const double local_particle_left_off, const double local_particle_bottom_off, 
+    const double local_particle_width, const double local_particle_height, 
     const int x_off, const int y_off, const double dt, const double* edgex, 
-    const double* edgey, const double initial_energy, RNPool* rn_pool,
+    const double* edgey, const double initial_energy, RNPool* rn_pool, 
     Particle* particle);
 
 // Initialises all of the Bright-specific data structures.
@@ -36,67 +35,67 @@ void initialise_bright_data(
   bright_data->initial_energy = 
     get_double_parameter("initial_energy", bright_data->neutral_params_filename);
 
-  int global_particle_nx;
-  int global_particle_ny;
-  int global_particle_start_x;
-  int global_particle_start_y;
+  int nkeys = 0;
+  char* keys = (char*)malloc(sizeof(char)*MAX_KEYS*MAX_STR_LEN);
+  double* values = (double*)malloc(sizeof(double)*MAX_KEYS);
 
-  const int source_location = 
-    get_int_parameter("source_location", bright_data->neutral_params_filename);
-
-  if(source_location == 0) {
-    // SMALL 1/5 SQUARE AT LEFT OF MESH
-    global_particle_start_x = 0;
-    global_particle_start_y = (2*mesh->global_ny/10);
-    global_particle_nx = (2*mesh->global_nx/10);
-    global_particle_ny = (2*mesh->global_ny/10);
-
-    if(mesh->rank == MASTER) {
-      printf("Source is small square at left of mesh.\n");
-    }
-  }
-  else if(source_location == 1) {
-    // RANDOM ACROSS WHOLE MESH
-    global_particle_start_x = 0;
-    global_particle_start_y = 0;
-    global_particle_nx = mesh->global_nx;
-    global_particle_ny = mesh->global_ny;
-
-    if(mesh->rank == MASTER) {
-      printf("Source is uniformly distributed across mesh.\n");
-    }
-  }
-  else {
-    TERMINATE("The 'source_location' parameter has been set incorrectly.\n");
+  if(!get_key_value_parameter(
+        "source", bright_data->neutral_params_filename, keys, values, &nkeys)) {
+    TERMINATE("Parameter file %s did not contain a source entry.\n", 
+        bright_data->neutral_params_filename);
   }
 
-  // Check if the start of data region is before or after our patch starts
-  const int local_particle_left_off = 
-    max(0, global_particle_start_x-mesh->x_off);
-  const int local_particle_bottom_off = 
-    max(0, global_particle_start_y-mesh->y_off);
-  const int local_particle_right_off = 
-    max(0, (mesh->x_off+local_nx)-(global_particle_start_x+global_particle_nx));
-  const int local_particle_top_off = 
-    max(0, (mesh->y_off+local_ny)-(global_particle_start_y+global_particle_ny));
+  // Fetch the width and height of the mesh
+  const double mesh_width = mesh->edgex[mesh->global_nx+PAD];
+  const double mesh_height = mesh->edgey[mesh->global_ny+PAD];
 
-  // The area of the active region shaded by this rank
-  const int local_particle_nx =
-    max(0, (local_nx-local_particle_left_off-local_particle_right_off));
-  const int local_particle_ny = 
-    max(0, (local_ny-local_particle_bottom_off-local_particle_top_off));
+  // The last four keys are the bound specification
+  const double source_xpos = values[nkeys-4]*mesh_width;
+  const double source_ypos = values[nkeys-3]*mesh_height;
+  const double source_width = values[nkeys-2]*mesh_width;
+  const double source_height = values[nkeys-1]*mesh_height;
+  const double rank_xpos_0 = mesh->edgex[mesh->x_off+PAD];
+  const double rank_ypos_0 = mesh->edgey[mesh->y_off+PAD];
+  const double rank_xpos_1 = mesh->edgex[local_nx+mesh->x_off+PAD];
+  const double rank_ypos_1 = mesh->edgey[local_ny+mesh->y_off+PAD];
 
-  bright_data->nlocal_particles = bright_data->nparticles*
-    ((double)local_particle_nx*local_particle_ny)/
-    ((double)global_particle_nx*global_particle_ny);
+  // Calculate the shaded bounds
+  const double local_particle_left_off =
+    max(0.0, source_xpos-rank_xpos_0);
+  const double local_particle_bottom_off =
+    max(0.0, source_ypos-rank_ypos_0);
+  const double local_particle_right_off =
+    max(0.0, rank_xpos_1-(source_xpos+source_width));
+  const double local_particle_top_off =
+    max(0.0, rank_ypos_1-(source_ypos+source_height));
 
-  // TODO: FIX THE OVERESTIMATED PARTICLE POPULATION MAXIMUMS
+  const double local_particle_width = 
+    max(0.0, (rank_xpos_1-rank_xpos_0)-
+        (local_particle_right_off+local_particle_left_off));
+  const double local_particle_height = 
+    max(0.0, (rank_ypos_1-rank_ypos_0)-
+        (local_particle_top_off+local_particle_bottom_off));
+
+  // Calculate the number of particles we need based on the shaded area that
+  // is covered by our source
+  const double nlocal_particles_real = 
+    bright_data->nparticles*
+    (local_particle_width*local_particle_height)/(source_width*source_height);
+
+  // Rounding hack to make sure correct number of particles is selected
+  bright_data->nlocal_particles = nlocal_particles_real + 0.5;
+
+  // TODO: SHOULD PROBABLY PERFORM A REDUCTION OVER THE NUMBER OF LOCAL PARTICLES
+  // TO MAKE SURE THAT THEY ALL SUM UP TO THE CORRECT VALUE!
+
+  // TODO: THIS ESTIMATE OF THE PARTICLE POPULATION NEEDS TO BE IMPROVED!
   bright_data->local_particles = 
     (Particle*)malloc(sizeof(Particle)*bright_data->nparticles*2);
   if(!bright_data->local_particles) {
     TERMINATE("Could not allocate particle array.\n");
   }
 
+  // TODO: SO DOES THIS ONE, WHICH IS WAYYYYY TOO HIGH
   bright_data->out_particles = 
     (Particle*)malloc(sizeof(Particle)*bright_data->nparticles);
   if(!bright_data->out_particles) {
@@ -110,15 +109,11 @@ void initialise_bright_data(
     bright_data->energy_deposition_tally[ii] = 0.0;
   }
 
-  // Check we are injecting some particle into this part of the mesh
-  if(global_particle_start_x+global_particle_nx >= mesh->x_off && 
-      global_particle_start_x < mesh->x_off+local_nx &&
-      global_particle_start_y+global_particle_ny >= mesh->y_off && 
-      global_particle_start_y < mesh->y_off+local_ny) {
-
+  // Inject some particles into the mesh if we need to
+  if(bright_data->nlocal_particles) {
     inject_particles(
         mesh, local_nx, local_ny, local_particle_left_off, 
-        local_particle_bottom_off, local_particle_nx, local_particle_ny, 
+        local_particle_bottom_off, local_particle_width, local_particle_height, 
         bright_data->nlocal_particles, bright_data->initial_energy, 
         rn_pool, bright_data->local_particles);
   }
@@ -141,43 +136,41 @@ void initialise_bright_data(
 // Acts as a particle source
 void inject_particles(
     Mesh* mesh, const int local_nx, const int local_ny, 
-    const int local_particle_left_off, const int local_particle_bottom_off,
-    const int local_particle_nx, const int local_particle_ny, 
+    const double local_particle_left_off, const double local_particle_bottom_off,
+    const double local_particle_width, const double local_particle_height, 
     const int nparticles, const double initial_energy, RNPool* rn_pool,
     Particle* particles)
 {
   START_PROFILING(&compute_profile);
   for(int ii = 0; ii < nparticles; ++ii) {
     initialise_particle(
-        mesh->global_nx, mesh->global_ny, local_nx, local_ny, mesh->width, 
-        mesh->height, mesh->edgex[local_particle_left_off+PAD], 
-        mesh->edgey[local_particle_bottom_off+PAD], local_particle_nx, 
-        local_particle_ny, mesh->x_off, mesh->y_off, mesh->dt, mesh->edgex, 
-        mesh->edgey, initial_energy, rn_pool, &particles[ii]);
+        mesh->global_nx, local_nx, local_ny, local_particle_left_off, 
+        local_particle_bottom_off, local_particle_width, local_particle_height, 
+        mesh->x_off, mesh->y_off, mesh->dt, mesh->edgex, mesh->edgey, 
+        initial_energy, rn_pool, &particles[ii]);
   }
   STOP_PROFILING(&compute_profile, "initialising particles");
 }
 
 // Initialises a new particle ready for tracking
 void initialise_particle(
-    const int global_nx, const int global_ny, const int local_nx, 
-    const int local_ny, const double mesh_width, const double mesh_height, 
-    const double particle_off_x, const double particle_off_y, 
-    const int local_particle_nx, const int local_particle_ny, 
+    const int global_nx, const int local_nx, const int local_ny, 
+    const double local_particle_left_off, const double local_particle_bottom_off, 
+    const double local_particle_width, const double local_particle_height, 
     const int x_off, const int y_off, const double dt, const double* edgex, 
     const double* edgey, const double initial_energy, RNPool* rn_pool, 
     Particle* particle)
 {
   // Set the initial random location of the particle inside the source region
-  particle->x = particle_off_x + 
-    genrand(rn_pool)*(((double)local_particle_nx/global_nx)*mesh_width);
-  particle->y = particle_off_y +
-    genrand(rn_pool)*(((double)local_particle_ny/global_ny)*mesh_height);
+  particle->x = local_particle_left_off + 
+    genrand(rn_pool)*local_particle_width;
+  particle->y = local_particle_bottom_off + 
+    genrand(rn_pool)*local_particle_height;
 
+  // Check the location of the specific cell that the particle sits within.
+  // We have to check this explicitly because the mesh might be non-uniform.
   int cellx = 0;
   int celly = 0;
-
-  // Have to check this way as mesh doesn't have to be uniform
   for(int ii = 0; ii < local_nx; ++ii) {
     if(particle->x >= edgex[ii+PAD] && particle->x < edgex[ii+PAD+1]) {
       cellx = x_off+ii;
