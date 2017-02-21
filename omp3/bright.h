@@ -4,8 +4,7 @@ enum { PARTICLE_SENT, PARTICLE_DEAD, PARTICLE_CENSUS };
 
 // Fetch the cross section for a particular energy value
 double microscopic_cs_for_energy(
-    const CrossSection* cs, const double energy, const double local_density,
-    int* cs_index);
+    const CrossSection* cs, const double energy, int* cs_index);
 
 // Handles the current active batch of particles
 void handle_particles(
