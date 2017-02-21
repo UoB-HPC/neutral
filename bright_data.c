@@ -36,10 +36,10 @@ void initialise_bright_data(
   bright_data->initial_energy = 
     get_double_parameter("initial_energy", bright_data->neutral_params_filename);
 
-  int global_particle_start_x;
-  int global_particle_start_y;
   int global_particle_nx;
   int global_particle_ny;
+  int global_particle_start_x;
+  int global_particle_start_y;
 
   const int source_location = 
     get_int_parameter("source_location", bright_data->neutral_params_filename);
