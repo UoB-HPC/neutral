@@ -46,7 +46,6 @@ void solve_transport_2d(
       scalar_flux_tally, energy_deposition_tally,
       rn_pool);
 
-  START_PROFILING(&compute_profile);
 #ifdef MPI
   while(1) {
     int nneighbours = 0;
@@ -118,7 +117,6 @@ void solve_transport_2d(
     }
   }
 #endif
-  STOP_PROFILING(&compute_profile, "mopping up particles");
 
   barrier();
 
@@ -142,6 +140,8 @@ void handle_particles(
   int nparticles_out = 0;
   int nparticles_deleted = 0;
 
+  START_PROFILING(&compute_profile);
+
   // Start by handling all of the initial local particles
   //#pragma omp parallel for reduction(+: facets, collisions)
   for(int pp = 0; pp < nparticles_to_process; ++pp) {
@@ -163,6 +163,8 @@ void handle_particles(
     nparticles_out += (result == PARTICLE_SENT);
     nparticles_deleted += (result == PARTICLE_DEAD || result == PARTICLE_SENT);
   }
+
+  STOP_PROFILING(&compute_profile, "handling particles");
 
   // Correct the new total number of particles
   *nparticles -= nparticles_deleted;
@@ -198,8 +200,6 @@ int handle_particle(
   int celly = (particle->cell/global_nx)-y_off+PAD;
   double local_density = density[celly*(nx+2*PAD)+cellx];
 
-  START_PROFILING(&compute_profile);
-
   // This makes some assumption about the units of the data stored globally.
   // Might be worth making this more explicit somewhere.
   double microscopic_cs_scatter = 
@@ -219,12 +219,8 @@ int handle_particle(
     particle->mfp_to_collision = -log(genrand(rn_pool))/macroscopic_cs_scatter;
   }
 
-  STOP_PROFILING(&compute_profile, "handle particle initial");
-
   // Loop until we have reached census
   while(particle->dt_to_census > 0.0) {
-    START_PROFILING(&compute_profile);
-
     const double macroscopic_cs_total = 
       macroscopic_cs_scatter+macroscopic_cs_absorb;
     cell_mfp = 1.0/macroscopic_cs_total;
@@ -239,13 +235,9 @@ int handle_particle(
     const double distance_to_collision = particle->mfp_to_collision*cell_mfp;
     const double distance_to_census = particle_velocity*particle->dt_to_census;
 
-    STOP_PROFILING(&compute_profile, "calc_distance_to_facet");
-
     // Check if our next event is a collision
     if(distance_to_collision < distance_to_facet &&
         distance_to_collision < distance_to_census) {
-
-      START_PROFILING(&compute_profile);
       (*collisions)++;
 
       // Update the tallies before the energy is updated
@@ -277,7 +269,6 @@ int handle_particle(
       particle->mfp_to_collision = -log(genrand(rn_pool))/macroscopic_cs_scatter;
       particle->dt_to_census -= distance_to_collision/particle_velocity;
       particle_velocity = sqrt((2.0*particle->e*eV_TO_J)/PARTICLE_MASS);
-      STOP_PROFILING(&compute_profile, "collision");
     }
     // Check if we have reached facet
     else if(distance_to_facet < distance_to_census) {
@@ -318,7 +309,6 @@ int handle_particle(
     }
     // Check if we have reached census
     else {
-      START_PROFILING(&compute_profile);
       // We have not changed cell or energy level at this stage
       particle->x += distance_to_census*particle->omega_x;
       particle->y += distance_to_census*particle->omega_y;
@@ -332,7 +322,6 @@ int handle_particle(
           scalar_flux_tally, energy_deposition_tally);
 
       particle->dt_to_census = 0.0;
-      STOP_PROFILING(&compute_profile, "stream");
       break;
     }
   }
