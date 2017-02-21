@@ -19,25 +19,30 @@ void plot_particle_density(
 
 int main(int argc, char** argv)
 {
-  if(argc != 4) {
-    TERMINATE("usage: ./bright.exe <nx> <ny> <niters>\n");
+  if(argc != 2) {
+    TERMINATE("usage: ./bright.exe <param_file>\n");
   }
+
+  char* neutral_params_filename = argv[1];
 
 #ifdef ENABLE_PROFILING
   /* The timing code has to be called so many times that the API calls 
    * actually begin to influence the performance dramatically. */
-  fprintf(stderr, "Warning. Profiling is enabled and will increase the runtime.\n\n");
+  if(mesh.rank == MASTER) {
+    fprintf(stderr, 
+        "Warning. Profiling is enabled and will increase the runtime.\n\n");
+  }
 #endif
 
   // Store the dimensions of the mesh
   Mesh mesh = {0};
-  mesh.global_nx = atoi(argv[1]);
-  mesh.global_ny = atoi(argv[2]);
-  mesh.local_nx = atoi(argv[1]) + 2*PAD;
-  mesh.local_ny = atoi(argv[2]) + 2*PAD;
+  mesh.global_nx = get_int_parameter("nx", neutral_params_filename);
+  mesh.global_ny = get_int_parameter("ny", neutral_params_filename);
+  mesh.local_nx = mesh.global_nx + 2*PAD;
+  mesh.local_ny = mesh.global_ny + 2*PAD;
   mesh.width = get_double_parameter("width", ARCH_ROOT_PARAMS);
   mesh.height = get_double_parameter("height", ARCH_ROOT_PARAMS);
-  mesh.dt = get_double_parameter("dt", NEUTRAL_PARAMS);
+  mesh.dt = get_double_parameter("dt", neutral_params_filename);
   mesh.sim_end = get_double_parameter("sim_end", ARCH_ROOT_PARAMS);
   mesh.rank = MASTER;
   mesh.niters = atoi(argv[3]);
@@ -55,10 +60,13 @@ int main(int argc, char** argv)
   initialise_comms(&mesh);
   initialise_mesh_2d(&mesh);
 
+  if(mesh.rank == MASTER) {
+    printf("Loading problem from %s.\n", neutral_params_filename);
+  }
   SharedData shared_data = {0};
   initialise_shared_data_2d(
       mesh.local_nx, mesh.local_ny, mesh.x_off, mesh.y_off, 
-      mesh.ndims, NEUTRAL_PARAMS, mesh.edgex, mesh.edgey, &shared_data);
+      mesh.ndims, neutral_params_filename, mesh.edgex, mesh.edgey, &shared_data);
 
   RNPool* rn_pool = (RNPool*)malloc(sizeof(RNPool)*nthreads);
 #pragma omp parallel
@@ -72,9 +80,9 @@ int main(int argc, char** argv)
 
   // TODO: Currently considering that we have a time dependent system where
   // there are no secondary particles, and reflective boundary conditions.
-  // This should mean that the final shared_data of the system has conserved the number
-  // of particles from initialisation, minus the particles that have disappeared
-  // due to leakage and absorption
+  // This should mean that the final shared_data of the system has conserved 
+  // the number of particles from initialisation, minus the particles that 
+  // have disappeared due to leakage and absorption
   //
   // Modelling two types of collision, scattering and absorption, but not 
   // modelling fission in this particular simulation
@@ -148,8 +156,9 @@ int main(int argc, char** argv)
 
   // TODO: WHAT SHOULD THE VALUE OF NINITIALPARTICLES BE IF FISSION ETC.
   validate(
-      mesh.local_nx-2*PAD, mesh.local_ny-2*PAD, ninitial_particles, mesh.dt, 
-      mesh.niters, mesh.rank, bright_data.energy_deposition_tally);
+      mesh.local_nx-2*PAD, mesh.local_ny-2*PAD, neutral_params_filename,
+      ninitial_particles, mesh.dt, mesh.niters, mesh.rank, 
+      bright_data.energy_deposition_tally);
 
   if(mesh.rank == MASTER) {
     PRINT_PROFILING_RESULTS(&compute_profile);
@@ -179,9 +188,9 @@ void plot_particle_density(
   char particles_name[100];
   sprintf(particles_name, "particles%d", tt);
   write_all_ranks_to_visit(
-      mesh->global_nx, mesh->global_ny, mesh->local_nx-2*PAD, mesh->local_ny-2*PAD, 
-      mesh->x_off, mesh->y_off, mesh->rank, mesh->nranks, neighbours, 
-      temp, particles_name, 0, elapsed_sim_time);
+      mesh->global_nx, mesh->global_ny, mesh->local_nx-2*PAD, 
+      mesh->local_ny-2*PAD, mesh->x_off, mesh->y_off, mesh->rank, 
+      mesh->nranks, neighbours, temp, particles_name, 0, elapsed_sim_time);
   free(temp);
 }
 

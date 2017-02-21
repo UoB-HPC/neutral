@@ -7,6 +7,7 @@
 #include "../../comms.h"
 #include "../../shared.h"
 #include "../../shared_data.h"
+#include "../../params.h"
 
 #ifdef MPI
 #include "mpi.h"
@@ -340,7 +341,7 @@ int handle_collision(
   particle->y += distance_to_collision*particle->omega_y;
 
   const double p_absorb = macroscopic_cs_absorb/macroscopic_cs_total;
-  int is_particle_dead = FALSE;
+  int is_particle_dead = 0;
 
   if(genrand(rn_pool) < p_absorb) {
     /* Model particle absorption */
@@ -354,7 +355,7 @@ int handle_collision(
     if(particle->e < MIN_ENERGY_OF_INTEREST) {
       // Overwrite the particle
       *particle = *particle_end;
-      is_particle_dead = TRUE;
+      is_particle_dead = 1;
     }
   }
   else {
@@ -424,7 +425,7 @@ int handle_facet_encounter(
           send_and_replace_particle(
               neighbours[EAST], particle_end, particle, particle_out);
           nparticles_sent[EAST]++;
-          return TRUE;
+          return 1;
         }
       }
     }
@@ -443,7 +444,7 @@ int handle_facet_encounter(
           send_and_replace_particle(
               neighbours[WEST], particle_end, particle, particle_out);
           nparticles_sent[WEST]++;
-          return TRUE;
+          return 1;
         }
       }
     }
@@ -464,7 +465,7 @@ int handle_facet_encounter(
           send_and_replace_particle(
               neighbours[NORTH], particle_end, particle, particle_out);
           nparticles_sent[NORTH]++;
-          return TRUE;
+          return 1;
         }
       }
     }
@@ -483,13 +484,13 @@ int handle_facet_encounter(
           send_and_replace_particle(
               neighbours[SOUTH], particle_end, particle, particle_out);
           nparticles_sent[SOUTH]++;
-          return TRUE;
+          return 1;
         }
       }
     }
   }
 
-  return FALSE;
+  return 0;
 }
 
 // Sends a particle to a neighbour and replaces in the particle list
@@ -642,8 +643,9 @@ double microscopic_cs_for_energy(
 
 // Validates the results of the simulation
 void validate(
-    const int nx, const int ny, const int nglobal_particles, const double dt,
-    const int niters, const int rank, double* energy_deposition_tally)
+    const int nx, const int ny, const char* params_filename, 
+    const int nglobal_particles, const double dt, const int niters, 
+    const int rank, double* energy_deposition_tally)
 {
   double local_energy_tally = 0.0;
   for(int ii = 0; ii < nx*ny; ++ii) {
@@ -658,38 +660,23 @@ void validate(
 
   printf("Final global_energy_tally %.15e\n", global_energy_tally);
 
-  FILE* fp = fopen(NEUTRAL_TESTS, "r");
-  if(!fp) {
-    TERMINATE("Couldn't open the test.results file.\n");
+  int nresults = 0;
+  double test_result;
+  char* keys = (char*)malloc(sizeof(char)*MAX_STR_LEN);
+  if(!get_key_value_parameter(
+        params_filename, NEUTRAL_TESTS, &keys, &test_result, &nresults)) {
+    printf("Warning. Test entry was not found, could NOT validate.\n");
+    return;
   }
 
-  int val_nx;
-  int val_ny;
-  int val_iters;
-  double val_dt;
-  double val_result;
-  fscanf(fp, "%lf,%d,%d,%d,%lf", 
-      &val_dt, &val_nx, &val_ny, &val_iters, &val_result);
-  fclose(fp);
-
-  if(nx != val_nx) {
-    printf("Validation and test problem do not match on nx.\n");
-  }
-  if(ny != val_ny) {
-    printf("Validation and test problem do not match on ny.\n");
-  }
-  if(niters != val_iters) {
-    printf("Validation and test problem do not match on iters.\n");
-  }
-  if(dt != val_dt) {
-    printf("Validation and test problem do not match on dt.\n");
-  }
-
-  if(global_energy_tally/nglobal_particles == val_result) {
+  printf("Expected %.12e, result was %.12e.\n", test_result, global_energy_tally);
+  if(within_tolerance(test_result, global_energy_tally, VALIDATE_TOLERANCE)) {
     printf("PASSED validation.\n");
   }
   else {
     printf("FAILED validation.\n");
   }
+
+  free(keys);
 }
 
