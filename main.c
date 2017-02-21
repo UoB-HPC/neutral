@@ -44,8 +44,8 @@ int main(int argc, char** argv)
   mesh.height = get_double_parameter("height", ARCH_ROOT_PARAMS);
   mesh.dt = get_double_parameter("dt", neutral_params_filename);
   mesh.sim_end = get_double_parameter("sim_end", ARCH_ROOT_PARAMS);
+  mesh.niters = get_int_parameter("iterations", neutral_params_filename);
   mesh.rank = MASTER;
-  mesh.niters = atoi(argv[3]);
   mesh.nranks = 1;
   mesh.ndims = 2;
 
@@ -102,7 +102,7 @@ int main(int argc, char** argv)
   double elapsed_sim_time = 0.0;
   for(tt = 1; tt <= mesh.niters; ++tt) {
     if(mesh.rank == MASTER) {
-      printf("Iteration %d\n", tt);
+      printf("\nIteration %d\n", tt);
     }
 
     plot_particle_density(
@@ -157,8 +157,7 @@ int main(int argc, char** argv)
   // TODO: WHAT SHOULD THE VALUE OF NINITIALPARTICLES BE IF FISSION ETC.
   validate(
       mesh.local_nx-2*PAD, mesh.local_ny-2*PAD, neutral_params_filename,
-      ninitial_particles, mesh.dt, mesh.niters, mesh.rank, 
-      bright_data.energy_deposition_tally);
+      mesh.rank, bright_data.energy_deposition_tally);
 
   if(mesh.rank == MASTER) {
     PRINT_PROFILING_RESULTS(&compute_profile);

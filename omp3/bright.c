@@ -644,7 +644,6 @@ double microscopic_cs_for_energy(
 // Validates the results of the simulation
 void validate(
     const int nx, const int ny, const char* params_filename, 
-    const int nglobal_particles, const double dt, const int niters, 
     const int rank, double* energy_deposition_tally)
 {
   double local_energy_tally = 0.0;
@@ -658,19 +657,19 @@ void validate(
     return;
   }
 
-  printf("Final global_energy_tally %.15e\n", global_energy_tally);
+  printf("\nFinal global_energy_tally %.15e\n", global_energy_tally);
 
   int nresults = 0;
-  double test_result;
-  char* keys = (char*)malloc(sizeof(char)*MAX_STR_LEN);
+  char* keys = (char*)malloc(sizeof(char)*MAX_KEYS*(MAX_STR_LEN+1));
+  double* values = (double*)malloc(sizeof(double)*MAX_KEYS);
   if(!get_key_value_parameter(
-        params_filename, NEUTRAL_TESTS, &keys, &test_result, &nresults)) {
+        params_filename, NEUTRAL_TESTS, keys, values, &nresults)) {
     printf("Warning. Test entry was not found, could NOT validate.\n");
     return;
   }
 
-  printf("Expected %.12e, result was %.12e.\n", test_result, global_energy_tally);
-  if(within_tolerance(test_result, global_energy_tally, VALIDATE_TOLERANCE)) {
+  printf("Expected %.12e, result was %.12e.\n", values[0], global_energy_tally);
+  if(within_tolerance(values[0], global_energy_tally, VALIDATE_TOLERANCE)) {
     printf("PASSED validation.\n");
   }
   else {
@@ -678,5 +677,6 @@ void validate(
   }
 
   free(keys);
+  free(values);
 }
 
