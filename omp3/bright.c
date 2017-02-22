@@ -249,9 +249,8 @@ int handle_particle(
       const double cell_volume = edgedx[cellx]*edgedy[celly];
       update_tallies(
           global_nx, nx, x_off, y_off, particle, ntotal_particles, 
-          distance_to_collision, cell_volume, dt, number_density, 
-          local_density, macroscopic_cs_absorb, 
-          macroscopic_cs_scatter+macroscopic_cs_absorb, 
+          distance_to_collision, cell_volume, number_density, 
+          microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb, 
           scalar_flux_tally, energy_deposition_tally);
 
       // The cross sections for scattering and absorbtion were calculated on 
@@ -289,9 +288,8 @@ int handle_particle(
       const double cell_volume = edgedx[cellx]*edgedy[celly];
       update_tallies(
           global_nx, nx, x_off, y_off, particle, ntotal_particles, 
-          distance_to_facet, cell_volume, dt, number_density,
-          local_density, macroscopic_cs_absorb, 
-          macroscopic_cs_scatter+macroscopic_cs_absorb, 
+          distance_to_facet, cell_volume, number_density,
+          microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb, 
           scalar_flux_tally, energy_deposition_tally);
 
       // Encounter facet, and jump out if particle left this rank's domain
@@ -327,9 +325,8 @@ int handle_particle(
       const double cell_volume = edgedx[cellx]*edgedy[celly];
       update_tallies(
           global_nx, nx, x_off, y_off, particle, ntotal_particles, 
-          distance_to_census, cell_volume, dt, number_density,
-          local_density, macroscopic_cs_absorb, 
-          macroscopic_cs_scatter+macroscopic_cs_absorb, 
+          distance_to_census, cell_volume, number_density,
+          microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb, 
           scalar_flux_tally, energy_deposition_tally);
 
       particle->dt_to_census = 0.0;
@@ -582,10 +579,9 @@ void calc_distance_to_facet(
 void update_tallies(
     const int global_nx, const int nx, const int x_off, const int y_off, 
     Particle* particle, const int ntotal_particles, const double path_length, 
-    const double cell_volume, const double dt, const double number_density,
-    const double local_density, const double macroscopic_cs_absorb, 
-    const double macroscopic_cs_total, double* scalar_flux_tally, 
-    double* energy_deposition_tally)
+    const double cell_volume, const double number_density, 
+    const double microscopic_cs_absorb, const double microscopic_cs_total, 
+    double* scalar_flux_tally, double* energy_deposition_tally)
 {
   // Store the scalar flux
   const int cellx = (particle->cell%global_nx)-x_off;
@@ -596,27 +592,17 @@ void update_tallies(
   // The leaving energy of a capture event is 0
   const double average_exit_energy_absorb = 0.0;
   const double absorption_heating = 
-    (macroscopic_cs_absorb/macroscopic_cs_total)*average_exit_energy_absorb;
+    (microscopic_cs_absorb/microscopic_cs_total)*average_exit_energy_absorb;
   const double average_exit_energy_scatter = 
     particle->e*(MASS_NO*MASS_NO+2)/((MASS_NO+1)*(MASS_NO+1));
   const double scattering_heating = 
-    (1.0-(macroscopic_cs_absorb/macroscopic_cs_total))*average_exit_energy_scatter;
+    (1.0-(microscopic_cs_absorb/microscopic_cs_total))*average_exit_energy_scatter;
   const double heating_response =
     (particle->e-scattering_heating-absorption_heating);
-
-#if 0
-  // As with MCNP, we end up with the MeV deposited by path length, I think...
   const double energy_deposition = 
-    (heating_response*macroscopic_cs_total)*
-    (scalar_flux*cell_volume)*number_density;
-#endif // if 0
-
-  // (m)*(m-1)*(eV)*(m-2)/((kg/m2)*(m2))
-  // (eV)/(kg)
-  const double energy_deposition = 
-    particle->weight*path_length*macroscopic_cs_total*
-    heating_response*(number_density*BARNS)/(local_density*cell_volume);
-
+    particle->weight*path_length*(microscopic_cs_total*BARNS)*
+    heating_response*number_density;
+        
   energy_deposition_tally[celly*nx+cellx] += 
     energy_deposition/(double)ntotal_particles;
 }
