@@ -23,10 +23,10 @@ def Program():
 
     # Stretch out the curve we're interested in [10.0e-3, 10.0e6]
     energy = np.linspace(0, 1, num=30000)
-    energy = 10.0e5*np.power(energy, 4)+10.0e-3
+    energy = 10.0e7*np.power(energy, 4)+10.0e-3
 
     cs = np.linspace(0, 1, num=30000)
-    cs = 1.0e3*cs+10.0
+    cs = 1.0e3*cs+1.0
 
     plt.plot(energy, cs)
 
