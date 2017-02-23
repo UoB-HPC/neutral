@@ -68,7 +68,6 @@ void initialise_bright_data(
     max(0.0, rank_xpos_1-(source_xpos+source_width));
   const double local_particle_top_off =
     max(0.0, rank_ypos_1-(source_ypos+source_height));
-
   const double local_particle_width = 
     max(0.0, (rank_xpos_1-rank_xpos_0)-
         (local_particle_right_off+local_particle_left_off));
@@ -161,7 +160,7 @@ void initialise_particle(
     const double* edgey, const double initial_energy, RNPool* rn_pool, 
     Particle* particle)
 {
-  // Set the initial random location of the particle inside the source region
+  // Set the initial nandom location of the particle inside the source region
   particle->x = local_particle_left_off + 
     genrand(rn_pool)*local_particle_width;
   particle->y = local_particle_bottom_off + 

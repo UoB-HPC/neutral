@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <float.h>
+#include <omp.h>
 #include "bright.h"
 #include "../bright_interface.h"
 #include "../../comms.h"
@@ -22,7 +23,7 @@ void solve_transport_2d(
     const double* density, const double* edgex, const double* edgey, 
     const double* edgedx, const double* edgedy, Particle* particles_out, 
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
-    double* scalar_flux_tally, double* energy_deposition_tally, RNPool* rn_pool)
+    double* scalar_flux_tally, double* energy_deposition_tally, RNPool* rn_pools)
 {
   // Initial idea is to use a kind of queue for handling the particles. Presumably
   // this doesn't have to be a carefully ordered queue but lets see how that goes.
@@ -51,8 +52,9 @@ void solve_transport_2d(
       particles, particles_out, 
       cs_scatter_table, cs_absorb_table, 
       scalar_flux_tally, energy_deposition_tally,
-      rn_pool);
+      rn_pools);
 
+#if 0
 #ifdef MPI
   while(1) {
     int nneighbours = 0;
@@ -109,7 +111,7 @@ void solve_transport_2d(
           density, edgex, edgey, edgedx, edgedy, &facets, &collisions, 
           nparticles_sent, ntotal_particles, nunprocessed_particles, &nparticles, 
           &particles[unprocessed_start], particles_out, cs_scatter_table, 
-          cs_absorb_table, scalar_flux_tally, energy_deposition_tally, rn_pool);
+          cs_absorb_table, scalar_flux_tally, energy_deposition_tally, rn_pools);
     }
 
     // Check if any of the ranks had unprocessed particles
@@ -126,6 +128,7 @@ void solve_transport_2d(
 #endif
 
   barrier();
+#endif // if 0
 
   *nlocal_particles = nparticles;
 
@@ -142,16 +145,26 @@ void handle_particles(
     const int nparticles_to_process, int* nparticles, Particle* particles_start, 
     Particle* particles_out, CrossSection* cs_scatter_table, 
     CrossSection* cs_absorb_table, double* scalar_flux_tally, 
-    double* energy_deposition_tally, RNPool* rn_pool)
+    double* energy_deposition_tally, RNPool* rn_pools)
 {
   int nparticles_out = 0;
   int nparticles_deleted = 0;
 
   START_PROFILING(&compute_profile);
 
-  // Start by handling all of the initial local particles
-  //#pragma omp parallel for reduction(+: facets, collisions)
+  int encountered_facets = 0;
+  int encountered_collisions = 0;
+
+#pragma omp parallel for  reduction(+: encountered_collisions, \
+    encountered_facets, nparticles_out, nparticles_deleted)
   for(int pp = 0; pp < nparticles_to_process; ++pp) {
+    RNPool* rn_pool = &rn_pools[omp_get_thread_num()];
+    if(!rn_pool->loop_init) {
+      // Initialise the random number pools for this thread
+      // Each iteration has a different key, to help with reproducibility
+      prepare_rn_pool(rn_pool, pp);
+    }
+
     // Current particle
     Particle* particle = 
       &particles_start[pp-nparticles_deleted];
@@ -163,9 +176,9 @@ void handle_particles(
     const int result = handle_particle(
         global_nx, global_ny, nx, ny, x_off, y_off, neighbours, dt, initial,
         ntotal_particles, density, edgex, edgey, edgedx, edgedy, cs_scatter_table, 
-        cs_absorb_table, particle_end, nparticles_sent, facets, collisions, 
-        particle, particle_out, scalar_flux_tally, energy_deposition_tally, 
-        rn_pool);
+        cs_absorb_table, particle_end, nparticles_sent, &encountered_facets, 
+        &encountered_collisions, particle, particle_out, scalar_flux_tally, 
+        energy_deposition_tally, rn_pool);
 
     nparticles_out += (result == PARTICLE_SENT);
     nparticles_deleted += (result == PARTICLE_DEAD || result == PARTICLE_SENT);
@@ -173,8 +186,16 @@ void handle_particles(
 
   STOP_PROFILING(&compute_profile, "handling particles");
 
+#pragma omp parallel
+  {
+    // Could be encapsulated somewhere
+    rn_pools[omp_get_thread_num()].loop_init = 0;
+  }
+
   // Correct the new total number of particles
   *nparticles -= nparticles_deleted;
+  *facets = encountered_facets;
+  *collisions = encountered_collisions;
 
   printf("handled %d particles, with %d particles deleted\n", 
       nparticles_to_process, nparticles_deleted);
@@ -220,7 +241,7 @@ int handle_particle(
 
   double particle_velocity = sqrt((2.0*particle->e*eV_TO_J)/PARTICLE_MASS);
 
-  // Set time to census and mfps until collision, unless travelled particle
+  // Set time to census and MFPs until collision, unless travelled particle
   if(initial) {
     particle->dt_to_census = dt;
     particle->mfp_to_collision = -log(genrand(rn_pool))/macroscopic_cs_scatter;
@@ -253,7 +274,7 @@ int handle_particle(
           microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb, 
           scalar_flux_tally, energy_deposition_tally);
 
-      // The cross sections for scattering and absorbtion were calculated on 
+      // The cross sections for scattering and absorption were calculated on 
       // a previous iteration for our given energy
       if(handle_collision(
             particle, particle_end, macroscopic_cs_absorb, 
@@ -271,7 +292,7 @@ int handle_particle(
       macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
       macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
 
-      // Resample number of mean free paths to collision
+      // Re-sample number of mean free paths to collision
       particle->mfp_to_collision = -log(genrand(rn_pool))/macroscopic_cs_scatter;
       particle->dt_to_census -= distance_to_collision/particle_velocity;
       particle_velocity = sqrt((2.0*particle->e*eV_TO_J)/PARTICLE_MASS);
@@ -373,7 +394,6 @@ int handle_collision(
     const double mu_cm = 1.0 - 2.0*genrand(rn_pool);
 
     // Calculate the new energy based on the relation to angle of incidence
-    // TODO: Could check here for the particular nuclide that was collided with
     const double e_new = particle->e*
       (MASS_NO*MASS_NO + 2.0*MASS_NO*mu_cm + 1.0)/
       ((MASS_NO + 1.0)*(MASS_NO + 1.0));
@@ -568,7 +588,7 @@ void calc_distance_to_facet(
   }
   else {
     // We are centered on the origin, so the x component is 0 after travelling
-    // aint the y axis to the edge (0, ay).(x, y)
+    // along the y axis to the edge (0, ay).(x, y)
     *distance_to_facet = (omega_y >= 0.0)
       ? ((edgey[celly+1])-y)*mag_u0*u_y_inv
       : ((edgey[celly]-OPEN_BOUND_CORRECTION)-y)*mag_u0*u_y_inv;
@@ -589,7 +609,7 @@ void update_tallies(
   const double scalar_flux = particle->weight*path_length/cell_volume;
   scalar_flux_tally[celly*nx+cellx] += scalar_flux/(double)ntotal_particles; 
 
-  // The leaving energy of a capture event is 0
+  // Calculate the energy deposition based on the path length
   const double average_exit_energy_absorb = 0.0;
   const double absorption_heating = 
     (microscopic_cs_absorb/microscopic_cs_total)*average_exit_energy_absorb;
@@ -602,7 +622,8 @@ void update_tallies(
   const double energy_deposition = 
     particle->weight*path_length*(microscopic_cs_total*BARNS)*
     heating_response*number_density;
-        
+
+#pragma omp atomic update
   energy_deposition_tally[celly*nx+cellx] += 
     energy_deposition/(double)ntotal_particles;
 }
@@ -612,7 +633,7 @@ double microscopic_cs_for_energy(
     const CrossSection* cs, const double energy, int* cs_index)
 {
   /* Attempt an optimisation of the search by performing a linear operation
-   * if theere is an existing location. We assume that the energy has
+   * if there is an existing location. We assume that the energy has
    * reduced rather than increased, which seems to be a legitimate 
    * approximation in this particular case */
 
@@ -624,11 +645,9 @@ double microscopic_cs_for_energy(
   // new energy
   const int direction = (energy-cs->value[*cs_index] > 0.0) ? 1 : -1; 
 
-  // TODO: Determine whether this is the best approach for all cases,
-  // are there situations where the linear search is not applicable, for instance
-  // are thre material properties that change the energy deltas enough 
-  // that the lookup jumps around? It might be worth organising the search under
-  // a cost model.
+  // TODO: The problem that occurred with the binary search appears to be an
+  // actual bug rather than just a performance issue. Now it is resolved it might
+  // not be necessary to actually have the linear search.
   if(*cs_index > -1) {
     // This search will move in the correct direction towards the new energy group
     for(int ind = *cs_index; ind >= 0 && ind < cs->nentries; ind += direction) {
