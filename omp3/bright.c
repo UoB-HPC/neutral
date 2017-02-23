@@ -46,13 +46,10 @@ void solve_transport_2d(
 
   handle_particles(
       global_nx, global_ny, nx, ny, x_off, y_off, 1, dt, neighbours, density, 
-      edgex, edgey, edgedx, edgedy, 
-      &facets, &collisions, nparticles_sent, 
-      ntotal_particles, nparticles, &nparticles, 
-      particles, particles_out, 
+      edgex, edgey, edgedx, edgedy, &facets, &collisions, nparticles_sent, 
+      ntotal_particles, nparticles, &nparticles, particles, particles_out, 
       cs_scatter_table, cs_absorb_table, 
-      scalar_flux_tally, energy_deposition_tally,
-      rn_pools);
+      scalar_flux_tally, energy_deposition_tally, rn_pools);
 
 #if 0
 #ifdef MPI
@@ -152,18 +149,13 @@ void handle_particles(
 
   START_PROFILING(&compute_profile);
 
-  int encountered_facets = 0;
-  int encountered_collisions = 0;
+  int nfacets = 0;
+  int ncollisions = 0;
 
-#pragma omp parallel for  reduction(+: encountered_collisions, \
-    encountered_facets, nparticles_out, nparticles_deleted)
+#pragma omp parallel for \
+  reduction(+: ncollisions, nfacets, nparticles_out, nparticles_deleted)
   for(int pp = 0; pp < nparticles_to_process; ++pp) {
-    RNPool* rn_pool = &rn_pools[omp_get_thread_num()];
-    if(!rn_pool->loop_init) {
-      // Initialise the random number pools for this thread
-      // Each iteration has a different key, to help with reproducibility
-      prepare_rn_pool(rn_pool, pp);
-    }
+    prepare_rn_pool(&rn_pools[omp_get_thread_num()], pp);
 
     // Current particle
     Particle* particle = 
@@ -176,9 +168,9 @@ void handle_particles(
     const int result = handle_particle(
         global_nx, global_ny, nx, ny, x_off, y_off, neighbours, dt, initial,
         ntotal_particles, density, edgex, edgey, edgedx, edgedy, cs_scatter_table, 
-        cs_absorb_table, particle_end, nparticles_sent, &encountered_facets, 
-        &encountered_collisions, particle, particle_out, scalar_flux_tally, 
-        energy_deposition_tally, rn_pool);
+        cs_absorb_table, particle_end, nparticles_sent, &nfacets, 
+        &ncollisions, particle, particle_out, scalar_flux_tally, 
+        energy_deposition_tally, &rn_pools[omp_get_thread_num()]);
 
     nparticles_out += (result == PARTICLE_SENT);
     nparticles_deleted += (result == PARTICLE_DEAD || result == PARTICLE_SENT);
@@ -186,16 +178,10 @@ void handle_particles(
 
   STOP_PROFILING(&compute_profile, "handling particles");
 
-#pragma omp parallel
-  {
-    // Could be encapsulated somewhere
-    rn_pools[omp_get_thread_num()].loop_init = 0;
-  }
-
   // Correct the new total number of particles
   *nparticles -= nparticles_deleted;
-  *facets = encountered_facets;
-  *collisions = encountered_collisions;
+  *facets = nfacets;
+  *collisions = ncollisions;
 
   printf("handled %d particles, with %d particles deleted\n", 
       nparticles_to_process, nparticles_deleted);
@@ -382,8 +368,8 @@ int handle_collision(
     // it dead and it will be garbage collected at some point
     if(particle->e < MIN_ENERGY_OF_INTEREST) {
       // Overwrite the particle
-      *particle = *particle_end;
-      is_particle_dead = 1;
+      //particle->cell = -1;
+      //is_particle_dead = 1;
     }
   }
   else {

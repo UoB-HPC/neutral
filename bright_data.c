@@ -123,11 +123,11 @@ void initialise_bright_data(
 #ifdef MPI
   // Had to initialise this in the package directly as the data structure is not
   // general enough to place in the multi-package 
-  const int blocks[2] = { 8, 1 };
-  MPI_Datatype types[2] = { MPI_DOUBLE, MPI_INT };
-  MPI_Aint displacements[2] = { 0, blocks[0]*sizeof(double) };
+  const int blocks[3] = { 8, 1, 1 };
+  MPI_Datatype types[3] = { MPI_DOUBLE, MPI_UINT64_T, MPI_INT };
+  MPI_Aint disp[3] = { 0, blocks[0]*sizeof(double), disp[0]+sizeof(uint64_t) };
   MPI_Type_create_struct(
-      2, blocks, displacements, types, &particle_type);
+      2, blocks, disp, types, &particle_type);
   MPI_Type_commit(&particle_type);
 #endif
 }
@@ -147,6 +147,7 @@ void inject_particles(
         local_particle_bottom_off, local_particle_width, local_particle_height, 
         mesh->x_off, mesh->y_off, mesh->dt, mesh->edgex, mesh->edgey, 
         initial_energy, rn_pool, &particles[ii]);
+    particles[ii].key = ii;
   }
   STOP_PROFILING(&compute_profile, "initialising particles");
 }
