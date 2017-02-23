@@ -89,16 +89,11 @@ int main(int argc, char** argv)
   int tt;
   double wallclock = 0.0;
   double elapsed_sim_time = 0.0;
+  uint64_t master_key = 0;
   for(tt = 1; tt <= mesh.niters; ++tt) {
 
     if(mesh.rank == MASTER) {
       printf("\nIteration %d\n", tt);
-    }
-
-#pragma omp parallel 
-    {
-      // Set up each of the pools with the correct master key
-      init_rn_pool(&rn_pools[omp_get_thread_num()], tt);
     }
 
     plot_particle_density(
@@ -108,16 +103,11 @@ int main(int argc, char** argv)
 
     // Begin the main solve step
     solve_transport_2d(
-        mesh.local_nx-2*PAD, mesh.local_ny-2*PAD, 
-        mesh.global_nx, mesh.global_ny, 
-        mesh.x_off, mesh.y_off, mesh.dt, 
-        bright_data.nparticles, &bright_data.nlocal_particles, 
-        mesh.neighbours, 
-        bright_data.local_particles, 
-        shared_data.rho, 
-        mesh.edgex, mesh.edgey, 
-        mesh.edgedx, mesh.edgedy, 
-        bright_data.out_particles, 
+        mesh.local_nx-2*PAD, mesh.local_ny-2*PAD, mesh.global_nx, mesh.global_ny, 
+        mesh.x_off, mesh.y_off, mesh.dt, bright_data.nparticles, 
+        &bright_data.nlocal_particles, &master_key, mesh.neighbours, 
+        bright_data.local_particles, shared_data.rho, mesh.edgex, mesh.edgey, 
+        mesh.edgedx, mesh.edgedy, bright_data.out_particles, 
         bright_data.cs_scatter_table, bright_data.cs_absorb_table, 
         bright_data.scalar_flux_tally, bright_data.energy_deposition_tally,
         rn_pools);
