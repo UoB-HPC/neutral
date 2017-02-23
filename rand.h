@@ -12,10 +12,18 @@ typedef struct {
   threefry2x64_ctr_t counter;
   threefry2x64_key_t key;
 
+  int loop_init;
+
 } RNPool;
 
-// Initialise the RNPool for a thread
-void init_rn_pool(RNPool* rn_pool, const int key);
+// Initialises the random number pool
+void init_rn_pool(RNPool* rn_pool);
+
+// Prepare the random number pool
+void prepare_rn_pool(RNPool* rn_pool, const uint64_t counter_start);
+
+// Increment the counter, handling carry as necessary
+void safe_increment(uint64_t* v);
 
 // Fills the rn buffer with random numbers
 void fill_rn_buffer(RNPool* rn_pool);

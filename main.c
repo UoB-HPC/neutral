@@ -50,50 +50,37 @@ int main(int argc, char** argv)
   mesh.nranks = 1;
   mesh.ndims = 2;
 
+  // Get the number of threads and initialise the random number pool
   int nthreads = 0;
 #pragma omp parallel
   {
     nthreads = omp_get_num_threads();
   }
 
+  // Initialise enough pools for every thread and a master pool
+  RNPool* rn_pools = (RNPool*)malloc(sizeof(RNPool)*(nthreads+1));
+#pragma omp parallel for
+  for(int ii = 0; ii < nthreads+1; ++ii) {
+    init_rn_pool(&rn_pools[ii]);
+  }
+
+  // Perform the general initialisation steps for the mesh etc
   initialise_mpi(argc, argv, &mesh.rank, &mesh.nranks);
   initialise_devices(mesh.rank);
   initialise_comms(&mesh);
   initialise_mesh_2d(&mesh);
-
-  if(mesh.rank == MASTER) {
-    printf("Loading problem from %s.\n", bright_data.neutral_params_filename);
-  }
   SharedData shared_data = {0};
   initialise_shared_data_2d(
       mesh.global_nx, mesh.global_ny, mesh.local_nx, mesh.local_ny, 
       mesh.x_off, mesh.y_off, mesh.ndims, bright_data.neutral_params_filename, 
       mesh.edgex, mesh.edgey, &shared_data);
-
-  RNPool* rn_pool = (RNPool*)malloc(sizeof(RNPool)*nthreads);
-#pragma omp parallel
-  {
-    init_rn_pool(&rn_pool[omp_get_thread_num()], omp_get_thread_num());
-  }
-
   initialise_bright_data(
-      &bright_data, &mesh, rn_pool);
+      &bright_data, &mesh, &rn_pools[nthreads]);
 
-  // TODO: Currently considering that we have a time dependent system where
-  // there are no secondary particles, and reflective boundary conditions.
-  // This should mean that the final shared_data of the system has conserved 
-  // the number of particles from initialisation, minus the particles that 
-  // have disappeared due to leakage and absorption
-
-  // Field initialisation stage
-  // Add a predefined numbar of particles into the system at random
-  for(int ii = 0; ii < nparticles; ++ii) {
-    initialise_particle(&particles[ii], &mesh);
+  if(mesh.rank == MASTER) {
+    printf("Starting up with %d OpenMP threads.\n", nthreads);
+    printf("Loading problem from %s.\n", bright_data.neutral_params_filename);
   }
-
-  // Presumably the timestep will have been set by the fluid dynamics,
-  // given that it has the tightest timestep control requirements
-  //set_timestep();
 
   // Make sure initialisation phase is complete
   barrier();
@@ -105,6 +92,7 @@ int main(int argc, char** argv)
   double wallclock = 0.0;
   double elapsed_sim_time = 0.0;
   for(tt = 1; tt <= mesh.niters; ++tt) {
+
     if(mesh.rank == MASTER) {
       printf("\nIteration %d\n", tt);
     }
@@ -114,9 +102,7 @@ int main(int argc, char** argv)
 
     double w0 = omp_get_wtime();
 
-    // At this stage all of the particles have been moved for their timestep
-    // and the tallying of the energy deposition throughout the system must
-    // have been resolved.
+    // Begin the main solve step
     solve_transport_2d(
         mesh.local_nx-2*PAD, mesh.local_ny-2*PAD, 
         mesh.global_nx, mesh.global_ny, 
@@ -130,7 +116,7 @@ int main(int argc, char** argv)
         bright_data.out_particles, 
         bright_data.cs_scatter_table, bright_data.cs_absorb_table, 
         bright_data.scalar_flux_tally, bright_data.energy_deposition_tally,
-        rn_pool);
+        rn_pools);
 
     barrier();
 
