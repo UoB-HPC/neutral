@@ -23,15 +23,6 @@ int main(int argc, char** argv)
     TERMINATE("usage: ./bright.exe <param_file>\n");
   }
 
-#ifdef ENABLE_PROFILING
-  /* The timing code has to be called so many times that the API calls 
-   * actually begin to influence the performance dramatically. */
-  if(mesh.rank == MASTER) {
-    fprintf(stderr, 
-        "Warning. Profiling is enabled and will increase the runtime.\n\n");
-  }
-#endif
-
   // Store the dimensions of the mesh
   Mesh mesh = {0};
   BrightData bright_data = {0};
@@ -48,6 +39,15 @@ int main(int argc, char** argv)
   mesh.rank = MASTER;
   mesh.nranks = 1;
   mesh.ndims = 2;
+
+#ifdef ENABLE_PROFILING
+  /* The timing code has to be called so many times that the API calls 
+   * actually begin to influence the performance dramatically. */
+  if(mesh.rank == MASTER) {
+    fprintf(stderr, 
+        "Warning. Profiling is enabled and will increase the runtime.\n\n");
+  }
+#endif
 
   // Get the number of threads and initialise the random number pool
   int nthreads = 0;
