@@ -4,6 +4,7 @@
 #include "bright_data.h"
 
 #define NRANDOM_NUMBERS        2            // Precomputed random nums
+#define BUF_LENGTH             1            // Precomputed random nums
 
 typedef struct {
   double buffer[NRANDOM_NUMBERS];   // The pool of random numbers

@@ -19,11 +19,12 @@
 void solve_transport_2d(
     const int nx, const int ny, const int global_nx, const int global_ny, 
     const int x_off, const int y_off, const double dt, const int ntotal_particles,
-    int* nlocal_particles, const int* neighbours, Particle* particles, 
-    const double* density, const double* edgex, const double* edgey, 
-    const double* edgedx, const double* edgedy, Particle* particles_out, 
-    CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
-    double* scalar_flux_tally, double* energy_deposition_tally, RNPool* rn_pools)
+    int* nlocal_particles, uint64_t* master_key, const int* neighbours, 
+    Particle* particles, const double* density, const double* edgex, 
+    const double* edgey, const double* edgedx, const double* edgedy, 
+    Particle* particles_out, CrossSection* cs_scatter_table, 
+    CrossSection* cs_absorb_table, double* scalar_flux_tally, 
+    double* energy_deposition_tally, RNPool* rn_pools)
 {
   // Initial idea is to use a kind of queue for handling the particles. Presumably
   // this doesn't have to be a carefully ordered queue but lets see how that goes.
@@ -47,8 +48,8 @@ void solve_transport_2d(
   handle_particles(
       global_nx, global_ny, nx, ny, x_off, y_off, 1, dt, neighbours, density, 
       edgex, edgey, edgedx, edgedy, &facets, &collisions, nparticles_sent, 
-      ntotal_particles, nparticles, &nparticles, particles, particles_out, 
-      cs_scatter_table, cs_absorb_table, 
+      master_key, ntotal_particles, nparticles, &nparticles, particles, 
+      particles_out, cs_scatter_table, cs_absorb_table, 
       scalar_flux_tally, energy_deposition_tally, rn_pools);
 
 #if 0
@@ -138,14 +139,24 @@ void handle_particles(
     const int x_off, const int y_off, const int initial, const double dt, 
     const int* neighbours, const double* density, const double* edgex, 
     const double* edgey, const double* edgedx, const double* edgedy, int* facets, 
-    int* collisions, int* nparticles_sent, const int ntotal_particles, 
-    const int nparticles_to_process, int* nparticles, Particle* particles_start, 
-    Particle* particles_out, CrossSection* cs_scatter_table, 
-    CrossSection* cs_absorb_table, double* scalar_flux_tally, 
-    double* energy_deposition_tally, RNPool* rn_pools)
+    int* collisions, int* nparticles_sent, uint64_t* master_key, 
+    const int ntotal_particles, const int nparticles_to_process, 
+    int* nparticles, Particle* particles_start, Particle* particles_out, 
+    CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
+    double* scalar_flux_tally, double* energy_deposition_tally, RNPool* rn_pools)
 {
   int nparticles_out = 0;
   int nparticles_deleted = 0;
+
+  // Have to maintain a master key, so that particles don't keep seeing
+  // the same random number streams. 
+  // TODO: THIS IS NOT GOING TO WORK WITH MPI...
+  (*master_key)++;
+#pragma omp parallel 
+  {
+    // Set up each of the pools with the correct master key
+    init_rn_pool(&rn_pools[omp_get_thread_num()], (*master_key));
+  }
 
   START_PROFILING(&compute_profile);
 
@@ -155,20 +166,16 @@ void handle_particles(
 #pragma omp parallel for \
   reduction(+: ncollisions, nfacets, nparticles_out, nparticles_deleted)
   for(int pp = 0; pp < nparticles_to_process; ++pp) {
-    prepare_rn_pool(&rn_pools[omp_get_thread_num()], pp);
-
     // Current particle
-    Particle* particle = 
-      &particles_start[pp-nparticles_deleted];
-    Particle* particle_end = 
-      &particles_start[(nparticles_to_process-1)-nparticles_deleted];
-    Particle* particle_out = 
-      &particles_out[nparticles_out];
+    Particle* particle = &particles_start[pp];
+    Particle* particle_out = &particles_out[nparticles_out];
+
+    prepare_rn_pool(&rn_pools[omp_get_thread_num()], particle->key);
 
     const int result = handle_particle(
         global_nx, global_ny, nx, ny, x_off, y_off, neighbours, dt, initial,
         ntotal_particles, density, edgex, edgey, edgedx, edgedy, cs_scatter_table, 
-        cs_absorb_table, particle_end, nparticles_sent, &nfacets, 
+        cs_absorb_table, particle/*delete*/, nparticles_sent, &nfacets, 
         &ncollisions, particle, particle_out, scalar_flux_tally, 
         energy_deposition_tally, &rn_pools[omp_get_thread_num()]);
 
@@ -368,8 +375,8 @@ int handle_collision(
     // it dead and it will be garbage collected at some point
     if(particle->e < MIN_ENERGY_OF_INTEREST) {
       // Overwrite the particle
-      //particle->cell = -1;
-      //is_particle_dead = 1;
+      *particle = *particle_end;
+      is_particle_dead = 1;
     }
   }
   else {

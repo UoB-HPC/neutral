@@ -12,11 +12,11 @@ void handle_particles(
     const int x_off, const int y_off, const int initial, const double dt, 
     const int* neighbours, const double* density, const double* edgex, 
     const double* edgey, const double* edgedx, const double* edgedy, int* facets, 
-    int* collisions, int* nparticles_sent, const int ntotal_particles, 
-    const int nparticles_to_process, int* nparticles, Particle* particles_start, 
-    Particle* particles_out, CrossSection* cs_scatter_table, 
-    CrossSection* cs_absorb_table, double* scalar_flux_tally, 
-    double* energy_deposition_tally, RNPool* rn_pool);
+    int* collisions, int* nparticles_sent, uint64_t* master_key, 
+    const int ntotal_particles, const int nparticles_to_process, 
+    int* nparticles, Particle* particles_start, Particle* particles_out, 
+    CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
+    double* scalar_flux_tally, double* energy_deposition_tally, RNPool* rn_pools);
 
 // Handles an individual particle.
 int handle_particle(
