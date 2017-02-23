@@ -1,7 +1,7 @@
 source xpos=0.1 ypos=0.1 width=0.2 height=0.2
 problem_0 density=1.0e-30 energy=0.0 xpos=0.0 ypos=0.0 width=1.0 height=1.0
 problem_1 density=1.0e3 energy=1.0 xpos=0.4 ypos=0.4 width=0.2 height=0.2
-nparticles        100000   # How many particles per source injection
+nparticles        1000000  # How many particles per source injection
 initial_energy    1.0e3    # The initial energy of each particle
 dt                1.0e-7
 nx                1000

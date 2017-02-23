@@ -59,10 +59,9 @@ int main(int argc, char** argv)
 
   // Initialise enough pools for every thread and a master pool
   RNPool* rn_pools = (RNPool*)malloc(sizeof(RNPool)*(nthreads+1));
-#pragma omp parallel for
-  for(int ii = 0; ii < nthreads+1; ++ii) {
-    init_rn_pool(&rn_pools[ii]);
-  }
+
+  // Initialise the master rn pool
+  init_rn_pool(&rn_pools[nthreads], 0xfffff);
 
   // Perform the general initialisation steps for the mesh etc
   initialise_mpi(argc, argv, &mesh.rank, &mesh.nranks);
@@ -97,6 +96,12 @@ int main(int argc, char** argv)
       printf("\nIteration %d\n", tt);
     }
 
+#pragma omp parallel 
+    {
+      // Set up each of the pools with the correct master key
+      init_rn_pool(&rn_pools[omp_get_thread_num()], tt);
+    }
+
     plot_particle_density(
         &bright_data, &mesh, tt, ninitial_particles, elapsed_sim_time);
 
@@ -127,10 +132,8 @@ int main(int argc, char** argv)
     sprintf(tally_name, "energy%d", tt);
     int dneighbours[NNEIGHBOURS] = { EDGE, EDGE,  EDGE,  EDGE,  EDGE,  EDGE }; 
     write_all_ranks_to_visit(
-        mesh.global_nx, mesh.global_ny, 
-        mesh.local_nx-2*PAD, mesh.local_ny-2*PAD,
-        mesh.x_off, mesh.y_off, 
-        mesh.rank, mesh.nranks, dneighbours, 
+        mesh.global_nx, mesh.global_ny, mesh.local_nx-2*PAD, mesh.local_ny-2*PAD,
+        mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, dneighbours, 
         bright_data.energy_deposition_tally, tally_name, 0, elapsed_sim_time);
 
     // Leave the simulation if we have reached the simulation end time
