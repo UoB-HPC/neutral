@@ -25,10 +25,9 @@ int handle_particle(
     const int initial, const int ntotal_particles, const double* density, 
     const double* edgex, const double* edgey, const double* edgedx, 
     const double* edgedy, const CrossSection* cs_scatter_table, 
-    const CrossSection* cs_absorb_table, Particle* particle_end, 
-    int* nparticles_sent, int* facets, int* collisions, Particle* particle, 
-    Particle* particle_out, double* scalar_flux_tally, 
-    double* energy_deposition_tally, RNPool* rn_pool);
+    const CrossSection* cs_absorb_table, int* nparticles_sent, int* facets, 
+    int* collisions, Particle* particle, Particle* particle_out, 
+    double* scalar_flux_tally, double* energy_deposition_tally, RNPool* rn_pool);
 
 // Calculate the distance to the next facet
 void calc_distance_to_facet(
@@ -43,7 +42,7 @@ int handle_facet_encounter(
     const int global_nx, const int global_ny, const int nx, const int ny, 
     const int x_off, const int y_off, const int* neighbours, 
     const double distance_to_facet, int x_facet, int* nparticles_sent, 
-    Particle* particle, Particle* particles_end, Particle* particle_out);
+    Particle* particle, Particle* particle_out);
 
 // Performs a binary search.
 int binary_search(
@@ -51,14 +50,13 @@ int binary_search(
 
 // Handle the collision event, including absorption and scattering
 int handle_collision(
-    Particle* particle, Particle* particle_end, 
-    const double macroscopic_cs_absorb, const double macroscopic_cs_total, 
-    const double distance_to_collision, RNPool* rn_pool);
+    Particle* particle, const double macroscopic_cs_absorb, 
+    const double macroscopic_cs_total, const double distance_to_collision, 
+    RNPool* rn_pool);
 
 // Sends a particle to a neighbour and replaces in the particle list
-void send_and_replace_particle(
-    const int destination, Particle* particles_end, Particle* particle_to_replace, 
-    Particle* particle_out);
+void send_and_mark_particle(
+    const int destination, Particle* particle_to_replace, Particle* particle_out);
 
 // Tallies both the scalar flux and energy deposition in the cell
 void update_tallies(
