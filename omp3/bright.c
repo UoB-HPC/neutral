@@ -185,15 +185,24 @@ void handle_particles(
   STOP_PROFILING(&compute_profile, "handling particles");
 #endif // if 0
 
-  // This currently looks like a really small overhead so might well
-  // be the right approach to avoid other overheads and decouple the 
-  // problematic dependency
+  int particle_end_index = ntotal_particles-1;
+
+  // The reason that we decouple this and do it after the main particle loop
+  // is because otherwise we could be in a situation where the particles
+  // that the thread attempts to select are at the end of this list of 
+  // particles and therefore belong to another thread to handle, which will
+  // skew the work for the final thread dramatically
   START_PROFILING(&compute_profile);
   int nparticles_deleted = 0;
+#pragma omp parallel for shared(particle_end_index) reduction(nparticles_deleted)
   for(int pp = 0; pp < nparticles_to_process; ++pp) {
     if(particles_start[pp].cell == -1) {
-      particles_start[pp] = 
-        particles_start[(nparticles_to_process-1)-nparticles_deleted++];
+      // Acquire a particle to swap in
+#pragma omp atomic capture
+      int particle_swap_index = particle_end_index++;
+
+      particles_start[pp] = particles_start[particle_swap_index];
+      nparticles_deleted++;
     }
   }
   STOP_PROFILING(&compute_profile, "serial delete particles");
