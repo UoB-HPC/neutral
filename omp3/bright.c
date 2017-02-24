@@ -157,7 +157,9 @@ void handle_particles(
     init_rn_pool(&rn_pools[omp_get_thread_num()], (*master_key));
   }
 
+#if 0
   START_PROFILING(&compute_profile);
+#endif // if 0
 
   int nfacets = 0;
   int ncollisions = 0;
@@ -179,7 +181,9 @@ void handle_particles(
     nparticles_out += (result == PARTICLE_SENT);
   }
 
+#if 0
   STOP_PROFILING(&compute_profile, "handling particles");
+#endif // if 0
 
   // This currently looks like a really small overhead so might well
   // be the right approach to avoid other overheads and decouple the 
@@ -317,8 +321,7 @@ int handle_particle(
       // Encounter facet, and jump out if particle left this rank's domain
       if(handle_facet_encounter(
             global_nx, global_ny, nx, ny, x_off, y_off, neighbours, 
-            distance_to_facet, x_facet, nparticles_sent, particle, particle_out)) 
-      {
+            distance_to_facet, x_facet, nparticles_sent, particle, particle_out)) {
         return PARTICLE_SENT;
       }
 
@@ -600,7 +603,10 @@ void update_tallies(
   const int cellx = (particle->cell%global_nx)-x_off;
   const int celly = (particle->cell/global_nx)-y_off;
   const double scalar_flux = particle->weight*path_length/cell_volume;
-  scalar_flux_tally[celly*nx+cellx] += scalar_flux/(double)ntotal_particles; 
+
+#pragma omp atomic update 
+  scalar_flux_tally[celly*nx+cellx] += 
+    scalar_flux/(double)ntotal_particles; 
 
   // Calculate the energy deposition based on the path length
   const double average_exit_energy_absorb = 0.0;

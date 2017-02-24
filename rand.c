@@ -12,6 +12,7 @@ void init_rn_pool(RNPool* rn_pool, const uint64_t master_key)
   rn_pool->key.v[1] = master_key;
   rn_pool->counter.v[0] = 0;
   rn_pool->counter.v[1] = 0;
+  rn_pool->available = 0;
 }
 
 // Prepare the random number pool

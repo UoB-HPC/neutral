@@ -7,13 +7,11 @@
 #define BUF_LENGTH             1            // Precomputed random nums
 
 typedef struct {
-  double buffer[NRANDOM_NUMBERS];   // The pool of random numbers
+  double buffer[BUF_LENGTH*NRANDOM_NUMBERS];   // The pool of random numbers
   int available;                    // The number of available random numbers
 
   threefry2x64_ctr_t counter;
   threefry2x64_key_t key;
-
-  int loop_init;
 
 } RNPool;
 

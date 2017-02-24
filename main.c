@@ -16,7 +16,7 @@
 
 void plot_particle_density(
     BrightData* bright_data, Mesh* mesh, const int tt, 
-    const int ninitial_particles, const double elapsed_sim_time);
+    const int nparticles, const double elapsed_sim_time);
 
 int main(int argc, char** argv)
 {
@@ -41,21 +41,21 @@ int main(int argc, char** argv)
   mesh.nranks = 1;
   mesh.ndims = 2;
 
-#ifdef ENABLE_PROFILING
-  /* The timing code has to be called so many times that the API calls 
-   * actually begin to influence the performance dramatically. */
-  if(mesh.rank == MASTER) {
-    fprintf(stderr, 
-        "Warning. Profiling is enabled and will increase the runtime.\n\n");
-  }
-#endif
-
   // Get the number of threads and initialise the random number pool
   int nthreads = 0;
 #pragma omp parallel
   {
     nthreads = omp_get_num_threads();
   }
+
+  printf("Starting up with %d OpenMP threads.\n", nthreads);
+  printf("Loading problem from %s.\n", bright_data.neutral_params_filename);
+#ifdef ENABLE_PROFILING
+  /* The timing code has to be called so many times that the API calls 
+   * actually begin to influence the performance dramatically. */
+  fprintf(stderr, 
+      "Warning. Profiling is enabled and will increase the runtime.\n\n");
+#endif
 
   // Initialise enough pools for every thread and a master pool
   RNPool* rn_pools = (RNPool*)malloc(sizeof(RNPool)*(nthreads+1));
@@ -76,15 +76,10 @@ int main(int argc, char** argv)
   initialise_bright_data(
       &bright_data, &mesh, &rn_pools[nthreads]);
 
-  if(mesh.rank == MASTER) {
-    printf("Starting up with %d OpenMP threads.\n", nthreads);
-    printf("Loading problem from %s.\n", bright_data.neutral_params_filename);
-  }
-
   // Make sure initialisation phase is complete
   barrier();
 
-  const int ninitial_particles = bright_data.nparticles;
+  const int nparticles = bright_data.nparticles;
 
   // Main timestep loop where we will track each particle through time
   int tt;
@@ -97,8 +92,10 @@ int main(int argc, char** argv)
       printf("\nIteration %d\n", tt);
     }
 
+#if 0
     plot_particle_density(
-        &bright_data, &mesh, tt, ninitial_particles, elapsed_sim_time);
+        &bright_data, &mesh, tt, nparticles, elapsed_sim_time);
+#endif // if 0
 
     double w0 = omp_get_wtime();
 
@@ -134,8 +131,10 @@ int main(int argc, char** argv)
     }
   }
 
+#if 0
   plot_particle_density(
-      &bright_data, &mesh, tt, ninitial_particles, elapsed_sim_time);
+      &bright_data, &mesh, tt, nparticles, elapsed_sim_time);
+#endif // if 0
 
   // TODO: WHAT SHOULD THE VALUE OF NINITIALPARTICLES BE IF FISSION ETC.
   validate(
@@ -146,7 +145,7 @@ int main(int argc, char** argv)
   if(mesh.rank == MASTER) {
     PRINT_PROFILING_RESULTS(&p);
 
-    printf("Wallclock %.2fs, Elapsed Simulation Time %.6fs\n", 
+    printf("Wallclock %.9fs, Elapsed Simulation Time %.6fs\n", 
         wallclock, elapsed_sim_time);
   }
 
@@ -162,10 +161,14 @@ int main(int argc, char** argv)
 // This is a bit hacky and temporary for now
 void plot_particle_density(
     BrightData* bright_data, Mesh* mesh, const int tt, 
-    const int ninitial_particles, const double elapsed_sim_time)
+    const int nparticles, const double elapsed_sim_time)
 {
   double* temp = (double*)malloc(sizeof(double)*mesh->local_nx*mesh->local_ny);
-  for(int ii = 0; ii < ninitial_particles; ++ii) {
+  if(!temp) {
+    TERMINATE("Could not allocate data for printing.\n");
+  }
+
+  for(int ii = 0; ii < nparticles; ++ii) {
     Particle* particle = &bright_data->local_particles[ii];
     const int cellx = (particle->cell%mesh->global_nx)-mesh->x_off;
     const int celly = (particle->cell/mesh->global_nx)-mesh->y_off;
