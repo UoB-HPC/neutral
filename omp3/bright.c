@@ -194,12 +194,14 @@ void handle_particles(
   // skew the work for the final thread dramatically
   START_PROFILING(&compute_profile);
   int nparticles_deleted = 0;
-#pragma omp parallel for shared(particle_end_index) reduction(nparticles_deleted)
+#pragma omp parallel for shared(particle_end_index) reduction(+:nparticles_deleted)
   for(int pp = 0; pp < nparticles_to_process; ++pp) {
     if(particles_start[pp].cell == -1) {
       // Acquire a particle to swap in
+      int particle_swap_index;
+
 #pragma omp atomic capture
-      int particle_swap_index = particle_end_index++;
+      particle_swap_index = particle_end_index++;
 
       particles_start[pp] = particles_start[particle_swap_index];
       nparticles_deleted++;
