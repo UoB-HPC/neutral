@@ -164,7 +164,8 @@ void handle_particles(
   int nfacets = 0;
   int ncollisions = 0;
 
-#pragma omp parallel for reduction(+: ncollisions, nfacets, nparticles_out)
+#pragma omp parallel for schedule(guided) \
+  reduction(+: ncollisions, nfacets, nparticles_out)
   for(int pp = 0; pp < nparticles_to_process; ++pp) {
     // Current particle
     Particle* particle = &particles_start[pp];
@@ -185,29 +186,9 @@ void handle_particles(
   STOP_PROFILING(&compute_profile, "handling particles");
 #endif // if 0
 
-  int particle_end_index = nparticles_to_process-1;
-
-  // The reason that we decouple this and do it after the main particle loop
-  // is because otherwise we could be in a situation where the particles
-  // that the thread attempts to select are at the end of this list of 
-  // particles and therefore belong to another thread to handle, which will
-  // skew the work for the final thread dramatically
-  START_PROFILING(&compute_profile);
   int nparticles_deleted = 0;
-//#pragma omp parallel for shared(particle_end_index) reduction(+:nparticles_deleted)
-  for(int pp = 0; pp < nparticles_to_process; ++pp) {
-    if(particles_start[pp].cell == -1) {
-      // Acquire a particle to swap in
-      int particle_swap_index;
-
-//#pragma omp atomic capture
-      particle_swap_index = particle_end_index--;
-
-      particles_start[pp] = particles_start[particle_swap_index];
-      nparticles_deleted++;
-    }
-  }
-  STOP_PROFILING(&compute_profile, "serial delete particles");
+  compress_particle_list(
+    nparticles_to_process, particles_start, &nparticles_deleted);
 
   // Correct the new total number of particles
   *nparticles -= nparticles_deleted;
@@ -216,6 +197,37 @@ void handle_particles(
 
   printf("handled %d particles, with %d particles deleted\n", 
       nparticles_to_process, nparticles_deleted);
+}
+
+void compress_particle_list(
+    const int nparticles_to_process, Particle* particles_start,
+    int* nparticles_deleted)
+{
+  int particle_end_index = nparticles_to_process-1;
+
+  // The reason that we decouple this and do it after the main particle loop
+  // is because otherwise we could be in a situation where the particles
+  // that the thread attempts to select are at the end of this list of 
+  // particles and therefore belong to another thread to handle, which will
+  // skew the work for the final thread dramatically
+  START_PROFILING(&compute_profile);
+  int ndeleted = 0;
+#pragma omp parallel for schedule(guided) \
+  shared(particle_end_index) reduction(+:ndeleted)
+  for(int pp = 0; pp < nparticles_to_process; ++pp) {
+    if(particles_start[pp].cell == -1) {
+      // Acquire a particle to swap in
+      int particle_swap_index;
+
+#pragma omp atomic capture
+      particle_swap_index = particle_end_index--;
+
+      particles_start[pp] = particles_start[particle_swap_index];
+      ndeleted++;
+    }
+  }
+  STOP_PROFILING(&compute_profile, "serial delete particles");
+  *nparticles_deleted = ndeleted;
 }
 
 // Handles an individual particle.

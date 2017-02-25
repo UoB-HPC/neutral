@@ -66,3 +66,7 @@ void update_tallies(
     const double macroscopic_cs_absorb, const double macroscopic_cs_total, 
     double* scalar_flux_tally, double* energy_deposition_tally);
 
+void compress_particle_list(
+    const int nparticles_to_process, Particle* particles_start,
+    int* nparticles_deleted);
+
