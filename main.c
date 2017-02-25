@@ -114,6 +114,7 @@ int main(int argc, char** argv)
     wallclock += omp_get_wtime()-w0;
     elapsed_sim_time += mesh.dt;
 
+#if 0
     char tally_name[100];
     sprintf(tally_name, "energy%d", tt);
     int dneighbours[NNEIGHBOURS] = { EDGE, EDGE,  EDGE,  EDGE,  EDGE,  EDGE }; 
@@ -121,6 +122,7 @@ int main(int argc, char** argv)
         mesh.global_nx, mesh.global_ny, mesh.local_nx-2*PAD, mesh.local_ny-2*PAD,
         mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, dneighbours, 
         bright_data.energy_deposition_tally, tally_name, 0, elapsed_sim_time);
+#endif // if 0
 
     // Leave the simulation if we have reached the simulation end time
     if(elapsed_sim_time >= mesh.sim_end) {
