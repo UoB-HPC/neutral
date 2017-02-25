@@ -185,7 +185,7 @@ void handle_particles(
   STOP_PROFILING(&compute_profile, "handling particles");
 #endif // if 0
 
-  int particle_end_index = ntotal_particles-1;
+  int particle_end_index = nparticles_to_process-1;
 
   // The reason that we decouple this and do it after the main particle loop
   // is because otherwise we could be in a situation where the particles
@@ -194,14 +194,14 @@ void handle_particles(
   // skew the work for the final thread dramatically
   START_PROFILING(&compute_profile);
   int nparticles_deleted = 0;
-#pragma omp parallel for shared(particle_end_index) reduction(+:nparticles_deleted)
+//#pragma omp parallel for shared(particle_end_index) reduction(+:nparticles_deleted)
   for(int pp = 0; pp < nparticles_to_process; ++pp) {
     if(particles_start[pp].cell == -1) {
       // Acquire a particle to swap in
       int particle_swap_index;
 
-#pragma omp atomic capture
-      particle_swap_index = particle_end_index++;
+//#pragma omp atomic capture
+      particle_swap_index = particle_end_index--;
 
       particles_start[pp] = particles_start[particle_swap_index];
       nparticles_deleted++;
