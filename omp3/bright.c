@@ -158,8 +158,7 @@ void handle_particles(
   int ncollisions = 0;
   int nparticles_deleted = 0;
 
-#pragma omp parallel for schedule(guided) \
-  reduction(+: ncollisions, nfacets, nparticles_deleted) 
+#pragma omp parallel for reduction(+: ncollisions, nfacets, nparticles_deleted) 
   for(int pp = 0; pp < nparticles_to_process; ++pp) {
     // Current particle
     Particle* particle = &particles_start[pp];
@@ -252,8 +251,8 @@ int handle_particle(
   double number_density = (local_density*AVOGADROS/MOLAR_MASS);
   double macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
   double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
-
   double particle_velocity = sqrt((2.0*particle->e*eV_TO_J)/PARTICLE_MASS);
+  const double inv_ntotal_particles = 1.0/(double)ntotal_particles;
 
   // Set time to census and MFPs until collision, unless travelled particle
   if(initial) {
@@ -282,7 +281,7 @@ int handle_particle(
 
       // Update the tallies before the energy is updated
       update_tallies(
-          global_nx, nx, x_off, y_off, particle, ntotal_particles, 
+          global_nx, nx, x_off, y_off, particle, inv_ntotal_particles, 
           distance_to_collision, inv_cell_volume, number_density, 
           microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb, 
           scalar_flux_tally, energy_deposition_tally);
@@ -320,7 +319,7 @@ int handle_particle(
 
       // Update the tallies in this zone
       update_tallies(
-          global_nx, nx, x_off, y_off, particle, ntotal_particles, 
+          global_nx, nx, x_off, y_off, particle, inv_ntotal_particles, 
           distance_to_facet, inv_cell_volume, number_density,
           microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb, 
           scalar_flux_tally, energy_deposition_tally);
@@ -350,7 +349,7 @@ int handle_particle(
 
       // Update the tallies in this zone
       update_tallies(
-          global_nx, nx, x_off, y_off, particle, ntotal_particles, 
+          global_nx, nx, x_off, y_off, particle, inv_ntotal_particles, 
           distance_to_census, inv_cell_volume, number_density,
           microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb, 
           scalar_flux_tally, energy_deposition_tally);
@@ -586,7 +585,7 @@ void calc_distance_to_facet(
 // Tallies both the scalar flux and energy deposition in the cell
 void update_tallies(
     const int global_nx, const int nx, const int x_off, const int y_off, 
-    Particle* particle, const int ntotal_particles, const double path_length, 
+    Particle* particle, const double inv_ntotal_particles, const double path_length, 
     const double inv_cell_volume, const double number_density, 
     const double microscopic_cs_absorb, const double microscopic_cs_total, 
     double* scalar_flux_tally, double* energy_deposition_tally)
@@ -597,8 +596,7 @@ void update_tallies(
   const double scalar_flux = particle->weight*path_length*inv_cell_volume;
 
 #pragma omp atomic update 
-  scalar_flux_tally[celly*nx+cellx] += 
-    scalar_flux/(double)ntotal_particles; 
+  scalar_flux_tally[celly*nx+cellx] += scalar_flux*inv_ntotal_particles; 
 
   // Calculate the energy deposition based on the path length
   const double average_exit_energy_absorb = 0.0;
@@ -615,8 +613,7 @@ void update_tallies(
     heating_response*number_density;
 
 #pragma omp atomic update
-  energy_deposition_tally[celly*nx+cellx] += 
-    energy_deposition/(double)ntotal_particles;
+  energy_deposition_tally[celly*nx+cellx] += energy_deposition*inv_ntotal_particles;
 }
 
 // Fetch the cross section for a particular energy value
