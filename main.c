@@ -42,13 +42,12 @@ int main(int argc, char** argv)
   mesh.ndims = 2;
 
   // Get the number of threads and initialise the random number pool
-  int nthreads = 0;
 #pragma omp parallel
   {
-    nthreads = omp_get_num_threads();
+    bright_data.nthreads = omp_get_num_threads();
   }
 
-  printf("Starting up with %d OpenMP threads.\n", nthreads);
+  printf("Starting up with %d OpenMP threads.\n", bright_data.nthreads);
   printf("Loading problem from %s.\n", bright_data.neutral_params_filename);
 #ifdef ENABLE_PROFILING
   /* The timing code has to be called so many times that the API calls 
@@ -58,10 +57,10 @@ int main(int argc, char** argv)
 #endif
 
   // Initialise enough pools for every thread and a master pool
-  RNPool* rn_pools = (RNPool*)malloc(sizeof(RNPool)*(nthreads+1));
+  RNPool* rn_pools = (RNPool*)malloc(sizeof(RNPool)*(bright_data.nthreads+1));
 
   // Initialise the master rn pool
-  init_rn_pool(&rn_pools[nthreads], 0xfffff);
+  init_rn_pool(&rn_pools[bright_data.nthreads], 0xfffff);
 
   // Perform the general initialisation steps for the mesh etc
   initialise_mpi(argc, argv, &mesh.rank, &mesh.nranks);
@@ -74,7 +73,7 @@ int main(int argc, char** argv)
       mesh.x_off, mesh.y_off, mesh.ndims, bright_data.neutral_params_filename, 
       mesh.edgex, mesh.edgey, &shared_data);
   initialise_bright_data(
-      &bright_data, &mesh, &rn_pools[nthreads]);
+      &bright_data, &mesh, &rn_pools[bright_data.nthreads]);
 
   // Make sure initialisation phase is complete
   barrier();

@@ -157,33 +157,28 @@ void handle_particles(
 
   int nfacets = 0;
   int ncollisions = 0;
-  int nparticles_out = 0;
+  int nparticles_deleted = 0;
 
-#pragma omp parallel for reduction(+: ncollisions, nfacets, nparticles_out) schedule(dynamic,1)
+#pragma omp parallel for schedule(guided) \
+  reduction(+: ncollisions, nfacets, nparticles_deleted) 
   for(int pp = 0; pp < nparticles_to_process; ++pp) {
     // Current particle
     Particle* particle = &particles_start[pp];
-
-    if(particle->cell == -1) {
-      continue;
-    }
-
-    Particle* particle_out = &particles_out[nparticles_out];
 
     prepare_rn_pool(&rn_pools[omp_get_thread_num()], particle->key);
 
     const int result = handle_particle(
         global_nx, global_ny, nx, ny, x_off, y_off, neighbours, dt, initial,
         ntotal_particles, density, edgex, edgey, edgedx, edgedy, cs_scatter_table, 
-        cs_absorb_table, nparticles_sent, &nfacets, 
-        &ncollisions, particle, particle_out, scalar_flux_tally, 
-        energy_deposition_tally, &rn_pools[omp_get_thread_num()]);
-    nparticles_out += (result == PARTICLE_SENT);
+        cs_absorb_table, nparticles_sent, &nfacets, &ncollisions, particle, 
+        scalar_flux_tally, energy_deposition_tally, 
+        &rn_pools[omp_get_thread_num()]);
+
+    nparticles_deleted += (result == PARTICLE_SENT || result == PARTICLE_DEAD);
   }
 
-  int nparticles_deleted = 0;
   compress_particle_list(
-    nparticles_to_process, particles_start, &nparticles_deleted);
+    nparticles_to_process, particles_start, nparticles_deleted);
 
   // Correct the new total number of particles
   *nparticles -= nparticles_deleted;
@@ -196,7 +191,7 @@ void handle_particles(
 
 void compress_particle_list(
     const int nparticles_to_process, Particle* particles_start,
-    int* nparticles_deleted)
+    int nparticles_deleted)
 {
   // The reason that we decouple this and do it after the main particle loop
   // is because otherwise we could be in a situation where the particles
@@ -208,7 +203,7 @@ void compress_particle_list(
   int particle_end_index = nparticles_to_process-1;
 #pragma omp parallel for shared(particle_end_index) reduction(+:ndeleted)
   for(int pp = 0; pp < nparticles_to_process; ++pp) {
-    if(particles_start[pp].cell == -1) {
+    if(particles_start[pp].dead) {
       // Acquire a particle to swap in
       int particle_swap_index;
 
@@ -219,7 +214,6 @@ void compress_particle_list(
       ndeleted++;
     }
   }
-  *nparticles_deleted = ndeleted;
 }
 
 // Handles an individual particle.
@@ -230,8 +224,8 @@ int handle_particle(
     const double* edgex, const double* edgey, const double* edgedx, 
     const double* edgedy, const CrossSection* cs_scatter_table, 
     const CrossSection* cs_absorb_table, int* nparticles_sent, int* facets, 
-    int* collisions, Particle* particle, Particle* particle_out, 
-    double* scalar_flux_tally, double* energy_deposition_tally, RNPool* rn_pool)
+    int* collisions, Particle* particle, double* scalar_flux_tally, 
+    double* energy_deposition_tally, RNPool* rn_pool)
 {
   // (1) particle can stream and reach census
   // (2) particle can collide and either
@@ -336,7 +330,7 @@ int handle_particle(
       // Encounter facet, and jump out if particle left this rank's domain
       if(handle_facet_encounter(
             global_nx, global_ny, nx, ny, x_off, y_off, neighbours, 
-            distance_to_facet, x_facet, nparticles_sent, particle, particle_out)) {
+            distance_to_facet, x_facet, nparticles_sent, particle)) {
         return PARTICLE_SENT;
       }
 
@@ -388,7 +382,6 @@ int handle_collision(
   particle->y += distance_to_collision*particle->omega_y;
 
   const double p_absorb = macroscopic_cs_absorb/macroscopic_cs_total;
-  int is_particle_dead = 0;
 
   if(genrand(rn_pool) < p_absorb) {
     /* Model particle absorption */
@@ -399,8 +392,7 @@ int handle_collision(
 
     if(particle->e < MIN_ENERGY_OF_INTEREST) {
       // Energy is too low, so mark the particle for deletion
-      particle->cell = -1;
-      is_particle_dead = 1;
+      particle->dead = 1;
     }
   }
   else {
@@ -431,7 +423,7 @@ int handle_collision(
     particle->e = e_new;
   }
 
-  return is_particle_dead;
+  return particle->dead;
 }
 
 // Makes the necessary updates to the particle given that
@@ -440,7 +432,7 @@ int handle_facet_encounter(
     const int global_nx, const int global_ny, const int nx, const int ny, 
     const int x_off, const int y_off, const int* neighbours, 
     const double distance_to_facet, int x_facet, int* nparticles_sent, 
-    Particle* particle, Particle* particle_out)
+    Particle* particle)
 {
   // We don't need to consider the halo regions in this package
   int cellx = particle->cell%global_nx;
@@ -466,7 +458,7 @@ int handle_facet_encounter(
 
         // Check if we need to pass to another process
         if(cellx >= nx+x_off) {
-          send_and_mark_particle(neighbours[EAST], particle, particle_out);
+          send_and_mark_particle(neighbours[EAST], particle);
           nparticles_sent[EAST]++;
           return 1;
         }
@@ -484,7 +476,7 @@ int handle_facet_encounter(
 
         // Check if we need to pass to another process
         if(cellx < x_off) {
-          send_and_mark_particle(neighbours[WEST], particle, particle_out);
+          send_and_mark_particle(neighbours[WEST], particle);
           nparticles_sent[WEST]++;
           return 1;
         }
@@ -504,7 +496,7 @@ int handle_facet_encounter(
 
         // Check if we need to pass to another process
         if(celly >= ny+y_off) {
-          send_and_mark_particle(neighbours[NORTH], particle, particle_out);
+          send_and_mark_particle(neighbours[NORTH], particle);
           nparticles_sent[NORTH]++;
           return 1;
         }
@@ -522,7 +514,7 @@ int handle_facet_encounter(
 
         // Check if we need to pass to another process
         if(celly < y_off) {
-          send_and_mark_particle(neighbours[SOUTH], particle, particle_out);
+          send_and_mark_particle(neighbours[SOUTH], particle);
           nparticles_sent[SOUTH]++;
           return 1;
         }
@@ -535,18 +527,18 @@ int handle_facet_encounter(
 
 // Sends a particle to a neighbour and replaces in the particle list
 void send_and_mark_particle(
-    const int destination, Particle* particle, Particle* particle_out)
+    const int destination, Particle* particle)
 {
 #ifdef MPI
-  if(destination == EDGE)
+  if(destination == EDGE) {
     return;
+  }
 
-  // Place the particle in the out buffer and mark for deletion
-  *particle_out = *particle;
+  particle->dead = 1;
 
   // Send the particle
   MPI_Send(
-      particle_out, 1, particle_type, destination, TAG_PARTICLE, MPI_COMM_WORLD);
+      particle, 1, particle_type, destination, TAG_PARTICLE, MPI_COMM_WORLD);
 #else
   TERMINATE("Unreachable - shouldn't send particles unless MPI enabled.\n");
 #endif

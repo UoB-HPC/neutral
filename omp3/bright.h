@@ -26,7 +26,7 @@ int handle_particle(
     const double* edgex, const double* edgey, const double* edgedx, 
     const double* edgedy, const CrossSection* cs_scatter_table, 
     const CrossSection* cs_absorb_table, int* nparticles_sent, int* facets, 
-    int* collisions, Particle* particle, Particle* particle_out, 
+    int* collisions, Particle* particle, 
     double* scalar_flux_tally, double* energy_deposition_tally, RNPool* rn_pool);
 
 // Calculate the distance to the next facet
@@ -42,7 +42,7 @@ int handle_facet_encounter(
     const int global_nx, const int global_ny, const int nx, const int ny, 
     const int x_off, const int y_off, const int* neighbours, 
     const double distance_to_facet, int x_facet, int* nparticles_sent, 
-    Particle* particle, Particle* particle_out);
+    Particle* particle);
 
 // Performs a binary search.
 int binary_search(
@@ -56,7 +56,7 @@ int handle_collision(
 
 // Sends a particle to a neighbour and replaces in the particle list
 void send_and_mark_particle(
-    const int destination, Particle* particle_to_replace, Particle* particle_out);
+    const int destination, Particle* particle_to_replace);
 
 // Tallies both the scalar flux and energy deposition in the cell
 void update_tallies(
@@ -68,5 +68,5 @@ void update_tallies(
 
 void compress_particle_list(
     const int nparticles_to_process, Particle* particles_start,
-    int* nparticles_deleted);
+    int nparticles_deleted);
 

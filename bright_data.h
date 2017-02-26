@@ -48,6 +48,7 @@ typedef struct {
   double mfp_to_collision;   // the mean free paths until a collision
   uint64_t key;
   int cell;
+  int dead;
 
 } Particle;
 
@@ -60,6 +61,7 @@ typedef struct {
 
   double initial_energy;
 
+  int nthreads;
   int nparticles;
   int nlocal_particles;
 

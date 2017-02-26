@@ -200,6 +200,7 @@ void initialise_particle(
   particle->weight = 1.0;
   particle->dt_to_census = dt;
   particle->mfp_to_collision = 0.0;
+  particle->dead = 0;
 }
 
 // Reads in a cross-sectional data file
