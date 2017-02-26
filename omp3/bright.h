@@ -33,7 +33,8 @@ int handle_particle(
 void calc_distance_to_facet(
     const int global_nx, const double x, const double y, const int x_off,
     const int y_off, const double omega_x, const double omega_y,
-    const double particle_velocity, const int cell, double* distance_to_facet,
+    const double particle_velocity, const int particle_cellx, 
+    const int particle_celly, double* distance_to_facet,
     int* x_facet, const double* edgex, const double* edgey);
 
 // Makes the necessary updates to the particle given that

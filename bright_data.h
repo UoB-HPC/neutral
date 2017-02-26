@@ -47,7 +47,8 @@ typedef struct {
   double dt_to_census;       // the time until census is reached
   double mfp_to_collision;   // the mean free paths until a collision
   uint64_t key;
-  int cell;
+  int cellx;
+  int celly;
   int dead;
 
 } Particle;
