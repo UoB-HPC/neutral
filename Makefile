@@ -4,7 +4,7 @@ COMPILER         = INTEL
 MPI              = yes
 MAC_RPATH				 = -Wl,-rpath,${COMPILER_ROOT}/lib 
 CFLAGS_INTEL     = -O3 -no-prec-div -std=gnu99 -qopenmp -DINTEL \
-									 $(MAC_RPATH) -xhost -Wall -qopt-report=5 -g
+									 $(MAC_RPATH) -Wall -qopt-report=5 -g #-xhost
 CFLAGS_INTEL_KNL = -O3 -qopenmp -no-prec-div -std=gnu99 -DINTEL \
 									 -xMIC-AVX512 -Wall -qopt-report=5
 CFLAGS_GCC       = -O3 -g -std=gnu99 -fopenmp -march=native -Wall #-std=gnu99
@@ -20,8 +20,8 @@ ifeq ($(MPI), yes)
 endif
 
 # Default compiler
-MULTI_COMPILER_CC   = mpicc
-MULTI_COMPILER_CPP  = mpic++
+MULTI_COMPILER_CC   = cc
+MULTI_COMPILER_CPP  = CC
 MULTI_LINKER    		= $(MULTI_COMPILER_CC)
 MULTI_FLAGS     		= $(CFLAGS_$(COMPILER))
 MULTI_LDFLAGS   		= $(MULTI_FLAGS) -lm
@@ -55,5 +55,5 @@ make_build_dir:
 	@mkdir -p $(MULTI_BUILD_DIR)/$(KERNELS)
 
 clean:
-	rm -rf $(EXE).exe *.bov *.dat
+	rm -rf $(MULTI_BUILD_DIR)/* bright.$(KERNELS) *.vtk *.bov *.dat *.optrpt *.cub *.ptx *.ap2 *.xf
 

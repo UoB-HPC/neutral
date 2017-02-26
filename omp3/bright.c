@@ -159,7 +159,7 @@ void handle_particles(
   int ncollisions = 0;
   int nparticles_out = 0;
 
-#pragma omp parallel for reduction(+: ncollisions, nfacets, nparticles_out)
+#pragma omp parallel for reduction(+: ncollisions, nfacets, nparticles_out) schedule(dynamic,1)
   for(int pp = 0; pp < nparticles_to_process; ++pp) {
     // Current particle
     Particle* particle = &particles_start[pp];
@@ -212,7 +212,7 @@ void compress_particle_list(
       // Acquire a particle to swap in
       int particle_swap_index;
 
-//#pragma omp atomic capture
+#pragma omp atomic capture
       particle_swap_index = particle_end_index--;
 
       particles_start[pp] = particles_start[particle_swap_index];
@@ -619,7 +619,7 @@ void update_tallies(
   const int celly = (particle->cell/global_nx)-y_off;
   const double scalar_flux = particle->weight*path_length/cell_volume;
 
-//#pragma omp atomic update 
+#pragma omp atomic update 
   scalar_flux_tally[celly*nx+cellx] += 
     scalar_flux/(double)ntotal_particles; 
 
@@ -637,7 +637,7 @@ void update_tallies(
     particle->weight*path_length*(microscopic_cs_total*BARNS)*
     heating_response*number_density;
 
-//#pragma omp atomic update
+#pragma omp atomic update
   energy_deposition_tally[celly*nx+cellx] += 
     energy_deposition/(double)ntotal_particles;
 }
