@@ -145,8 +145,6 @@ void handle_particles(
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
     double* scalar_flux_tally, double* energy_deposition_tally, RNPool* rn_pools)
 {
-  int nparticles_out = 0;
-
   // Have to maintain a master key, so that particles don't keep seeing
   // the same random number streams. 
   // TODO: THIS IS NOT GOING TO WORK WITH MPI...
@@ -157,18 +155,19 @@ void handle_particles(
     init_rn_pool(&rn_pools[omp_get_thread_num()], (*master_key));
   }
 
-#if 0
-  START_PROFILING(&compute_profile);
-#endif // if 0
-
   int nfacets = 0;
   int ncollisions = 0;
+  int nparticles_out = 0;
 
-#pragma omp parallel for schedule(guided) \
-  reduction(+: ncollisions, nfacets, nparticles_out)
+#pragma omp parallel for reduction(+: ncollisions, nfacets, nparticles_out)
   for(int pp = 0; pp < nparticles_to_process; ++pp) {
     // Current particle
     Particle* particle = &particles_start[pp];
+
+    if(particle->cell == -1) {
+      continue;
+    }
+
     Particle* particle_out = &particles_out[nparticles_out];
 
     prepare_rn_pool(&rn_pools[omp_get_thread_num()], particle->key);
@@ -181,10 +180,6 @@ void handle_particles(
         energy_deposition_tally, &rn_pools[omp_get_thread_num()]);
     nparticles_out += (result == PARTICLE_SENT);
   }
-
-#if 0
-  STOP_PROFILING(&compute_profile, "handling particles");
-#endif // if 0
 
   int nparticles_deleted = 0;
   compress_particle_list(
@@ -203,30 +198,27 @@ void compress_particle_list(
     const int nparticles_to_process, Particle* particles_start,
     int* nparticles_deleted)
 {
-  int particle_end_index = nparticles_to_process-1;
-
   // The reason that we decouple this and do it after the main particle loop
   // is because otherwise we could be in a situation where the particles
   // that the thread attempts to select are at the end of this list of 
   // particles and therefore belong to another thread to handle, which will
   // skew the work for the final thread dramatically
-  START_PROFILING(&compute_profile);
+
   int ndeleted = 0;
-#pragma omp parallel for schedule(guided) \
-  shared(particle_end_index) reduction(+:ndeleted)
+  int particle_end_index = nparticles_to_process-1;
+#pragma omp parallel for shared(particle_end_index) reduction(+:ndeleted)
   for(int pp = 0; pp < nparticles_to_process; ++pp) {
     if(particles_start[pp].cell == -1) {
       // Acquire a particle to swap in
       int particle_swap_index;
 
-#pragma omp atomic capture
+//#pragma omp atomic capture
       particle_swap_index = particle_end_index--;
 
       particles_start[pp] = particles_start[particle_swap_index];
       ndeleted++;
     }
   }
-  STOP_PROFILING(&compute_profile, "serial delete particles");
   *nparticles_deleted = ndeleted;
 }
 
@@ -627,7 +619,7 @@ void update_tallies(
   const int celly = (particle->cell/global_nx)-y_off;
   const double scalar_flux = particle->weight*path_length/cell_volume;
 
-#pragma omp atomic update 
+//#pragma omp atomic update 
   scalar_flux_tally[celly*nx+cellx] += 
     scalar_flux/(double)ntotal_particles; 
 
@@ -645,7 +637,7 @@ void update_tallies(
     particle->weight*path_length*(microscopic_cs_total*BARNS)*
     heating_response*number_density;
 
-#pragma omp atomic update
+//#pragma omp atomic update
   energy_deposition_tally[celly*nx+cellx] += 
     energy_deposition/(double)ntotal_particles;
 }
