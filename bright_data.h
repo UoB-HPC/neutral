@@ -57,7 +57,6 @@ typedef struct {
   CrossSection* cs_scatter_table;
   CrossSection* cs_absorb_table;
   Particle* local_particles;
-  Particle* out_particles;
 
   double initial_energy;
 

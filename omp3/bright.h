@@ -14,9 +14,9 @@ void handle_particles(
     const double* edgey, const double* edgedx, const double* edgedy, int* facets, 
     int* collisions, int* nparticles_sent, uint64_t* master_key, 
     const int ntotal_particles, const int nparticles_to_process, 
-    int* nparticles, Particle* particles_start, Particle* particles_out, 
-    CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
-    double* scalar_flux_tally, double* energy_deposition_tally, RNPool* rn_pools);
+    int* nparticles, Particle* particles_start, CrossSection* cs_scatter_table, 
+    CrossSection* cs_absorb_table, double* scalar_flux_tally, 
+    double* energy_deposition_tally, RNPool* rn_pools);
 
 // Handles an individual particle.
 int handle_particle(

@@ -22,9 +22,8 @@ void solve_transport_2d(
     int* nlocal_particles, uint64_t* master_key, const int* neighbours, 
     Particle* particles, const double* density, const double* edgex, 
     const double* edgey, const double* edgedx, const double* edgedy, 
-    Particle* particles_out, CrossSection* cs_scatter_table, 
-    CrossSection* cs_absorb_table, double* scalar_flux_tally, 
-    double* energy_deposition_tally, RNPool* rn_pools)
+    CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
+    double* scalar_flux_tally, double* energy_deposition_tally, RNPool* rn_pools)
 {
   // Initial idea is to use a kind of queue for handling the particles. Presumably
   // this doesn't have to be a carefully ordered queue but lets see how that goes.
@@ -49,8 +48,8 @@ void solve_transport_2d(
       global_nx, global_ny, nx, ny, x_off, y_off, 1, dt, neighbours, density, 
       edgex, edgey, edgedx, edgedy, &facets, &collisions, nparticles_sent, 
       master_key, ntotal_particles, nparticles, &nparticles, particles, 
-      particles_out, cs_scatter_table, cs_absorb_table, 
-      scalar_flux_tally, energy_deposition_tally, rn_pools);
+      cs_scatter_table, cs_absorb_table, scalar_flux_tally, 
+      energy_deposition_tally, rn_pools);
 
 #if 0
 #ifdef MPI
@@ -141,9 +140,9 @@ void handle_particles(
     const double* edgey, const double* edgedx, const double* edgedy, int* facets, 
     int* collisions, int* nparticles_sent, uint64_t* master_key, 
     const int ntotal_particles, const int nparticles_to_process, 
-    int* nparticles, Particle* particles_start, Particle* particles_out, 
-    CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
-    double* scalar_flux_tally, double* energy_deposition_tally, RNPool* rn_pools)
+    int* nparticles, Particle* particles_start, CrossSection* cs_scatter_table, 
+    CrossSection* cs_absorb_table, double* scalar_flux_tally, 
+    double* energy_deposition_tally, RNPool* rn_pools)
 {
   // Have to maintain a master key, so that particles don't keep seeing
   // the same random number streams. 
