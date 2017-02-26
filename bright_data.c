@@ -94,13 +94,6 @@ void initialise_bright_data(
     TERMINATE("Could not allocate particle array.\n");
   }
 
-  // TODO: SO DOES THIS ONE, WHICH IS WAYYYYY TOO HIGH
-  bright_data->out_particles = 
-    (Particle*)malloc(sizeof(Particle)*bright_data->nparticles);
-  if(!bright_data->out_particles) {
-    TERMINATE("Could not allocate particle array.\n");
-  }
-
   allocate_data(&bright_data->scalar_flux_tally, local_nx*local_ny);
   allocate_data(&bright_data->energy_deposition_tally, local_nx*local_ny);
 

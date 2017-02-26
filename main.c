@@ -103,10 +103,9 @@ int main(int argc, char** argv)
         mesh.x_off, mesh.y_off, mesh.dt, bright_data.nparticles, 
         &bright_data.nlocal_particles, &master_key, mesh.neighbours, 
         bright_data.local_particles, shared_data.rho, mesh.edgex, mesh.edgey, 
-        mesh.edgedx, mesh.edgedy, bright_data.out_particles, 
-        bright_data.cs_scatter_table, bright_data.cs_absorb_table, 
-        bright_data.scalar_flux_tally, bright_data.energy_deposition_tally,
-        rn_pools);
+        mesh.edgedx, mesh.edgedy, bright_data.cs_scatter_table, 
+        bright_data.cs_absorb_table, bright_data.scalar_flux_tally, 
+        bright_data.energy_deposition_tally, rn_pools);
 
     barrier();
 
