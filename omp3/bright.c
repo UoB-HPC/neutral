@@ -238,8 +238,9 @@ int handle_particle(
   double cell_mfp = 0.0;
 
   // Update the cross sections, referencing into the padded mesh
-  int cellx = (particle->cell%global_nx)-x_off+PAD;
-  int celly = (particle->cell/global_nx)-y_off+PAD;
+  int cellx = particle->cellx-x_off+PAD;
+  int celly = particle->celly-y_off+PAD;
+  double inv_cell_volume = 1.0/edgex[cellx]*edgey[celly];
   double local_density = density[celly*(nx+2*PAD)+cellx];
 
   // This makes some assumption about the units of the data stored globally.
@@ -268,7 +269,7 @@ int handle_particle(
     double distance_to_facet = 0.0;
     calc_distance_to_facet(
         global_nx, particle->x, particle->y, x_off, y_off, particle->omega_x,
-        particle->omega_y, particle_velocity, particle->cell,
+        particle->omega_y, particle_velocity, particle->cellx, particle->celly,
         &distance_to_facet, &x_facet, edgex, edgey);
 
     const double distance_to_collision = particle->mfp_to_collision*cell_mfp;
@@ -280,10 +281,9 @@ int handle_particle(
       (*collisions)++;
 
       // Update the tallies before the energy is updated
-      const double cell_volume = edgedx[cellx]*edgedy[celly];
       update_tallies(
           global_nx, nx, x_off, y_off, particle, ntotal_particles, 
-          distance_to_collision, cell_volume, number_density, 
+          distance_to_collision, inv_cell_volume, number_density, 
           microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb, 
           scalar_flux_tally, energy_deposition_tally);
 
@@ -319,10 +319,9 @@ int handle_particle(
       particle->dt_to_census -= (distance_to_facet/particle_velocity);
 
       // Update the tallies in this zone
-      const double cell_volume = edgedx[cellx]*edgedy[celly];
       update_tallies(
           global_nx, nx, x_off, y_off, particle, ntotal_particles, 
-          distance_to_facet, cell_volume, number_density,
+          distance_to_facet, inv_cell_volume, number_density,
           microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb, 
           scalar_flux_tally, energy_deposition_tally);
 
@@ -333,16 +332,11 @@ int handle_particle(
         return PARTICLE_SENT;
       }
 
-      // Update the local density and cross-sections
-      cellx = (particle->cell%global_nx)-x_off+PAD;
-      celly = (particle->cell/global_nx)-y_off+PAD;
-
-      /* We don't actually need to perform a cross sectional update here in the
-       * traditional sense as we do not have to lookup the energy profile
-       * in the data table, merely update it with the adjusted density. */
-      local_density = 
-        density[celly*(nx+2*PAD)+cellx];
-
+      // Update the data based on new cell
+      cellx = particle->cellx-x_off+PAD;
+      celly = particle->celly-y_off+PAD;
+      local_density = density[celly*(nx+2*PAD)+cellx];
+      inv_cell_volume = 1.0/(edgedx[cellx]*edgedy[celly]);
       number_density = (local_density*AVOGADROS/MOLAR_MASS);
       macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
       macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
@@ -355,10 +349,9 @@ int handle_particle(
       particle->mfp_to_collision -= (distance_to_census/cell_mfp);
 
       // Update the tallies in this zone
-      const double cell_volume = edgedx[cellx]*edgedy[celly];
       update_tallies(
           global_nx, nx, x_off, y_off, particle, ntotal_particles, 
-          distance_to_census, cell_volume, number_density,
+          distance_to_census, inv_cell_volume, number_density,
           microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb, 
           scalar_flux_tally, energy_deposition_tally);
 
@@ -433,10 +426,6 @@ int handle_facet_encounter(
     const double distance_to_facet, int x_facet, int* nparticles_sent, 
     Particle* particle)
 {
-  // We don't need to consider the halo regions in this package
-  int cellx = particle->cell%global_nx;
-  int celly = particle->cell/global_nx;
-
   // TODO: Make sure that the roundoff is handled here, perhaps actually set it
   // fully to one of the edges here
   particle->x += distance_to_facet*particle->omega_x;
@@ -447,16 +436,15 @@ int handle_facet_encounter(
   if(x_facet) {
     if(particle->omega_x > 0.0) {
       // Reflect at the boundary
-      if(cellx >= (global_nx-1)) {
+      if(particle->cellx >= (global_nx-1)) {
         particle->omega_x = -(particle->omega_x);
       }
       else {
         // Definitely moving to right cell
-        cellx += 1;
-        particle->cell = celly*global_nx+cellx;
+        particle->cellx += 1;
 
         // Check if we need to pass to another process
-        if(cellx >= nx+x_off) {
+        if(particle->cellx >= nx+x_off) {
           send_and_mark_particle(neighbours[EAST], particle);
           nparticles_sent[EAST]++;
           return 1;
@@ -464,17 +452,16 @@ int handle_facet_encounter(
       }
     }
     else if(particle->omega_x < 0.0) {
-      if(cellx <= 0) {
+      if(particle->cellx <= 0) {
         // Reflect at the boundary
         particle->omega_x = -(particle->omega_x);
       }
       else {
         // Definitely moving to left cell
-        cellx -= 1;
-        particle->cell = celly*global_nx+cellx;
+        particle->cellx -= 1;
 
         // Check if we need to pass to another process
-        if(cellx < x_off) {
+        if(particle->cellx < x_off) {
           send_and_mark_particle(neighbours[WEST], particle);
           nparticles_sent[WEST]++;
           return 1;
@@ -485,16 +472,15 @@ int handle_facet_encounter(
   else {
     if(particle->omega_y > 0.0) {
       // Reflect at the boundary
-      if(celly >= (global_ny-1)) {
+      if(particle->celly >= (global_ny-1)) {
         particle->omega_y = -(particle->omega_y);
       }
       else {
         // Definitely moving to north cell
-        celly += 1;
-        particle->cell = celly*global_nx+cellx;
+        particle->celly += 1;
 
         // Check if we need to pass to another process
-        if(celly >= ny+y_off) {
+        if(particle->celly >= ny+y_off) {
           send_and_mark_particle(neighbours[NORTH], particle);
           nparticles_sent[NORTH]++;
           return 1;
@@ -503,16 +489,15 @@ int handle_facet_encounter(
     }
     else if(particle->omega_y < 0.0) {
       // Reflect at the boundary
-      if(celly <= 0) {
+      if(particle->celly <= 0) {
         particle->omega_y = -(particle->omega_y);
       }
       else {
         // Definitely moving to south cell
-        celly -= 1;
-        particle->cell = celly*global_nx+cellx;
+        particle->celly -= 1;
 
         // Check if we need to pass to another process
-        if(celly < y_off) {
+        if(particle->celly < y_off) {
           send_and_mark_particle(neighbours[SOUTH], particle);
           nparticles_sent[SOUTH]++;
           return 1;
@@ -547,13 +532,14 @@ void send_and_mark_particle(
 void calc_distance_to_facet(
     const int global_nx, const double x, const double y, const int x_off,
     const int y_off, const double omega_x, const double omega_y,
-    const double particle_velocity, const int cell, double* distance_to_facet,
+    const double particle_velocity, const int particle_cellx, 
+    const int particle_celly, double* distance_to_facet,
     int* x_facet, const double* edgex, const double* edgey)
 {
   // Check the timestep required to move the particle along a single axis
   // If the velocity is positive then the top or right boundary will be hit
-  const int cellx = (cell%global_nx)-x_off+PAD;
-  const int celly = (cell/global_nx)-y_off+PAD;
+  const int cellx = particle_cellx-x_off+PAD;
+  const int celly = particle_celly-y_off+PAD;
   double u_x_inv = 1.0/(omega_x*particle_velocity);
   double u_y_inv = 1.0/(omega_y*particle_velocity);
 
@@ -601,14 +587,14 @@ void calc_distance_to_facet(
 void update_tallies(
     const int global_nx, const int nx, const int x_off, const int y_off, 
     Particle* particle, const int ntotal_particles, const double path_length, 
-    const double cell_volume, const double number_density, 
+    const double inv_cell_volume, const double number_density, 
     const double microscopic_cs_absorb, const double microscopic_cs_total, 
     double* scalar_flux_tally, double* energy_deposition_tally)
 {
   // Store the scalar flux
-  const int cellx = (particle->cell%global_nx)-x_off;
-  const int celly = (particle->cell/global_nx)-y_off;
-  const double scalar_flux = particle->weight*path_length/cell_volume;
+  const int cellx = particle->cellx-x_off;
+  const int celly = particle->celly-y_off;
+  const double scalar_flux = particle->weight*path_length*inv_cell_volume;
 
 #pragma omp atomic update 
   scalar_flux_tally[celly*nx+cellx] += 

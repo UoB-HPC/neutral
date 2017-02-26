@@ -178,7 +178,9 @@ void initialise_particle(
       break;
     }
   }
-  particle->cell = celly*global_nx+cellx;
+
+  particle->cellx = cellx;
+  particle->celly = celly;
 
   // Generating theta has uniform density, however 0.0 and 1.0 produce the same 
   // value which introduces very very very small bias...
