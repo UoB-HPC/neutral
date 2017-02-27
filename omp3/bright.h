@@ -61,13 +61,19 @@ void send_and_mark_particle(
 
 // Tallies both the scalar flux and energy deposition in the cell
 void update_tallies(
-    const int global_nx, const int nx, const int x_off, const int y_off, 
-    Particle* particle, const double inv_ntotal_particles, const double path_length, 
-    const double inv_cell_volume, const double number_density, 
-    const double microscopic_cs_absorb, const double microscopic_cs_total, 
-    double* scalar_flux_tally, double* energy_deposition_tally);
+    const int nx, const int x_off, const int y_off, Particle* particle, 
+    const double inv_ntotal_particles, const double energy_deposition,
+    const double scalar_flux, double* scalar_flux_tally, 
+    double* energy_deposition_tally);
 
 void compress_particle_list(
     const int nparticles_to_process, Particle* particles_start,
     int nparticles_deleted);
+
+// Calculate the energy deposition in the cell
+double calculate_energy_deposition(
+    const int global_nx, const int nx, const int x_off, const int y_off, 
+    Particle* particle, const double inv_ntotal_particles, const double path_length, 
+    const double inv_cell_volume, const double number_density, 
+    const double microscopic_cs_absorb, const double microscopic_cs_total);
 
