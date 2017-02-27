@@ -158,7 +158,8 @@ void handle_particles(
   int ncollisions = 0;
   int nparticles_deleted = 0;
 
-#pragma omp parallel for reduction(+: ncollisions, nfacets, nparticles_deleted) 
+#pragma omp parallel for schedule(guided) \
+  reduction(+: ncollisions, nfacets, nparticles_deleted) 
   for(int pp = 0; pp < nparticles_to_process; ++pp) {
     // Current particle
     Particle* particle = &particles_start[pp];
@@ -176,7 +177,7 @@ void handle_particles(
   }
 
   compress_particle_list(
-    nparticles_to_process, particles_start, nparticles_deleted);
+      nparticles_to_process, particles_start, nparticles_deleted);
 
   // Correct the new total number of particles
   *nparticles -= nparticles_deleted;
@@ -197,6 +198,7 @@ void compress_particle_list(
   // particles and therefore belong to another thread to handle, which will
   // skew the work for the final thread dramatically
 
+#if 0
   int ndeleted = 0;
   int particle_end_index = nparticles_to_process-1;
 #pragma omp parallel for shared(particle_end_index) reduction(+:ndeleted)
@@ -212,6 +214,7 @@ void compress_particle_list(
       ndeleted++;
     }
   }
+#endif // if 0
 }
 
 // Handles an individual particle.
@@ -252,6 +255,8 @@ int handle_particle(
   double macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
   double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
   double particle_velocity = sqrt((2.0*particle->e*eV_TO_J)/PARTICLE_MASS);
+  double scalar_flux = 0.0;
+  double energy_deposition = 0.0;
   const double inv_ntotal_particles = 1.0/(double)ntotal_particles;
 
   // Set time to census and MFPs until collision, unless travelled particle
@@ -279,12 +284,12 @@ int handle_particle(
         distance_to_collision < distance_to_census) {
       (*collisions)++;
 
-      // Update the tallies before the energy is updated
-      update_tallies(
+      // Don't need to tally into mesh on collision
+      scalar_flux += particle->weight*distance_to_collision*inv_cell_volume;
+      energy_deposition += calculate_energy_deposition(
           global_nx, nx, x_off, y_off, particle, inv_ntotal_particles, 
-          distance_to_collision, inv_cell_volume, number_density, 
-          microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb, 
-          scalar_flux_tally, energy_deposition_tally);
+          distance_to_collision, inv_cell_volume, number_density, microscopic_cs_absorb, 
+          microscopic_cs_scatter+microscopic_cs_absorb);
 
       // The cross sections for scattering and absorption were calculated on 
       // a previous iteration for our given energy
@@ -292,6 +297,12 @@ int handle_particle(
             particle, macroscopic_cs_absorb, 
             macroscopic_cs_scatter+macroscopic_cs_absorb, 
             distance_to_collision, rn_pool)) {
+
+        // Need to store tally information as finished with particle
+        update_tallies(
+            nx, x_off, y_off, particle, inv_ntotal_particles, energy_deposition,
+            scalar_flux, scalar_flux_tally, energy_deposition_tally);
+
         return PARTICLE_DEAD;
       }
 
@@ -317,12 +328,17 @@ int handle_particle(
       particle->mfp_to_collision -= (distance_to_facet/cell_mfp);
       particle->dt_to_census -= (distance_to_facet/particle_velocity);
 
-      // Update the tallies in this zone
-      update_tallies(
+      // Don't need to tally into mesh on collision
+      scalar_flux += particle->weight*distance_to_facet*inv_cell_volume;
+      energy_deposition += calculate_energy_deposition(
           global_nx, nx, x_off, y_off, particle, inv_ntotal_particles, 
-          distance_to_facet, inv_cell_volume, number_density,
-          microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb, 
-          scalar_flux_tally, energy_deposition_tally);
+          distance_to_facet, inv_cell_volume, number_density, microscopic_cs_absorb, 
+          microscopic_cs_scatter+microscopic_cs_absorb);
+
+      // Update tallies as we leave a cell
+      update_tallies(
+          nx, x_off, y_off, particle, inv_ntotal_particles, energy_deposition,
+          scalar_flux, scalar_flux_tally, energy_deposition_tally);
 
       // Encounter facet, and jump out if particle left this rank's domain
       if(handle_facet_encounter(
@@ -332,6 +348,8 @@ int handle_particle(
       }
 
       // Update the data based on new cell
+      scalar_flux = 0.0;
+      energy_deposition = 0.0;
       cellx = particle->cellx-x_off+PAD;
       celly = particle->celly-y_off+PAD;
       local_density = density[celly*(nx+2*PAD)+cellx];
@@ -346,13 +364,16 @@ int handle_particle(
       particle->x += distance_to_census*particle->omega_x;
       particle->y += distance_to_census*particle->omega_y;
       particle->mfp_to_collision -= (distance_to_census/cell_mfp);
-
-      // Update the tallies in this zone
-      update_tallies(
+      scalar_flux += particle->weight*distance_to_census*inv_cell_volume;
+      energy_deposition += calculate_energy_deposition(
           global_nx, nx, x_off, y_off, particle, inv_ntotal_particles, 
-          distance_to_census, inv_cell_volume, number_density,
-          microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb, 
-          scalar_flux_tally, energy_deposition_tally);
+          distance_to_census, inv_cell_volume, number_density, microscopic_cs_absorb, 
+          microscopic_cs_scatter+microscopic_cs_absorb);
+
+      // Need to store tally information as finished with particle
+      update_tallies(
+          nx, x_off, y_off, particle, inv_ntotal_particles, energy_deposition,
+          scalar_flux, scalar_flux_tally, energy_deposition_tally);
 
       particle->dt_to_census = 0.0;
       break;
@@ -360,6 +381,26 @@ int handle_particle(
   }
 
   return PARTICLE_CENSUS;
+}
+
+// Tallies both the scalar flux and energy deposition in the cell
+void update_tallies(
+    const int nx, const int x_off, const int y_off, Particle* particle, 
+    const double inv_ntotal_particles, const double energy_deposition,
+    const double scalar_flux, double* scalar_flux_tally, 
+    double* energy_deposition_tally)
+{
+  // Store the scalar flux
+  const int cellx = particle->cellx-x_off;
+  const int celly = particle->celly-y_off;
+
+#pragma omp atomic update 
+  scalar_flux_tally[celly*nx+cellx] += 
+    scalar_flux*inv_ntotal_particles; 
+
+#pragma omp atomic update
+  energy_deposition_tally[celly*nx+cellx] += 
+    energy_deposition*inv_ntotal_particles;
 }
 
 // Handle the collision event, including absorption and scattering
@@ -582,22 +623,13 @@ void calc_distance_to_facet(
   }
 }
 
-// Tallies both the scalar flux and energy deposition in the cell
-void update_tallies(
+// Calculate the energy deposition in the cell
+double calculate_energy_deposition(
     const int global_nx, const int nx, const int x_off, const int y_off, 
     Particle* particle, const double inv_ntotal_particles, const double path_length, 
     const double inv_cell_volume, const double number_density, 
-    const double microscopic_cs_absorb, const double microscopic_cs_total, 
-    double* scalar_flux_tally, double* energy_deposition_tally)
+    const double microscopic_cs_absorb, const double microscopic_cs_total)
 {
-  // Store the scalar flux
-  const int cellx = particle->cellx-x_off;
-  const int celly = particle->celly-y_off;
-  const double scalar_flux = particle->weight*path_length*inv_cell_volume;
-
-#pragma omp atomic update 
-  scalar_flux_tally[celly*nx+cellx] += scalar_flux*inv_ntotal_particles; 
-
   // Calculate the energy deposition based on the path length
   const double average_exit_energy_absorb = 0.0;
   const double absorption_heating = 
@@ -608,12 +640,8 @@ void update_tallies(
     (1.0-(microscopic_cs_absorb/microscopic_cs_total))*average_exit_energy_scatter;
   const double heating_response =
     (particle->e-scattering_heating-absorption_heating);
-  const double energy_deposition = 
-    particle->weight*path_length*(microscopic_cs_total*BARNS)*
+  return particle->weight*path_length*(microscopic_cs_total*BARNS)*
     heating_response*number_density;
-
-#pragma omp atomic update
-  energy_deposition_tally[celly*nx+cellx] += energy_deposition*inv_ntotal_particles;
 }
 
 // Fetch the cross section for a particular energy value
