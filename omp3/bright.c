@@ -202,7 +202,6 @@ void compress_particle_list(
   // particles and therefore belong to another thread to handle, which will
   // skew the work for the final thread dramatically
 
-  int ndeleted = 0;
   int particle_end_index = nparticles_to_process-1;
 #pragma omp parallel for shared(particle_end_index) 
   for(int pp = 0; pp < nparticles_to_process; ++pp) {
