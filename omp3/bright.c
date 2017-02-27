@@ -164,6 +164,10 @@ void handle_particles(
     // Current particle
     Particle* particle = &particles_start[pp];
 
+    if(particle->dead) {
+      continue;
+    }
+
     prepare_rn_pool(&rn_pools[omp_get_thread_num()], particle->key);
 
     const int result = handle_particle(
@@ -198,10 +202,9 @@ void compress_particle_list(
   // particles and therefore belong to another thread to handle, which will
   // skew the work for the final thread dramatically
 
-#if 0
   int ndeleted = 0;
   int particle_end_index = nparticles_to_process-1;
-#pragma omp parallel for shared(particle_end_index) reduction(+:ndeleted)
+#pragma omp parallel for shared(particle_end_index) 
   for(int pp = 0; pp < nparticles_to_process; ++pp) {
     if(particles_start[pp].dead) {
       // Acquire a particle to swap in
@@ -211,10 +214,8 @@ void compress_particle_list(
       particle_swap_index = particle_end_index--;
 
       particles_start[pp] = particles_start[particle_swap_index];
-      ndeleted++;
     }
   }
-#endif // if 0
 }
 
 // Handles an individual particle.
@@ -288,8 +289,8 @@ int handle_particle(
       scalar_flux += particle->weight*distance_to_collision*inv_cell_volume;
       energy_deposition += calculate_energy_deposition(
           global_nx, nx, x_off, y_off, particle, inv_ntotal_particles, 
-          distance_to_collision, inv_cell_volume, number_density, microscopic_cs_absorb, 
-          microscopic_cs_scatter+microscopic_cs_absorb);
+          distance_to_collision, inv_cell_volume, number_density, 
+          microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb);
 
       // The cross sections for scattering and absorption were calculated on 
       // a previous iteration for our given energy
