@@ -154,9 +154,9 @@ void plot_particle_density(
   }
 
   for(int ii = 0; ii < nparticles; ++ii) {
-    Particle* particle = &bright_data->local_particles[ii];
-    const int cellx = particle->cellx-mesh->x_off;
-    const int celly = particle->celly-mesh->y_off;
+    Particles* particles = bright_data->local_particles;
+    const int cellx = particles->cellx[ii]-mesh->x_off;
+    const int celly = particles->celly[ii]-mesh->y_off;
     temp[celly*(mesh->local_nx-2*PAD)+cellx] += 1.0;
   }
 

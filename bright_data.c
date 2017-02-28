@@ -17,12 +17,12 @@ void initialise_cross_sections(
 
 // Initialises a new particle ready for tracking
 void initialise_particle(
-    const int global_nx, const int local_nx, const int local_ny, 
+    const int index, const int global_nx, const int local_nx, const int local_ny, 
     const double local_particle_left_off, const double local_particle_bottom_off, 
     const double local_particle_width, const double local_particle_height, 
     const int x_off, const int y_off, const double dt, const double* edgex, 
     const double* edgey, const double initial_energy, RNPool* rn_pool, 
-    Particle* particle);
+    Particles* particles);
 
 // Initialises all of the Bright-specific data structures.
 void initialise_bright_data(
@@ -94,9 +94,48 @@ void initialise_bright_data(
   // TODO: SHOULD PROBABLY PERFORM A REDUCTION OVER THE NUMBER OF LOCAL PARTICLES
   // TO MAKE SURE THAT THEY ALL SUM UP TO THE CORRECT VALUE!
 
-  // TODO: THIS ESTIMATE OF THE PARTICLE POPULATION NEEDS TO BE IMPROVED!
+  // THIS IS A LOT OF DATA...
   bright_data->local_particles = 
-    (Particle*)malloc(sizeof(Particle)*bright_data->nparticles*2);
+    (Particles*)malloc(sizeof(Particles));
+  bright_data->local_particles->x = 
+    (double*)malloc(sizeof(double)*bright_data->nparticles*1.5);
+  bright_data->local_particles->y = 
+    (double*)malloc(sizeof(double)*bright_data->nparticles*1.5);
+  bright_data->local_particles->omega_x = 
+    (double*)malloc(sizeof(double)*bright_data->nparticles*1.5);
+  bright_data->local_particles->omega_y = 
+    (double*)malloc(sizeof(double)*bright_data->nparticles*1.5);
+  bright_data->local_particles->e = 
+    (double*)malloc(sizeof(double)*bright_data->nparticles*1.5);
+  bright_data->local_particles->weight = 
+    (double*)malloc(sizeof(double)*bright_data->nparticles*1.5);
+  bright_data->local_particles->dt_to_census = 
+    (double*)malloc(sizeof(double)*bright_data->nparticles*1.5);
+  bright_data->local_particles->mfp_to_collision = 
+    (double*)malloc(sizeof(double)*bright_data->nparticles*1.5);
+  bright_data->local_particles->distance_to_facet = 
+    (double*)malloc(sizeof(double)*bright_data->nparticles*1.5);
+  bright_data->local_particles->microscopic_cs_absorb = 
+    (double*)malloc(sizeof(double)*bright_data->nparticles*1.5);
+  bright_data->local_particles->microscopic_cs_scatter = 
+    (double*)malloc(sizeof(double)*bright_data->nparticles*1.5);
+  bright_data->local_particles->local_density = 
+    (double*)malloc(sizeof(double)*bright_data->nparticles*1.5);
+  bright_data->local_particles->cell_mfp = 
+    (double*)malloc(sizeof(double)*bright_data->nparticles*1.5);
+  bright_data->local_particles->x_facet = 
+    (int*)malloc(sizeof(int)*bright_data->nparticles*1.5);
+  bright_data->local_particles->cellx = 
+    (int*)malloc(sizeof(int)*bright_data->nparticles*1.5);
+  bright_data->local_particles->celly = 
+    (int*)malloc(sizeof(int)*bright_data->nparticles*1.5);
+  bright_data->local_particles->scatter_cs_index = 
+    (int*)malloc(sizeof(int)*bright_data->nparticles*1.5);
+  bright_data->local_particles->absorb_cs_index = 
+    (int*)malloc(sizeof(int)*bright_data->nparticles*1.5);
+  bright_data->local_particles->next_event = 
+    (int*)malloc(sizeof(int)*bright_data->nparticles*1.5);
+
   if(!bright_data->local_particles) {
     TERMINATE("Could not allocate particle array.\n");
   }
@@ -140,35 +179,34 @@ void inject_particles(
     const double local_particle_left_off, const double local_particle_bottom_off,
     const double local_particle_width, const double local_particle_height, 
     const int nparticles, const double initial_energy, RNPool* rn_pools,
-    Particle* particles)
+    Particles* particles)
 {
   START_PROFILING(&compute_profile);
 
  #pragma omp parallel for
   for(int ii = 0; ii < nparticles; ++ii) {
     initialise_particle(
-        mesh->global_nx, local_nx, local_ny, local_particle_left_off, 
+        ii, mesh->global_nx, local_nx, local_ny, local_particle_left_off, 
         local_particle_bottom_off, local_particle_width, local_particle_height, 
         mesh->x_off, mesh->y_off, mesh->dt, mesh->edgex, mesh->edgey, 
-        initial_energy, &rn_pools[omp_get_thread_num()], &particles[ii]);
-    particles[ii].key = ii;
+        initial_energy, &rn_pools[omp_get_thread_num()], particles);
   }
   STOP_PROFILING(&compute_profile, "initialising particles");
 }
 
 // Initialises a new particle ready for tracking
 void initialise_particle(
-    const int global_nx, const int local_nx, const int local_ny, 
+    const int index, const int global_nx, const int local_nx, const int local_ny, 
     const double local_particle_left_off, const double local_particle_bottom_off, 
     const double local_particle_width, const double local_particle_height, 
     const int x_off, const int y_off, const double dt, const double* edgex, 
     const double* edgey, const double initial_energy, RNPool* rn_pool, 
-    Particle* particle)
+    Particles* particles)
 {
   // Set the initial nandom location of the particle inside the source region
-  particle->x = local_particle_left_off + 
+  particles->x[index] = local_particle_left_off + 
     getrand(rn_pool)*local_particle_width;
-  particle->y = local_particle_bottom_off + 
+  particles->y[index] = local_particle_bottom_off + 
     getrand(rn_pool)*local_particle_height;
 
   // Check the location of the specific cell that the particle sits within.
@@ -176,37 +214,39 @@ void initialise_particle(
   int cellx = 0;
   int celly = 0;
   for(int ii = 0; ii < local_nx; ++ii) {
-    if(particle->x >= edgex[ii+PAD] && particle->x < edgex[ii+PAD+1]) {
+    if(particles->x[index] >= edgex[ii+PAD] && 
+        particles->x[index] < edgex[ii+PAD+1]) {
       cellx = x_off+ii;
       break;
     }
   }
   for(int ii = 0; ii < local_ny; ++ii) {
-    if(particle->y >= edgey[ii+PAD] && particle->y < edgey[ii+PAD+1]) {
+    if(particles->y[index] >= edgey[ii+PAD] && 
+        particles->y[index] < edgey[ii+PAD+1]) {
       celly = y_off+ii;
       break;
     }
   }
 
-  particle->cellx = cellx;
-  particle->celly = celly;
+  particles->cellx[index] = cellx;
+  particles->celly[index] = celly;
 
   // Generating theta has uniform density, however 0.0 and 1.0 produce the same 
   // value which introduces very very very small bias...
   const double theta = 2.0*M_PI*getrand(rn_pool);
-  particle->omega_x = cos(theta);
-  particle->omega_y = sin(theta);
+  particles->omega_x[index] = cos(theta);
+  particles->omega_y[index] = sin(theta);
 
   // This approximation sets mono-energetic initial state for source particles  
-  particle->e = initial_energy;
+  particles->e[index] = initial_energy;
 
   // Set a weight for the particle to track absorption
-  particle->weight = 1.0;
-  particle->dt_to_census = dt;
-  particle->mfp_to_collision = 0.0;
-  particle->scatter_cs_index = -1;
-  particle->absorb_cs_index = -1;
-  particle->next_event = FACET;
+  particles->weight[index] = 1.0;
+  particles->dt_to_census[index] = dt;
+  particles->mfp_to_collision[index] = 0.0;
+  particles->scatter_cs_index[index] = -1;
+  particles->absorb_cs_index[index] = -1;
+  particles->next_event[index] = FACET;
 }
 
 // Reads in a cross-sectional data file

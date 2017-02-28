@@ -38,28 +38,27 @@ typedef struct {
 
 // Represents an individual particle
 typedef struct {
-  double x;                  // x position in space
-  double y;                  // y position in space
-  double omega_x;            // x direction
-  double omega_y;            // y direction
-  double e;                  // energy
-  double weight;             // weight of the particle
-  double dt_to_census;       // the time until census is reached
-  double mfp_to_collision;   // the mean free paths until a collision
-  double distance_to_facet;  // the distance until a facet is encountered
-  double microscopic_cs_scatter;
-  double microscopic_cs_absorb;
-  double local_density;
-  double cell_mfp;
-  uint64_t key;
-  int x_facet;
-  int cellx;
-  int celly;
-  int scatter_cs_index;
-  int absorb_cs_index;
-  int next_event;
+  double* x;                  // x position in space
+  double* y;                  // y position in space
+  double* omega_x;            // x direction
+  double* omega_y;            // y direction
+  double* e;                  // energy
+  double* weight;             // weight of the particle
+  double* dt_to_census;       // the time until census is reached
+  double* mfp_to_collision;   // the mean free paths until a collision
+  double* distance_to_facet;  // the distance until a facet is encountered
+  double* microscopic_cs_scatter;
+  double* microscopic_cs_absorb;
+  double* local_density;
+  double* cell_mfp;
+  int* x_facet;
+  int* cellx;
+  int* celly;
+  int* scatter_cs_index;
+  int* absorb_cs_index;
+  int* next_event;
 
-} Particle;
+} Particles;
 
 enum { COLLISION, FACET, CENSUS, DEAD };
 
@@ -67,7 +66,7 @@ enum { COLLISION, FACET, CENSUS, DEAD };
 typedef struct {
   CrossSection* cs_scatter_table;
   CrossSection* cs_absorb_table;
-  Particle* local_particles;
+  Particles* local_particles;
   RNPool* rn_pools;
 
   double initial_energy;
@@ -100,5 +99,5 @@ void inject_particles(
     const double local_particle_left_off, const double local_particle_bottom_off,
     const double local_particle_width, const double local_particle_height, 
     const int nparticles, const double initial_energy, RNPool* rn_pool,
-    Particle* particles);
+    Particles* particles);
 
