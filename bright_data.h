@@ -47,8 +47,12 @@ typedef struct {
   double dt_to_census;       // the time until census is reached
   double mfp_to_collision;   // the mean free paths until a collision
   double distance_to_facet;  // the distance until a facet is encountered
-  int x_facet;
+  double microscopic_cs_scatter;
+  double microscopic_cs_absorb;
+  double local_density;
+  double cell_mfp;
   uint64_t key;
+  int x_facet;
   int cellx;
   int celly;
   int scatter_cs_index;
