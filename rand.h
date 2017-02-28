@@ -17,8 +17,7 @@ typedef struct {
 } RNPool;
 
 // Initialises the random number pool
-void init_rn_pool(RNPool* rn_pool, const uint64_t master_key, 
-    const int nrandom_numbers);
+void init_rn_pool(RNPool* rn_pool, const uint64_t master_key);
 
 // Prepare the random number pool
 void prepare_rn_pool(

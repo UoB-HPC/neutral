@@ -1,11 +1,11 @@
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include "bright_data.h"
 #include "rand.h"
 
 // Initialises the random number pool
-void init_rn_pool(RNPool* rn_pool, const uint64_t master_key, 
-    const int nrandom_numbers)
+void init_rn_pool(RNPool* rn_pool, const uint64_t master_key)
 {
   // The master key is necessary to stop the particles seeing the same RN stream
   // every time the pool is reset
@@ -14,13 +14,7 @@ void init_rn_pool(RNPool* rn_pool, const uint64_t master_key,
   rn_pool->counter.v[0] = 0;
   rn_pool->counter.v[1] = 0;
   rn_pool->available = 0;
-
-  if(rn_pool->buf_len < nrandom_numbers) {
-    // Reallocate the random number space to be larger
-    rn_pool->buf_len = max(rn_pool->buf_len, nrandom_numbers);
-    free(rn_pool->buffer);
-    rn_pool->buffer = (double*)malloc(sizeof(double)*1.5*nrandom_numbers);
-  }
+  rn_pool->buf_len = 0;
 }
 
 // Prepare the random number pool
@@ -30,6 +24,15 @@ void prepare_rn_pool(
   rn_pool->counter.v[0] = 0;
   rn_pool->counter.v[1] = 0;
   rn_pool->key.v[0] = key;
+
+  if(rn_pool->buf_len < nrandom_numbers) {
+    printf("reallocing rn pool\n");
+    // Reallocate the random number space to be larger
+    free(rn_pool->buffer);
+    rn_pool->buf_len = max(rn_pool->buf_len, nrandom_numbers);
+    rn_pool->buffer = (double*)malloc(sizeof(double)*1.5*nrandom_numbers);
+  }
+
   fill_rn_buffer(rn_pool, nrandom_numbers);
 }
 

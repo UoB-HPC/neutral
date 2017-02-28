@@ -58,9 +58,6 @@ int main(int argc, char** argv)
   // Initialise enough pools for every thread and a master pool
   RNPool* rn_pools = (RNPool*)malloc(sizeof(RNPool)*(bright_data.nthreads+1));
 
-  // Initialise the master rn pool
-  init_rn_pool(&rn_pools[bright_data.nthreads], 0xfffff);
-
   // Perform the general initialisation steps for the mesh etc
   initialise_mpi(argc, argv, &mesh.rank, &mesh.nranks);
   initialise_devices(mesh.rank);

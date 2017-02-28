@@ -35,6 +35,10 @@ void initialise_bright_data(
   bright_data->initial_energy = 
     get_double_parameter("initial_energy", bright_data->neutral_params_filename);
 
+  // There are three genrand calls in the subsequent initialisation
+  init_rn_pool(rn_pool, 0xfffff);
+  prepare_rn_pool(rn_pool, 0xfffff, bright_data->nparticles*(NRANDOM_NUMBERS+1));
+
   int nkeys = 0;
   char* keys = (char*)malloc(sizeof(char)*MAX_KEYS*MAX_STR_LEN);
   double* values = (double*)malloc(sizeof(double)*MAX_KEYS);
