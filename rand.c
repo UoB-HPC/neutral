@@ -29,8 +29,9 @@ void prepare_rn_pool(
     printf("reallocing rn pool\n");
     // Reallocate the random number space to be larger
     free(rn_pool->buffer);
-    rn_pool->buf_len = max(rn_pool->buf_len, nrandom_numbers);
-    rn_pool->buffer = (double*)malloc(sizeof(double)*1.5*nrandom_numbers);
+    const int realloc_size = 1.5*nrandom_numbers;
+    rn_pool->buf_len = realloc_size;
+    rn_pool->buffer = (double*)malloc(sizeof(double)*realloc_size);
   }
 
   fill_rn_buffer(rn_pool, nrandom_numbers);
