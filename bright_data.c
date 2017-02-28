@@ -204,7 +204,9 @@ void initialise_particle(
   particle->weight = 1.0;
   particle->dt_to_census = dt;
   particle->mfp_to_collision = 0.0;
-  particle->dead = 0;
+  particle->scatter_cs_index = -1;
+  particle->absorb_cs_index = -1;
+  particle->next_event = FACET;
 }
 
 // Reads in a cross-sectional data file
