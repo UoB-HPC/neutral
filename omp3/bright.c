@@ -144,18 +144,121 @@ void handle_particles(
     CrossSection* cs_absorb_table, double* scalar_flux_tally, 
     double* energy_deposition_tally, RNPool* rn_pools)
 {
-  // Have to maintain a master key, so that particles don't keep seeing
-  // the same random number streams. 
-  // TODO: THIS IS NOT GOING TO WORK WITH MPI...
-  (*master_key)++;
-#pragma omp parallel 
-  {
-    // Set up each of the pools with the correct master key
-    init_rn_pool(&rn_pools[omp_get_thread_num()], (*master_key));
+  // Initialise all particles to the correct census time
+#pragma omp parallel for
+  for(int ii = 0; ii < ntotal_particles; ++ii) {
+    particles_start[ii].dt_to_census = dt;
   }
 
-  int nfacets = 0;
-  int ncollisions = 0;
+  int nthreads;
+#pragma omp parallel
+  {
+    nthreads = omp_get_num_threads();
+  }
+
+  // An event per particle
+  int* events = (int*)malloc(sizeof(int)*ntotal_particles);
+
+  int nfacets = 1;
+  int ncollisions = 1;
+  while(nfacets && ncollisions) {
+    // Generate NRANDOM_NUMBER random numbers per particle...
+    (*master_key)++;
+    init_rn_pool(
+        &rn_pools[nthreads+1], (*master_key), ntotal_particles*NRANDOM_NUMBERS);
+
+    // Calculate the distance of the current particle to the facet
+#pragma omp parallel for
+    for(int ii = 0; ii < ntotal_particles; ++ii) {
+      Particle* particle = &particles_start[ii];
+
+      double particle_velocity = sqrt((2.0*particle->e*eV_TO_J)/PARTICLE_MASS);
+
+      // Check the timestep required to move the particle along a single axis
+      // If the velocity is positive then the top or right boundary will be hit
+      const int cellx = particle->cellx-x_off+PAD;
+      const int celly = particle->celly-y_off+PAD;
+      double u_x_inv = 1.0/(particle->omega_x*particle_velocity);
+      double u_y_inv = 1.0/(particle->omega_y*particle_velocity);
+
+      // The bound is open on the left and bottom so we have to correct for this and
+      // required the movement to the facet to go slightly further than the edge
+      // in the calculated values, using OPEN_BOUND_CORRECTION, which is the smallest
+      // possible distance we can be from the closed bound e.g. 1.0e-14.
+      double dt_x = (particle->omega_x >= 0.0)
+        ? ((edgex[cellx+1])-particle->x)*u_x_inv
+        : ((edgex[cellx]-OPEN_BOUND_CORRECTION)-particle->x)*u_x_inv;
+      double dt_y = (particle->omega_y >= 0.0)
+        ? ((edgey[celly+1])-particle->y)*u_y_inv
+        : ((edgey[celly]-OPEN_BOUND_CORRECTION)-particle->y)*u_y_inv;
+
+      // Calculated the projection to be
+      // a = vector on first edge to be hit
+      // u = velocity vector
+
+      double mag_u0 = particle_velocity;
+
+      if(dt_x < dt_y) {
+        // cos(theta) = ||(x, 0)||/||(u_x', u_y')|| - u' is u at boundary
+        // cos(theta) = (x.u)/(||x||.||u||)
+        // x_x/||u'|| = (x_x, 0)*(u_x, u_y) / (x_x.||u||)
+        // x_x/||u'|| = (x_x.u_x / x_x.||u||)
+        // x_x/||u'|| = u_x/||u||
+        // ||u'|| = (x_x.||u||)/u_x
+        // We are centered on the origin, so the y component is 0 after travelling
+        // aint the x axis to the edge (ax, 0).(x, y)
+        particle->distance_to_facet = (particle->omega_x >= 0.0)
+          ? ((edgex[cellx+1])-particle->x)*mag_u0*u_x_inv
+          : ((edgex[cellx]-OPEN_BOUND_CORRECTION)-particle->x)*mag_u0*u_x_inv;
+      }
+      else {
+        // We are centered on the origin, so the x component is 0 after travelling
+        // along the y axis to the edge (0, ay).(x, y)
+        particle->distance_to_facet = (particle->omega_y >= 0.0)
+          ? ((edgey[celly+1])-particle->y)*mag_u0*u_y_inv
+          : ((edgey[celly]-OPEN_BOUND_CORRECTION)-particle->y)*mag_u0*u_y_inv;
+      }
+    }
+
+    // Determine which particles will handle which events...
+#pragma omp parallel for
+    for(int ii = 0; ii < ntotal_particles; ++ii) {
+      Particle* particle;
+      int cellx = particle->cellx-x_off+PAD;
+      int celly = particle->celly-y_off+PAD;
+      int scatter_cs_index = -1;
+      int absorb_cs_index = -1;
+      double local_density = density[celly*(nx+2*PAD)+cellx];
+      double microscopic_cs_scatter = 
+        microscopic_cs_for_energy(cs_scatter_table, particle->e, &scatter_cs_index);
+      double microscopic_cs_absorb = 
+        microscopic_cs_for_energy(cs_absorb_table, particle->e, &absorb_cs_index);
+      double number_density = (local_density*AVOGADROS/MOLAR_MASS);
+      double macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
+      double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
+      double rn0 = rn_pools[nthreads+1].buffer[ii];
+      double particle_velocity = sqrt((2.0*particle->e*eV_TO_J)/PARTICLE_MASS);
+      particle->mfp_to_collision = -log(rn0)/macroscopic_cs_scatter;
+
+      double cell_mfp = 1.0/(macroscopic_cs_scatter+macroscopic_cs_absorb);
+      const double distance_to_collision = particle->mfp_to_collision*cell_mfp;
+      const double distance_to_census = particle_velocity*particle->dt_to_census;
+
+      if(distance_to_collision < distance_to_census && 
+          distance_to_collision < particle->distance_to_facet) {
+        events[ii] = COLLISION;
+      }
+      else if(particle->distance_to_facet < distance_to_census) {
+        events[ii] = FACET;
+      }
+      else {
+        events[ii] = CENSUS;
+      }
+    }
+  }
+
+  int nfacets_total = 0;
+  int ncollisions_total = 0;
   int nparticles_deleted = 0;
 
 #pragma omp parallel for schedule(guided) \
@@ -168,7 +271,8 @@ void handle_particles(
       continue;
     }
 
-    prepare_rn_pool(&rn_pools[omp_get_thread_num()], particle->key);
+    prepare_rn_pool(
+        &rn_pools[omp_get_thread_num()], particle->key, );
 
     const int result = handle_particle(
         global_nx, global_ny, nx, ny, x_off, y_off, neighbours, dt, initial,
@@ -190,31 +294,6 @@ void handle_particles(
 
   printf("handled %d particles, with %d particles deleted\n", 
       nparticles_to_process, nparticles_deleted);
-}
-
-void compress_particle_list(
-    const int nparticles_to_process, Particle* particles_start,
-    int nparticles_deleted)
-{
-  // The reason that we decouple this and do it after the main particle loop
-  // is because otherwise we could be in a situation where the particles
-  // that the thread attempts to select are at the end of this list of 
-  // particles and therefore belong to another thread to handle, which will
-  // skew the work for the final thread dramatically
-
-  int particle_end_index = nparticles_to_process-1;
-#pragma omp parallel for shared(particle_end_index) 
-  for(int pp = 0; pp < nparticles_to_process; ++pp) {
-    if(particles_start[pp].dead) {
-      // Acquire a particle to swap in
-      int particle_swap_index;
-
-#pragma omp atomic capture
-      particle_swap_index = particle_end_index--;
-
-      particles_start[pp] = particles_start[particle_swap_index];
-    }
-  }
 }
 
 // Handles an individual particle.
@@ -568,61 +647,6 @@ void send_and_mark_particle(
 #endif
 }
 
-// Calculate the distance to the next facet
-void calc_distance_to_facet(
-    const int global_nx, const double x, const double y, const int x_off,
-    const int y_off, const double omega_x, const double omega_y,
-    const double particle_velocity, const int particle_cellx, 
-    const int particle_celly, double* distance_to_facet,
-    int* x_facet, const double* edgex, const double* edgey)
-{
-  // Check the timestep required to move the particle along a single axis
-  // If the velocity is positive then the top or right boundary will be hit
-  const int cellx = particle_cellx-x_off+PAD;
-  const int celly = particle_celly-y_off+PAD;
-  double u_x_inv = 1.0/(omega_x*particle_velocity);
-  double u_y_inv = 1.0/(omega_y*particle_velocity);
-
-  // The bound is open on the left and bottom so we have to correct for this and
-  // required the movement to the facet to go slightly further than the edge
-  // in the calculated values, using OPEN_BOUND_CORRECTION, which is the smallest
-  // possible distance we can be from the closed bound e.g. 1.0e-14.
-  double dt_x = (omega_x >= 0.0)
-    ? ((edgex[cellx+1])-x)*u_x_inv
-    : ((edgex[cellx]-OPEN_BOUND_CORRECTION)-x)*u_x_inv;
-  double dt_y = (omega_y >= 0.0)
-    ? ((edgey[celly+1])-y)*u_y_inv
-    : ((edgey[celly]-OPEN_BOUND_CORRECTION)-y)*u_y_inv;
-  *x_facet = (dt_x < dt_y) ? 1 : 0;
-
-  // Calculated the projection to be
-  // a = vector on first edge to be hit
-  // u = velocity vector
-
-  double mag_u0 = particle_velocity;
-
-  if(*x_facet) {
-    // cos(theta) = ||(x, 0)||/||(u_x', u_y')|| - u' is u at boundary
-    // cos(theta) = (x.u)/(||x||.||u||)
-    // x_x/||u'|| = (x_x, 0)*(u_x, u_y) / (x_x.||u||)
-    // x_x/||u'|| = (x_x.u_x / x_x.||u||)
-    // x_x/||u'|| = u_x/||u||
-    // ||u'|| = (x_x.||u||)/u_x
-    // We are centered on the origin, so the y component is 0 after travelling
-    // aint the x axis to the edge (ax, 0).(x, y)
-    *distance_to_facet = (omega_x >= 0.0)
-      ? ((edgex[cellx+1])-x)*mag_u0*u_x_inv
-      : ((edgex[cellx]-OPEN_BOUND_CORRECTION)-x)*mag_u0*u_x_inv;
-  }
-  else {
-    // We are centered on the origin, so the x component is 0 after travelling
-    // along the y axis to the edge (0, ay).(x, y)
-    *distance_to_facet = (omega_y >= 0.0)
-      ? ((edgey[celly+1])-y)*mag_u0*u_y_inv
-      : ((edgey[celly]-OPEN_BOUND_CORRECTION)-y)*mag_u0*u_y_inv;
-  }
-}
-
 // Calculate the energy deposition in the cell
 double calculate_energy_deposition(
     const int global_nx, const int nx, const int x_off, const int y_off, 
@@ -728,4 +752,31 @@ void validate(
   free(keys);
   free(values);
 }
+
+#if 0
+void compress_particle_list(
+    const int nparticles_to_process, Particle* particles_start,
+    int nparticles_deleted)
+{
+  // The reason that we decouple this and do it after the main particle loop
+  // is because otherwise we could be in a situation where the particles
+  // that the thread attempts to select are at the end of this list of 
+  // particles and therefore belong to another thread to handle, which will
+  // skew the work for the final thread dramatically
+
+  int particle_end_index = nparticles_to_process-1;
+#pragma omp parallel for shared(particle_end_index) 
+  for(int pp = 0; pp < nparticles_to_process; ++pp) {
+    if(particles_start[pp].dead) {
+      // Acquire a particle to swap in
+      int particle_swap_index;
+
+#pragma omp atomic capture
+      particle_swap_index = particle_end_index--;
+
+      particles_start[pp] = particles_start[particle_swap_index];
+    }
+  }
+}
+#endif // if 0
 
