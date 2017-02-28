@@ -52,6 +52,9 @@ typedef struct {
   int cellx;
   int celly;
   int dead;
+  int scatter_cs_index;
+  int absorb_cs_index;
+  int next_event;
 
 } Particle;
 
@@ -62,12 +65,15 @@ typedef struct {
   CrossSection* cs_scatter_table;
   CrossSection* cs_absorb_table;
   Particle* local_particles;
+  RNPool* rn_pools;
 
   double initial_energy;
 
   int nthreads;
   int nparticles;
   int nlocal_particles;
+  int nrn_pools;
+  int rn_pool_master_index;
 
   double* scalar_flux_tally;
   double* energy_deposition_tally;
@@ -83,7 +89,7 @@ MPI_Datatype particle_type;
 
 // Initialises all of the Bright-specific data structures.
 void initialise_bright_data(
-    BrightData* bright_data, Mesh* mesh, RNPool* rn_pool);
+    BrightData* bright_data, Mesh* mesh);
 
 // Acts as a particle source
 void inject_particles(

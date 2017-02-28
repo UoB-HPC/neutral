@@ -4,47 +4,63 @@
 #include "bright_data.h"
 #include "rand.h"
 
-// Initialises the random number pool
-void init_rn_pool(RNPool* rn_pool, const uint64_t master_key)
-{
-  // The master key is necessary to stop the particles seeing the same RN stream
-  // every time the pool is reset
-  rn_pool->key.v[0] = 0;
-  rn_pool->key.v[1] = master_key;
-  rn_pool->counter.v[0] = 0;
-  rn_pool->counter.v[1] = 0;
-  rn_pool->available = 0;
-  rn_pool->buf_len = 0;
-}
+// Generates NRANDOM_NUMBERS and places them in the buffer
+void generate_random_numbers(
+    RNPool* rn_pool, int index, uint64_t counter_start);
 
 // Prepare the random number pool
-void prepare_rn_pool(
-    RNPool* rn_pool, const uint64_t key, const int nrandom_numbers)
+void init_rn_pools(
+    RNPool* rn_pools, const int nrn_pools, const int buf_len)
 {
-  rn_pool->counter.v[0] = 0;
-  rn_pool->counter.v[1] = 0;
-  rn_pool->key.v[0] = key;
-
-  if(rn_pool->buf_len < nrandom_numbers) {
-    printf("reallocing rn pool\n");
-    // Reallocate the random number space to be larger
-    free(rn_pool->buffer);
-    const int realloc_size = 1.5*nrandom_numbers;
-    rn_pool->buf_len = realloc_size;
-    rn_pool->buffer = (double*)malloc(sizeof(double)*realloc_size);
+  // Initialise all pools to some sensible default state
+  for(int ii = 0; ii < nrn_pools; ++ii) {
+    rn_pools[ii].key.v[0] = 0;
+    rn_pools[ii].key.v[1] = ii;
+    rn_pools[ii].counter.v[0] = 0;
+    rn_pools[ii].counter.v[1] = 0;
+    rn_pools[ii].available = 0;
+    rn_pools[ii].buf_len = 0;
+    rn_pools[ii].master = 0;
+    rn_pools[ii].buffer = NULL;
   }
 
-  fill_rn_buffer(rn_pool, nrandom_numbers);
+  // Setup the master pool to have access to the whole random number buffer
+  const int nnon_master_pools = (nrn_pools-1);
+  const int master_pool_index = nnon_master_pools;
+
+  double* buffer = (double*)malloc(sizeof(double)*buf_len);
+  rn_pools[master_pool_index].buffer = buffer;
+  rn_pools[master_pool_index].buf_len = buf_len;
+  rn_pools[master_pool_index].buf_index = 0;
+  rn_pools[master_pool_index].master = 1;
+
+  // Give each of the non master random number pools an allocation in the
+  // global space
+  const int nlocal_slots = buf_len/nnon_master_pools;
+  for(int ii = 0; ii < nnon_master_pools; ++ii) {
+    rn_pools[ii].buffer = buffer;
+    rn_pools[ii].buf_len = nlocal_slots;
+    rn_pools[ii].buf_index = ii*nlocal_slots;
+  }
+}
+
+// Updates the master key of the set of rn pools
+void update_rn_pool_master_keys(
+    RNPool* rn_pools, const int nrn_pools, uint64_t master_key)
+{
+  for(int ii = 0; ii < nrn_pools; ++ii) {
+    rn_pools[ii].key.v[0] = master_key;
+  }
 }
 
 // Generates a random number used the Random 123 library
-double genrand(RNPool* rn_pool)
+double getrand(RNPool* rn_pool)
 {
   // If we have run out of space, just generate the minimum required number 
   // of random numbers
   if(!rn_pool->available) {
     // TODO: WOULD BE NICE TO COUNT THE NUMBER OF TIMES THAT THIS ACTUALLY HAPPENS
-    fill_rn_buffer(rn_pool, NRANDOM_NUMBERS);
+    fill_rn_buffer(rn_pool, rn_pool->buf_len);
 
     // TODO: CHECK FOR OVERFLOW CAUSED BY THE INCREMENT
     if(rn_pool->counter.v[0]+NRANDOM_NUMBERS >= UINT64_MAX) {
@@ -63,25 +79,39 @@ double genrand(RNPool* rn_pool)
 void fill_rn_buffer(
     RNPool* rn_pool, const int nrandom_numbers)
 {
-  assert(nrandom_numbers%NRANDOM_NUMBERS == 0);
+  assert(nrandom_numbers <= rn_pool->buf_len);
 
+  // The master pool can initialise random numbers in parallel
   uint64_t counter_start = rn_pool->counter.v[0];
-
+  if(rn_pool->master) {
 #pragma omp parallel for
-  for(int ii = 0; ii < nrandom_numbers/NRANDOM_NUMBERS; ++ii) {
-    threefry2x64_ctr_t counter;
-    counter.v[0] = counter_start+ii;
-
-    // Generate the random numbers
-    threefry2x64_ctr_t rand = threefry2x64(counter, rn_pool->key);
-
-    // Turn our random numbers from integrals to double precision
-    const double factor = 1.0/(UINT64_MAX + 1.0);
-    const double half_factor = 0.5*factor;
-    rn_pool->buffer[ii*NRANDOM_NUMBERS] = rand.v[0]*factor+half_factor;
-    rn_pool->buffer[ii*NRANDOM_NUMBERS+1] = rand.v[1]*factor+half_factor;
+    for(int ii = 0; ii < nrandom_numbers/NRANDOM_NUMBERS; ++ii) {
+      generate_random_numbers(rn_pool, ii, counter_start);
+    }
+  }
+  else {
+    for(int ii = 0; ii < nrandom_numbers/NRANDOM_NUMBERS; ++ii) {
+      generate_random_numbers(rn_pool, ii, counter_start);
+    }
   }
 
   rn_pool->available = nrandom_numbers;
+}
+
+// Generates NRANDOM_NUMBERS and places them in the buffer
+void generate_random_numbers(
+    RNPool* rn_pool, int index, uint64_t counter_start)
+{
+  threefry2x64_ctr_t counter;
+  counter.v[0] = counter_start+index;
+
+  // Generate the random numbers
+  threefry2x64_ctr_t rand = threefry2x64(counter, rn_pool->key);
+
+  // Turn our random numbers from integrals to double precision
+  const double factor = 1.0/(UINT64_MAX + 1.0);
+  const double half_factor = 0.5*factor;
+  rn_pool->buffer[index*NRANDOM_NUMBERS] = rand.v[0]*factor+half_factor;
+  rn_pool->buffer[index*NRANDOM_NUMBERS+1] = rand.v[1]*factor+half_factor;
 }
 

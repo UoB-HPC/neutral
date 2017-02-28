@@ -1,6 +1,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <omp.h>
 #include "bright_data.h"
 #include "../profiler.h"
 #include "../shared.h"
@@ -25,7 +26,7 @@ void initialise_particle(
 
 // Initialises all of the Bright-specific data structures.
 void initialise_bright_data(
-    BrightData* bright_data, Mesh* mesh, RNPool* rn_pool)
+    BrightData* bright_data, Mesh* mesh)
 {
   const int local_nx = mesh->local_nx-2*PAD;
   const int local_ny = mesh->local_ny-2*PAD;
@@ -35,9 +36,11 @@ void initialise_bright_data(
   bright_data->initial_energy = 
     get_double_parameter("initial_energy", bright_data->neutral_params_filename);
 
-  // There are three genrand calls in the subsequent initialisation
-  init_rn_pool(rn_pool, 0xfffff);
-  prepare_rn_pool(rn_pool, 0xfffff, bright_data->nparticles*(NRANDOM_NUMBERS+1));
+  // Initialise enough pools for every thread and a master pool
+  bright_data->nrn_pools = bright_data->nthreads+1;
+  bright_data->rn_pool_master_index = bright_data->nrn_pools-1;
+  bright_data->rn_pools = (RNPool*)malloc(sizeof(RNPool)*(bright_data->nrn_pools));
+  init_rn_pools(bright_data->rn_pools, bright_data->nrn_pools, bright_data->nparticles);
 
   int nkeys = 0;
   char* keys = (char*)malloc(sizeof(char)*MAX_KEYS*MAX_STR_LEN);
@@ -113,7 +116,7 @@ void initialise_bright_data(
         mesh, local_nx, local_ny, local_particle_left_off, 
         local_particle_bottom_off, local_particle_width, local_particle_height, 
         bright_data->nlocal_particles, bright_data->initial_energy, 
-        rn_pool, bright_data->local_particles);
+        bright_data->rn_pools, bright_data->local_particles);
   }
 
   initialise_cross_sections(
@@ -136,16 +139,18 @@ void inject_particles(
     Mesh* mesh, const int local_nx, const int local_ny, 
     const double local_particle_left_off, const double local_particle_bottom_off,
     const double local_particle_width, const double local_particle_height, 
-    const int nparticles, const double initial_energy, RNPool* rn_pool,
+    const int nparticles, const double initial_energy, RNPool* rn_pools,
     Particle* particles)
 {
   START_PROFILING(&compute_profile);
+
+ #pragma omp parallel for
   for(int ii = 0; ii < nparticles; ++ii) {
     initialise_particle(
         mesh->global_nx, local_nx, local_ny, local_particle_left_off, 
         local_particle_bottom_off, local_particle_width, local_particle_height, 
         mesh->x_off, mesh->y_off, mesh->dt, mesh->edgex, mesh->edgey, 
-        initial_energy, rn_pool, &particles[ii]);
+        initial_energy, &rn_pools[omp_get_thread_num()], &particles[ii]);
     particles[ii].key = ii;
   }
   STOP_PROFILING(&compute_profile, "initialising particles");
@@ -162,9 +167,9 @@ void initialise_particle(
 {
   // Set the initial nandom location of the particle inside the source region
   particle->x = local_particle_left_off + 
-    genrand(rn_pool)*local_particle_width;
+    getrand(rn_pool)*local_particle_width;
   particle->y = local_particle_bottom_off + 
-    genrand(rn_pool)*local_particle_height;
+    getrand(rn_pool)*local_particle_height;
 
   // Check the location of the specific cell that the particle sits within.
   // We have to check this explicitly because the mesh might be non-uniform.
@@ -188,7 +193,7 @@ void initialise_particle(
 
   // Generating theta has uniform density, however 0.0 and 1.0 produce the same 
   // value which introduces very very very small bias...
-  const double theta = 2.0*M_PI*genrand(rn_pool);
+  const double theta = 2.0*M_PI*getrand(rn_pool);
   particle->omega_x = cos(theta);
   particle->omega_y = sin(theta);
 

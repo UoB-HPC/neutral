@@ -7,24 +7,27 @@
 #define BUF_LENGTH             1            // Precomputed random nums
 
 typedef struct {
-  int buf_len;
-  double* buffer;
-  int available;                    // The number of available random numbers
+  int buf_len;          // The local length of the random number buffer
+  int buf_index;        // The index into the global random number buffer
+  double* buffer;       // A pointer to the global buffer
+  int available;        // The number of available local random numbers
+  int master;
 
   threefry2x64_ctr_t counter;
   threefry2x64_key_t key;
 
 } RNPool;
 
-// Initialises the random number pool
-void init_rn_pool(RNPool* rn_pool, const uint64_t master_key);
-
 // Prepare the random number pool
-void prepare_rn_pool(
-    RNPool* rn_pool, const uint64_t key, const int nrandom_numbers);
+void init_rn_pools(
+    RNPool* rn_pools, const int nrn_pools, const int buf_len);
+
+// Updates the master key of the set of rn pools
+void update_rn_pool_master_keys(
+    RNPool* rn_pools, const int nrn_pools, uint64_t master_key);
 
 // Generates a random number used the Random 123 library
-double genrand(RNPool* rn_pool);
+double getrand(RNPool* rn_pool);
 
 // Fills the rn buffer with random numbers
 void fill_rn_buffer(

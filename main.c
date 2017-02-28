@@ -55,9 +55,6 @@ int main(int argc, char** argv)
       "Warning. Profiling is enabled and will increase the runtime.\n\n");
 #endif
 
-  // Initialise enough pools for every thread and a master pool
-  RNPool* rn_pools = (RNPool*)malloc(sizeof(RNPool)*(bright_data.nthreads+1));
-
   // Perform the general initialisation steps for the mesh etc
   initialise_mpi(argc, argv, &mesh.rank, &mesh.nranks);
   initialise_devices(mesh.rank);
@@ -69,7 +66,7 @@ int main(int argc, char** argv)
       mesh.x_off, mesh.y_off, mesh.ndims, bright_data.neutral_params_filename, 
       mesh.edgex, mesh.edgey, &shared_data);
   initialise_bright_data(
-      &bright_data, &mesh, &rn_pools[bright_data.nthreads]);
+      &bright_data, &mesh);
 
   // Make sure initialisation phase is complete
   barrier();
@@ -102,7 +99,7 @@ int main(int argc, char** argv)
         bright_data.local_particles, shared_data.rho, mesh.edgex, mesh.edgey, 
         mesh.edgedx, mesh.edgedy, bright_data.cs_scatter_table, 
         bright_data.cs_absorb_table, bright_data.scalar_flux_tally, 
-        bright_data.energy_deposition_tally, rn_pools);
+        bright_data.energy_deposition_tally, bright_data.rn_pools);
 
     barrier();
 
