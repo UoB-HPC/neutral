@@ -162,7 +162,7 @@ void handle_particles(
     if(!initialised) {
       // Generate random numbers for every particle...
       fill_rn_buffer(
-          &rn_pools[nthreads], ntotal_particles*NRANDOM_NUMBERS);
+          &rn_pools[nthreads], ntotal_particles);
 
       // Initialise all particles to the correct census time and mfp to collision
 #pragma omp parallel for simd
