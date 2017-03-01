@@ -549,7 +549,6 @@ void calc_distance_to_facet(
   }
 }
 
-
 // Tallies both the scalar flux and energy deposition in the cell
 void update_tallies(
     const int pindex, const int nx, const int x_off, const int y_off, Particles* particles, 
