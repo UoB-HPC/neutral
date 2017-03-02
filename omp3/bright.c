@@ -550,6 +550,7 @@ void calc_distance_to_facet(
 }
 
 // Tallies both the scalar flux and energy deposition in the cell
+#pragma omp declare simd
 void update_tallies(
     const int pindex, const int nx, const int x_off, const int y_off, Particles* particles, 
     const double inv_ntotal_particles, const double energy_deposition,
@@ -560,11 +561,11 @@ void update_tallies(
   const int cellx = particles->cellx[pindex]-x_off;
   const int celly = particles->celly[pindex]-y_off;
 
-#pragma omp atomic update 
+//#pragma omp atomic update 
   scalar_flux_tally[celly*nx+cellx] += 
     scalar_flux*inv_ntotal_particles; 
 
-#pragma omp atomic update
+//#pragma omp atomic update
   energy_deposition_tally[celly*nx+cellx] += 
     energy_deposition*inv_ntotal_particles;
 }
