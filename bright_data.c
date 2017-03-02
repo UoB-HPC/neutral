@@ -94,47 +94,50 @@ void initialise_bright_data(
   // TODO: SHOULD PROBABLY PERFORM A REDUCTION OVER THE NUMBER OF LOCAL PARTICLES
   // TO MAKE SURE THAT THEY ALL SUM UP TO THE CORRECT VALUE!
 
+  const int vec_align = 64;
   // THIS IS A LOT OF DATA...
   bright_data->local_particles = 
-    (Particles*)malloc(sizeof(Particles));
+    (Particles*)_mm_malloc(sizeof(Particles), vec_align);
   bright_data->local_particles->x = 
-    (double*)malloc(sizeof(double)*bright_data->nparticles*1.5);
+    (double*)_mm_malloc(sizeof(double)*bright_data->nparticles*1.5, vec_align);
   bright_data->local_particles->y = 
-    (double*)malloc(sizeof(double)*bright_data->nparticles*1.5);
+    (double*)_mm_malloc(sizeof(double)*bright_data->nparticles*1.5, vec_align);
   bright_data->local_particles->omega_x = 
-    (double*)malloc(sizeof(double)*bright_data->nparticles*1.5);
+    (double*)_mm_malloc(sizeof(double)*bright_data->nparticles*1.5, vec_align);
   bright_data->local_particles->omega_y = 
-    (double*)malloc(sizeof(double)*bright_data->nparticles*1.5);
+    (double*)_mm_malloc(sizeof(double)*bright_data->nparticles*1.5, vec_align);
   bright_data->local_particles->e = 
-    (double*)malloc(sizeof(double)*bright_data->nparticles*1.5);
+    (double*)_mm_malloc(sizeof(double)*bright_data->nparticles*1.5, vec_align);
   bright_data->local_particles->weight = 
-    (double*)malloc(sizeof(double)*bright_data->nparticles*1.5);
+    (double*)_mm_malloc(sizeof(double)*bright_data->nparticles*1.5, vec_align);
   bright_data->local_particles->dt_to_census = 
-    (double*)malloc(sizeof(double)*bright_data->nparticles*1.5);
+    (double*)_mm_malloc(sizeof(double)*bright_data->nparticles*1.5, vec_align);
   bright_data->local_particles->mfp_to_collision = 
-    (double*)malloc(sizeof(double)*bright_data->nparticles*1.5);
+    (double*)_mm_malloc(sizeof(double)*bright_data->nparticles*1.5, vec_align);
   bright_data->local_particles->distance_to_facet = 
-    (double*)malloc(sizeof(double)*bright_data->nparticles*1.5);
+    (double*)_mm_malloc(sizeof(double)*bright_data->nparticles*1.5, vec_align);
   bright_data->local_particles->microscopic_cs_absorb = 
-    (double*)malloc(sizeof(double)*bright_data->nparticles*1.5);
+    (double*)_mm_malloc(sizeof(double)*bright_data->nparticles*1.5, vec_align);
   bright_data->local_particles->microscopic_cs_scatter = 
-    (double*)malloc(sizeof(double)*bright_data->nparticles*1.5);
+    (double*)_mm_malloc(sizeof(double)*bright_data->nparticles*1.5, vec_align);
   bright_data->local_particles->local_density = 
-    (double*)malloc(sizeof(double)*bright_data->nparticles*1.5);
+    (double*)_mm_malloc(sizeof(double)*bright_data->nparticles*1.5, vec_align);
   bright_data->local_particles->cell_mfp = 
-    (double*)malloc(sizeof(double)*bright_data->nparticles*1.5);
+    (double*)_mm_malloc(sizeof(double)*bright_data->nparticles*1.5, vec_align);
+  bright_data->local_particles->particle_velocity = 
+    (double*)_mm_malloc(sizeof(double)*bright_data->nparticles*1.5, vec_align);
   bright_data->local_particles->x_facet = 
-    (int*)malloc(sizeof(int)*bright_data->nparticles*1.5);
+    (int*)_mm_malloc(sizeof(int)*bright_data->nparticles*1.5, vec_align);
   bright_data->local_particles->cellx = 
-    (int*)malloc(sizeof(int)*bright_data->nparticles*1.5);
+    (int*)_mm_malloc(sizeof(int)*bright_data->nparticles*1.5, vec_align);
   bright_data->local_particles->celly = 
-    (int*)malloc(sizeof(int)*bright_data->nparticles*1.5);
+    (int*)_mm_malloc(sizeof(int)*bright_data->nparticles*1.5, vec_align);
   bright_data->local_particles->scatter_cs_index = 
-    (int*)malloc(sizeof(int)*bright_data->nparticles*1.5);
+    (int*)_mm_malloc(sizeof(int)*bright_data->nparticles*1.5, vec_align);
   bright_data->local_particles->absorb_cs_index = 
-    (int*)malloc(sizeof(int)*bright_data->nparticles*1.5);
+    (int*)_mm_malloc(sizeof(int)*bright_data->nparticles*1.5, vec_align);
   bright_data->local_particles->next_event = 
-    (int*)malloc(sizeof(int)*bright_data->nparticles*1.5);
+    (int*)_mm_malloc(sizeof(int)*bright_data->nparticles*1.5, vec_align);
 
   if(!bright_data->local_particles) {
     TERMINATE("Could not allocate particle array.\n");

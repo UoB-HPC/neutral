@@ -51,6 +51,7 @@ typedef struct {
   double* microscopic_cs_absorb;
   double* local_density;
   double* cell_mfp;
+  double* particle_velocity;
   int* x_facet;
   int* cellx;
   int* celly;

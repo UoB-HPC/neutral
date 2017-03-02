@@ -153,40 +153,55 @@ void handle_particles(
   int nparticles_dead = 0;
 
   while(1) {
+    START_PROFILING(&compute_profile);
     update_rn_pool_master_keys(
         rn_pools, nthreads+1, (*master_key)++);
+    STOP_PROFILING(&compute_profile, "update rn pool master keys");
 
     /* INITIALISATION */
     if(!initialised) {
+      START_PROFILING(&compute_profile);
       event_initialisation(
           ntotal_particles, nx, x_off, y_off, particles, dt, density,
           nthreads, rn_pools, cs_scatter_table, cs_absorb_table);
       initialised = 1;
+      STOP_PROFILING(&compute_profile, "initialisation");
     }
 
     // Calculates the distance to the facet for all cells
+    START_PROFILING(&compute_profile);
     calc_distance_to_facet(
         ntotal_particles, x_off, y_off, particles, edgex, edgey);
+    STOP_PROFILING(&compute_profile, "calc dist to facet");
 
-    if(!calc_next_event(
-          ntotal_particles, particles, facets, collisions)) {
+    START_PROFILING(&compute_profile);
+    const int census = calc_next_event(ntotal_particles, particles, facets, collisions);
+    STOP_PROFILING(&compute_profile, "calc next event");
+
+    if(census) {
       break;
     }
 
+    START_PROFILING(&compute_profile);
     handle_facets(
         ntotal_particles, global_nx, global_ny, nx, ny, x_off, y_off, 
         neighbours, nparticles_sent, particles, edgex, edgey, density, 
         &nparticles_out, scalar_flux_tally, energy_deposition_tally,
         cs_scatter_table, cs_absorb_table);
+    STOP_PROFILING(&compute_profile, "handle facets");
 
+    START_PROFILING(&compute_profile);
     handle_collisions( 
         ntotal_particles, nx, x_off, y_off, particles, edgex, edgey, 
         rn_pools, &nparticles_dead, scalar_flux_tally, energy_deposition_tally);
+    STOP_PROFILING(&compute_profile, "handle collisions");
   }
 
+  START_PROFILING(&compute_profile);
   handle_census(
       ntotal_particles, nx, x_off, y_off, particles, density, edgex, 
       edgey, scalar_flux_tally, energy_deposition_tally);
+  STOP_PROFILING(&compute_profile, "handle census");
 
   printf("left the main loop\n");
 
@@ -221,9 +236,12 @@ void event_initialisation(
     }
 
     particles->microscopic_cs_scatter[ii] = 
-      microscopic_cs_for_energy(cs_scatter_table, particles->e[ii], &particles->scatter_cs_index[ii]);
+      microscopic_cs_for_energy(
+          cs_scatter_table, particles->e[ii], &particles->scatter_cs_index[ii]);
     particles->microscopic_cs_absorb[ii] = 
-      microscopic_cs_for_energy(cs_absorb_table, particles->e[ii], &particles->absorb_cs_index[ii]);
+      microscopic_cs_for_energy(
+          cs_absorb_table, particles->e[ii], &particles->absorb_cs_index[ii]);
+
     int cellx = particles->cellx[ii]-x_off+PAD;
     int celly = particles->celly[ii]-y_off+PAD;
     particles->local_density[ii] = density[celly*(nx+2*PAD)+cellx];
@@ -268,15 +286,17 @@ int calc_next_event(
   }
 
   if(!nfacets && !ncollisions) {
-    return 0;
+    return 1;
   }
 
+#if 0
   printf("calculated the events collision %d facets %d census/dead %d\n",
       ncollisions, nfacets, (ntotal_particles-nfacets-ncollisions));
+#endif // if 0
 
   *facets += nfacets;
   *collisions += ncollisions;
-  return 1;
+  return 0;
 }
 
 // Handle all of the facet encounters
@@ -318,20 +338,97 @@ void handle_facets(
         ii, nx, x_off, y_off, particles, inv_ntotal_particles, energy_deposition,
         scalar_flux, scalar_flux_tally, energy_deposition_tally);
 
-    // Encounter facet, and jump out if particles left this rank's domain
-    if(handle_facet_encounter(
-          ii, global_nx, global_ny, nx, ny, x_off, y_off, neighbours, 
-          particles->distance_to_facet[ii], particles->x_facet[ii], 
-          nparticles_sent, particles)) {
-      np_out++;
-      continue;
+    // TODO: Make sure that the roundoff is handled here, perhaps actually set it
+    // fully to one of the edges here
+    particles->x[ii] += particles->distance_to_facet[ii]*particles->omega_x[ii];
+    particles->y[ii] += particles->distance_to_facet[ii]*particles->omega_y[ii];
+
+    // This use of x_facet is a slight misnoma, as it is really a facet
+    // along the y dimensions
+    if(particles->x_facet[ii]) {
+      if(particles->omega_x[ii] > 0.0) {
+        // Reflect at the boundary
+        if(particles->cellx[ii] >= (global_nx-1)) {
+          particles->omega_x[ii] = -(particles->omega_x[ii]);
+        }
+        else {
+          // Definitely moving to right cell
+          particles->cellx[ii] += 1;
+
+          // Check if we need to pass to another process
+          if(particles->cellx[ii] >= nx+x_off) {
+            send_and_mark_particle(neighbours[EAST], ii, particles);
+            nparticles_sent[EAST]++;
+            np_out++;
+            continue;
+          }
+        }
+      }
+      else if(particles->omega_x[ii] < 0.0) {
+        if(particles->cellx[ii] <= 0) {
+          // Reflect at the boundary
+          particles->omega_x[ii] = -(particles->omega_x[ii]);
+        }
+        else {
+          // Definitely moving to left cell
+          particles->cellx[ii] -= 1;
+
+          // Check if we need to pass to another process
+          if(particles->cellx[ii] < x_off) {
+            send_and_mark_particle(neighbours[WEST], ii, particles);
+            nparticles_sent[WEST]++;
+            np_out++;
+            continue;
+          }
+        }
+      }
+    }
+    else {
+      if(particles->omega_y[ii] > 0.0) {
+        // Reflect at the boundary
+        if(particles->celly[ii] >= (global_ny-1)) {
+          particles->omega_y[ii] = -(particles->omega_y[ii]);
+        }
+        else {
+          // Definitely moving to north cell
+          particles->celly[ii] += 1;
+
+          // Check if we need to pass to another process
+          if(particles->celly[ii] >= ny+y_off) {
+            send_and_mark_particle(neighbours[NORTH], ii, particles);
+            nparticles_sent[NORTH]++;
+            np_out++;
+            continue;
+          }
+        }
+      }
+      else if(particles->omega_y[ii] < 0.0) {
+        // Reflect at the boundary
+        if(particles->celly[ii] <= 0) {
+          particles->omega_y[ii] = -(particles->omega_y[ii]);
+        }
+        else {
+          // Definitely moving to south cell
+          particles->celly[ii] -= 1;
+
+          // Check if we need to pass to another process
+          if(particles->celly[ii] < y_off) {
+            send_and_mark_particle(neighbours[SOUTH], ii, particles);
+            nparticles_sent[SOUTH]++;
+            np_out++;
+            continue;
+          }
+        }
+      }
     }
 
+#if 0
     // Updated all of the cached data
     particles->microscopic_cs_scatter[ii] = 
       microscopic_cs_for_energy(cs_scatter_table, particles->e[ii], &particles->scatter_cs_index[ii]);
     particles->microscopic_cs_absorb[ii] = 
       microscopic_cs_for_energy(cs_absorb_table, particles->e[ii], &particles->absorb_cs_index[ii]);
+#endif // if 0
     cellx = particles->cellx[ii]-x_off+PAD;
     celly = particles->celly[ii]-y_off+PAD;
     particles->local_density[ii] = density[celly*(nx+2*PAD)+cellx];
@@ -561,104 +658,13 @@ void update_tallies(
   const int cellx = particles->cellx[pindex]-x_off;
   const int celly = particles->celly[pindex]-y_off;
 
-//#pragma omp atomic update 
+  //#pragma omp atomic update 
   scalar_flux_tally[celly*nx+cellx] += 
     scalar_flux*inv_ntotal_particles; 
 
-//#pragma omp atomic update
+  //#pragma omp atomic update
   energy_deposition_tally[celly*nx+cellx] += 
     energy_deposition*inv_ntotal_particles;
-}
-
-// Makes the necessary updates to the particles given that
-// the facet was encountered
-int handle_facet_encounter(
-    const int pindex, const int global_nx, const int global_ny, const int nx, const int ny, 
-    const int x_off, const int y_off, const int* neighbours, 
-    const double distance_to_facet, int x_facet, int* nparticles_sent, 
-    Particles* particles)
-{
-  // TODO: Make sure that the roundoff is handled here, perhaps actually set it
-  // fully to one of the edges here
-  particles->x[pindex] += distance_to_facet*particles->omega_x[pindex];
-  particles->y[pindex] += distance_to_facet*particles->omega_y[pindex];
-
-  // This use of x_facet is a slight misnoma, as it is really a facet
-  // along the y dimensions
-  if(x_facet) {
-    if(particles->omega_x[pindex] > 0.0) {
-      // Reflect at the boundary
-      if(particles->cellx[pindex] >= (global_nx-1)) {
-        particles->omega_x[pindex] = -(particles->omega_x[pindex]);
-      }
-      else {
-        // Definitely moving to right cell
-        particles->cellx[pindex] += 1;
-
-        // Check if we need to pass to another process
-        if(particles->cellx[pindex] >= nx+x_off) {
-          send_and_mark_particle(neighbours[EAST], pindex, particles);
-          nparticles_sent[EAST]++;
-          return 1;
-        }
-      }
-    }
-    else if(particles->omega_x[pindex] < 0.0) {
-      if(particles->cellx[pindex] <= 0) {
-        // Reflect at the boundary
-        particles->omega_x[pindex] = -(particles->omega_x[pindex]);
-      }
-      else {
-        // Definitely moving to left cell
-        particles->cellx[pindex] -= 1;
-
-        // Check if we need to pass to another process
-        if(particles->cellx[pindex] < x_off) {
-          send_and_mark_particle(neighbours[WEST], pindex, particles);
-          nparticles_sent[WEST]++;
-          return 1;
-        }
-      }
-    }
-  }
-  else {
-    if(particles->omega_y[pindex] > 0.0) {
-      // Reflect at the boundary
-      if(particles->celly[pindex] >= (global_ny-1)) {
-        particles->omega_y[pindex] = -(particles->omega_y[pindex]);
-      }
-      else {
-        // Definitely moving to north cell
-        particles->celly[pindex] += 1;
-
-        // Check if we need to pass to another process
-        if(particles->celly[pindex] >= ny+y_off) {
-          send_and_mark_particle(neighbours[NORTH], pindex, particles);
-          nparticles_sent[NORTH]++;
-          return 1;
-        }
-      }
-    }
-    else if(particles->omega_y[pindex] < 0.0) {
-      // Reflect at the boundary
-      if(particles->celly[pindex] <= 0) {
-        particles->omega_y[pindex] = -(particles->omega_y[pindex]);
-      }
-      else {
-        // Definitely moving to south cell
-        particles->celly[pindex] -= 1;
-
-        // Check if we need to pass to another process
-        if(particles->celly[pindex] < y_off) {
-          send_and_mark_particle(neighbours[SOUTH], pindex, particles);
-          nparticles_sent[SOUTH]++;
-          return 1;
-        }
-      }
-    }
-  }
-
-  return 0;
 }
 
 // Sends a particles to a neighbour and replaces in the particles list
@@ -681,6 +687,7 @@ void send_and_mark_particle(
 }
 
 // Calculate the energy deposition in the cell
+#pragma omp declare simd
 double calculate_energy_deposition(
     const int pindex, Particles* particles, const double path_length, 
     const double number_density, const double microscopic_cs_absorb, 
@@ -688,12 +695,11 @@ double calculate_energy_deposition(
 {
   // Calculate the energy deposition based on the path length
   const double average_exit_energy_absorb = 0.0;
-  const double absorption_heating = 
-    (microscopic_cs_absorb/microscopic_cs_total)*average_exit_energy_absorb;
+  const double pabsorb = (microscopic_cs_absorb/microscopic_cs_total);
+  const double absorption_heating = pabsorb*average_exit_energy_absorb;
   const double average_exit_energy_scatter = 
-    particles->e[pindex]*(MASS_NO*MASS_NO+2)/((MASS_NO+1)*(MASS_NO+1));
-  const double scattering_heating = 
-    (1.0-(microscopic_cs_absorb/microscopic_cs_total))*average_exit_energy_scatter;
+    particles->e[pindex]*((MASS_NO*MASS_NO+MASS_NO+1)/((MASS_NO+1)*(MASS_NO+1)));
+  const double scattering_heating = (1.0-pabsorb)*average_exit_energy_scatter;
   const double heating_response =
     (particles->e[pindex]-scattering_heating-absorption_heating);
 
