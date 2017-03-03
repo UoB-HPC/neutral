@@ -108,7 +108,7 @@ int main(int argc, char** argv)
 
     char tally_name[100];
     sprintf(tally_name, "energy%d", tt);
-    int dneighbours[NNEIGHBOURS] = { EDGE, EDGE,  EDGE,  EDGE,  EDGE,  EDGE }; 
+    int dneighbours[NNEIGHBOURS] = { EDGE, EDGE,  EDGE,  EDGE,  EDGE,  EDGE };
     write_all_ranks_to_visit(
         mesh.global_nx, mesh.global_ny, mesh.local_nx-2*PAD, mesh.local_ny-2*PAD,
         mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, dneighbours, 
@@ -129,9 +129,8 @@ int main(int argc, char** argv)
 
   // TODO: WHAT SHOULD THE VALUE OF NINITIALPARTICLES BE IF FISSION ETC.
   validate(
-      mesh.local_nx-2*PAD, mesh.local_ny-2*PAD, 
-      bright_data.neutral_params_filename, mesh.rank, 
-      bright_data.energy_deposition_tally);
+      mesh.local_nx, mesh.local_ny, bright_data.neutral_params_filename, 
+      mesh.rank, bright_data.energy_deposition_tally);
 
   if(mesh.rank == MASTER) {
     PRINT_PROFILING_RESULTS(&compute_profile);
@@ -157,17 +156,16 @@ void plot_particle_density(
     Particles* particles = bright_data->local_particles;
     const int cellx = particles->cellx[ii]-mesh->x_off;
     const int celly = particles->celly[ii]-mesh->y_off;
-    temp[celly*(mesh->local_nx-2*PAD)+cellx] += 1.0;
+    temp[celly*(mesh->local_nx)+cellx] += 1.0;
   }
 
   // Dummy neighbours that stops any padding from happening
-  int neighbours[NNEIGHBOURS] = { EDGE, EDGE,  EDGE,  EDGE,  EDGE,  EDGE }; 
   char particles_name[100];
   sprintf(particles_name, "particles%d", tt);
   write_all_ranks_to_visit(
-      mesh->global_nx, mesh->global_ny, mesh->local_nx-2*PAD, 
-      mesh->local_ny-2*PAD, mesh->x_off, mesh->y_off, mesh->rank, 
-      mesh->nranks, neighbours, temp, particles_name, 0, elapsed_sim_time);
+      mesh->global_nx, mesh->global_ny, mesh->local_nx, mesh->local_ny, 
+      mesh->x_off, mesh->y_off, mesh->rank, mesh->nranks, mesh->neighbours, temp, 
+      particles_name, 0, elapsed_sim_time);
   free(temp);
 }
 

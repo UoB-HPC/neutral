@@ -15,7 +15,8 @@ void handle_particles(
 
 // Tallies both the scalar flux and energy deposition in the cell
 void update_tallies(
-    const int pindex, const int nx, const int x_off, const int y_off, Particles* particles, 
+    const int pindex, const int nx, const int x_off, const int y_off, 
+    Particles* particles, const int cellx, const int celly, 
     const double inv_ntotal_particles, const double energy_deposition,
     const double scalar_flux, double* scalar_flux_tally, 
     double* energy_deposition_tally);
