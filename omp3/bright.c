@@ -338,9 +338,8 @@ void handle_facets(
       (particles->distance_to_facet[ii]/particles->particle_velocity[ii]);
 
     // Update the tallies
-    double inv_cell_volume = 1.0/(edgedx[cellx]*edgedy[celly]);
     double scalar_flux =
-      particles->weight[ii]*particles->distance_to_facet[ii]*inv_cell_volume;
+      particles->weight[ii]*particles->distance_to_facet[ii]*inv_cell_volume[celly*(nx+2*PAD)+cellx];
     double energy_deposition = calculate_energy_deposition(
         ii, particles, particles->distance_to_facet[ii], number_density, 
         particles->microscopic_cs_absorb[ii], 
@@ -474,10 +473,9 @@ void handle_collisions(
       number_density*particles->microscopic_cs_absorb[ii]*BARNS;
     const double distance_to_collision = 
       particles->mfp_to_collision[ii]*particles->cell_mfp[ii];
-    double inv_cell_volume = 1.0/(edgedx[cellx]*edgedy[celly]);
 
     // Calculate the energy deposition in the cell
-    double scalar_flux = particles->weight[ii]*distance_to_collision*inv_cell_volume;
+    double scalar_flux = particles->weight[ii]*distance_to_collision*inv_cell_volume[celly*(nx+2*PAD)+cellx];
     double energy_deposition = calculate_energy_deposition(
         ii, particles, distance_to_collision, number_density, 
         particles->microscopic_cs_absorb[ii], 
@@ -576,8 +574,7 @@ void handle_census(
     particles->mfp_to_collision[ii] -= 
       (distance_to_census*(macroscopic_cs_scatter+macroscopic_cs_absorb));
 
-    double inv_cell_volume = 1.0/(edgedx[cellx]*edgey[celldy]);
-    double scalar_flux = particles->weight[ii]*distance_to_census*inv_cell_volume;
+    double scalar_flux = particles->weight[ii]*distance_to_census*inv_cell_volume[celly*(nx+2*PAD)+cellx];
 
     // Calculate the energy deposition in the cell
     double energy_deposition = calculate_energy_deposition(

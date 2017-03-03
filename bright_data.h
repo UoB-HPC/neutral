@@ -28,6 +28,8 @@
 #define ARCH_ROOT_PARAMS "../arch.params"
 #define NEUTRAL_TESTS    "neutral.tests"
 
+double* inv_cell_volume;
+
 // Represents a cross sectional table for resonance data
 typedef struct {
   double* key;
