@@ -241,7 +241,7 @@ void event_initialisation(
     particles->microscopic_cs_absorb[ii] = microscopic_cs_for_energy(
           cs_absorb_table, particles->e[ii], &particles->absorb_cs_index[ii]);
     particles->particle_velocity[ii] =
-      sqrt((2.0*particles->e[ii]*eV_TO_J)/PARTICLE_MASS);
+      sqrt((2.0*particles->e[ii]*eV_TO_J)*INV_PARTICLE_MASS);
 
     int cellx = particles->cellx[ii]-x_off+PAD;
     int celly = particles->celly[ii]-y_off+PAD;
@@ -268,7 +268,6 @@ int calc_next_event(
       continue;
     }
 
-    particles->particle_velocity[ii] = sqrt((2.0*particles->e[ii]*eV_TO_J)/PARTICLE_MASS);
     const double distance_to_collision = particles->mfp_to_collision[ii]*particles->cell_mfp[ii];
     const double distance_to_census = 
       particles->particle_velocity[ii]*particles->dt_to_census[ii];
@@ -532,6 +531,7 @@ void handle_collisions(
       particles->omega_x[ii] = omega_x_new;
       particles->omega_y[ii] = omega_y_new;
       particles->e[ii] = e_new;
+      particles->particle_velocity[ii] = sqrt((2.0*e_new*eV_TO_J)*INV_PARTICLE_MASS);
     }
 
     // Need to store tally information as finished with particles

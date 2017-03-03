@@ -12,7 +12,7 @@
 #define eV_TO_J                1.60217646e-19       // 1 eV to Joules
 #define AVOGADROS              6.02214085774e23     // Avogadro's constant
 #define BARNS                  1.0e-28              // The barns unit in m^2
-#define PARTICLE_MASS          1.674927471213e-27   // Mass taken from wiki
+#define INV_PARTICLE_MASS      5.9704077769754e26   // Mass taken from wiki
 #define MASS_NO                1.0e2                // Mass num of the particle
 #define MOLAR_MASS             1.0e-2               // Dummy kg per mole
 #define MIN_ENERGY_OF_INTEREST 1.0e0                // Energy to kill particles
