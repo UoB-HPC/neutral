@@ -94,57 +94,42 @@ void initialise_bright_data(
   // TODO: SHOULD PROBABLY PERFORM A REDUCTION OVER THE NUMBER OF LOCAL PARTICLES
   // TO MAKE SURE THAT THEY ALL SUM UP TO THE CORRECT VALUE!
 
-  const int vec_align = 256;
+
   // THIS IS A LOT OF DATA...
   bright_data->local_particles = 
-    (Particles*)_mm_malloc(sizeof(Particles), vec_align);
-  bright_data->local_particles->x = 
-    (double*)_mm_malloc(sizeof(double)*bright_data->nparticles*1.5, vec_align);
-  bright_data->local_particles->y = 
-    (double*)_mm_malloc(sizeof(double)*bright_data->nparticles*1.5, vec_align);
-  bright_data->local_particles->omega_x = 
-    (double*)_mm_malloc(sizeof(double)*bright_data->nparticles*1.5, vec_align);
-  bright_data->local_particles->omega_y = 
-    (double*)_mm_malloc(sizeof(double)*bright_data->nparticles*1.5, vec_align);
-  bright_data->local_particles->e = 
-    (double*)_mm_malloc(sizeof(double)*bright_data->nparticles*1.5, vec_align);
-  bright_data->local_particles->weight = 
-    (double*)_mm_malloc(sizeof(double)*bright_data->nparticles*1.5, vec_align);
-  bright_data->local_particles->dt_to_census = 
-    (double*)_mm_malloc(sizeof(double)*bright_data->nparticles*1.5, vec_align);
-  bright_data->local_particles->mfp_to_collision = 
-    (double*)_mm_malloc(sizeof(double)*bright_data->nparticles*1.5, vec_align);
-  bright_data->local_particles->distance_to_facet = 
-    (double*)_mm_malloc(sizeof(double)*bright_data->nparticles*1.5, vec_align);
-  bright_data->local_particles->microscopic_cs_absorb = 
-    (double*)_mm_malloc(sizeof(double)*bright_data->nparticles*1.5, vec_align);
-  bright_data->local_particles->microscopic_cs_scatter = 
-    (double*)_mm_malloc(sizeof(double)*bright_data->nparticles*1.5, vec_align);
-  bright_data->local_particles->local_density = 
-    (double*)_mm_malloc(sizeof(double)*bright_data->nparticles*1.5, vec_align);
-  bright_data->local_particles->cell_mfp = 
-    (double*)_mm_malloc(sizeof(double)*bright_data->nparticles*1.5, vec_align);
-  bright_data->local_particles->particle_velocity = 
-    (double*)_mm_malloc(sizeof(double)*bright_data->nparticles*1.5, vec_align);
-  bright_data->local_particles->x_facet = 
-    (int*)_mm_malloc(sizeof(int)*bright_data->nparticles*1.5, vec_align);
-  bright_data->local_particles->cellx = 
-    (int*)_mm_malloc(sizeof(int)*bright_data->nparticles*1.5, vec_align);
-  bright_data->local_particles->celly = 
-    (int*)_mm_malloc(sizeof(int)*bright_data->nparticles*1.5, vec_align);
-  bright_data->local_particles->scatter_cs_index = 
-    (int*)_mm_malloc(sizeof(int)*bright_data->nparticles*1.5, vec_align);
-  bright_data->local_particles->absorb_cs_index = 
-    (int*)_mm_malloc(sizeof(int)*bright_data->nparticles*1.5, vec_align);
-  bright_data->local_particles->next_event = 
-    (int*)_mm_malloc(sizeof(int)*bright_data->nparticles*1.5, vec_align);
+    (Particles*)_mm_malloc(sizeof(Particles), VEC_ALIGN);
+
+  Particles* particle = bright_data->local_particles;
+
+  size_t allocation = 0;
+  allocation += allocate_data(&particle->x,bright_data->nparticles*1.5);
+  allocation += allocate_data(&particle->y,bright_data->nparticles*1.5);
+  allocation += allocate_data(&particle->omega_x,bright_data->nparticles*1.5);
+  allocation += allocate_data(&particle->omega_y,bright_data->nparticles*1.5);
+  allocation += allocate_data(&particle->e,bright_data->nparticles*1.5);
+  allocation += allocate_data(&particle->weight,bright_data->nparticles*1.5);
+  allocation += allocate_data(&particle->dt_to_census,bright_data->nparticles*1.5);
+  allocation += allocate_data(&particle->mfp_to_collision,bright_data->nparticles*1.5);
+  allocation += allocate_data(&particle->distance_to_facet,bright_data->nparticles*1.5);
+  allocation += allocate_data(&particle->local_density,bright_data->nparticles*1.5);
+  allocation += allocate_data(&particle->cell_mfp,bright_data->nparticles*1.5);
+  allocation += allocate_data(&particle->particle_velocity,bright_data->nparticles*1.5);
+  allocation += allocate_int_data(&particle->x_facet,bright_data->nparticles*1.5);
+  allocation += allocate_int_data(&particle->cellx,bright_data->nparticles*1.5);
+  allocation += allocate_int_data(&particle->celly,bright_data->nparticles*1.5);
+  allocation += allocate_int_data(&particle->scatter_cs_index,bright_data->nparticles*1.5);
+  allocation += allocate_int_data(&particle->absorb_cs_index,bright_data->nparticles*1.5);
+  allocation += allocate_int_data(&particle->next_event,bright_data->nparticles*1.5);
+  allocation += 
+    allocate_data(&bright_data->scalar_flux_tally, (mesh->local_nx)*(mesh->local_ny));
+  allocation += 
+    allocate_data(&bright_data->energy_deposition_tally, (mesh->local_nx)*(mesh->local_ny));
+
+  printf("Allocating %lld bytes of data.\n", allocation);
 
   if(!bright_data->local_particles) {
     TERMINATE("Could not allocate particle array.\n");
   }
-
-  allocate_data(&bright_data->scalar_flux_tally, (mesh->local_nx)*(mesh->local_ny));
-  allocate_data(&bright_data->energy_deposition_tally, (mesh->local_nx)*(mesh->local_ny));
 
 #pragma omp parallel for
   for(int ii = 0; ii < (mesh->local_ny); ++ii) {
