@@ -317,6 +317,7 @@ void handle_facets(
   /* HANDLE FACET ENCOUNTERS */
 #pragma omp parallel for simd \
   reduction(+:np_out_east, np_out_west, np_out_north, np_out_south) 
+#pragma vector aligned
   for(int ii = 0; ii < ntotal_particles; ++ii) {
     if(particles->next_event[ii] != FACET) {
       continue;
@@ -337,7 +338,7 @@ void handle_facets(
       (particles->distance_to_facet[ii]/particles->particle_velocity[ii]);
 
     // Update the tallies
-    double inv_cell_volume = 1.0/(edgex[cellx]*edgey[celly]);
+    double inv_cell_volume = 1.0/(edgedx[cellx]*edgedy[celly]);
     double scalar_flux =
       particles->weight[ii]*particles->distance_to_facet[ii]*inv_cell_volume;
     double energy_deposition = calculate_energy_deposition(
@@ -367,7 +368,7 @@ void handle_facets(
 
           // Check if we need to pass to another process
           if(particles->cellx[ii] >= nx+x_off) {
-            send_and_mark_particle(neighbours[EAST], ii, particles);
+            //send_and_mark_particle(neighbours[EAST], ii, particles);
             np_out_east++;
             continue;
           }
@@ -384,7 +385,7 @@ void handle_facets(
 
           // Check if we need to pass to another process
           if(particles->cellx[ii] < x_off) {
-            send_and_mark_particle(neighbours[WEST], ii, particles);
+            //send_and_mark_particle(neighbours[WEST], ii, particles);
             np_out_west++;
             continue;
           }
@@ -403,7 +404,7 @@ void handle_facets(
 
           // Check if we need to pass to another process
           if(particles->celly[ii] >= ny+y_off) {
-            send_and_mark_particle(neighbours[NORTH], ii, particles);
+            //send_and_mark_particle(neighbours[NORTH], ii, particles);
             np_out_north++;
             continue;
           }
@@ -420,7 +421,7 @@ void handle_facets(
 
           // Check if we need to pass to another process
           if(particles->celly[ii] < y_off) {
-            send_and_mark_particle(neighbours[SOUTH], ii, particles);
+            //send_and_mark_particle(neighbours[SOUTH], ii, particles);
             np_out_south++;
             continue;
           }
@@ -456,6 +457,7 @@ void handle_collisions(
 
   /* HANDLE COLLISIONS */
 #pragma omp parallel for simd reduction(+:np_dead)
+#pragma vector aligned
   for(int ii = 0; ii < ntotal_particles; ++ii) {
     if(particles->next_event[ii] != COLLISION) {
       continue;
@@ -472,7 +474,7 @@ void handle_collisions(
       number_density*particles->microscopic_cs_absorb[ii]*BARNS;
     const double distance_to_collision = 
       particles->mfp_to_collision[ii]*particles->cell_mfp[ii];
-    double inv_cell_volume = 1.0/(edgex[cellx]*edgey[celly]);
+    //double inv_cell_volume = 1.0/(edgedx[cellx]*edgedy[celly]);
 
     // Calculate the energy deposition in the cell
     double scalar_flux = particles->weight[ii]*distance_to_collision*inv_cell_volume;
@@ -519,7 +521,7 @@ void handle_collisions(
             (MASS_NO-1.0)*sqrt(particles->e[ii]/e_new));
 
       // Alter the direction of the velocities
-      const double sin_theta = sin(acos(cos_theta));
+      const double sin_theta = sqrt(1.0-cos_theta*cos_theta);
       const double omega_x_new =
         (particles->omega_x[ii]*cos_theta - particles->omega_y[ii]*sin_theta);
       const double omega_y_new =
@@ -574,7 +576,7 @@ void handle_census(
     particles->mfp_to_collision[ii] -= 
       (distance_to_census*(macroscopic_cs_scatter+macroscopic_cs_absorb));
 
-    double inv_cell_volume = 1.0/(edgex[cellx]*edgey[celly]);
+    double inv_cell_volume = 1.0/(edgedx[cellx]*edgey[celldy]);
     double scalar_flux = particles->weight[ii]*distance_to_census*inv_cell_volume;
 
     // Calculate the energy deposition in the cell
