@@ -315,7 +315,7 @@ void handle_facets(
   int np_out_south = 0;
 
   /* HANDLE FACET ENCOUNTERS */
-#pragma omp parallel for simd \
+#pragma omp parallel for \
   reduction(+:np_out_east, np_out_west, np_out_north, np_out_south) 
 #pragma vector aligned
   for(int ii = 0; ii < ntotal_particles; ++ii) {
@@ -338,8 +338,10 @@ void handle_facets(
       (particles->distance_to_facet[ii]/particles->particle_velocity[ii]);
 
     // Update the tallies
-    double scalar_flux =
-      particles->weight[ii]*particles->distance_to_facet[ii]*inv_cell_volume[celly*(nx+2*PAD)+cellx];
+    double scalar_flux =0.0;
+#if 0
+      particles->weight[ii]*particles->distance_to_facet[ii]/(edgedx[cellx]*edgedy[celly]);
+#endif // if 0
     double energy_deposition = calculate_energy_deposition(
         ii, particles, particles->distance_to_facet[ii], number_density, 
         particles->microscopic_cs_absorb[ii], 
@@ -455,7 +457,7 @@ void handle_collisions(
   int np_dead = 0;
 
   /* HANDLE COLLISIONS */
-#pragma omp parallel for simd reduction(+:np_dead)
+#pragma omp parallel for reduction(+:np_dead)
 #pragma vector aligned
   for(int ii = 0; ii < ntotal_particles; ++ii) {
     if(particles->next_event[ii] != COLLISION) {
@@ -475,7 +477,10 @@ void handle_collisions(
       particles->mfp_to_collision[ii]*particles->cell_mfp[ii];
 
     // Calculate the energy deposition in the cell
-    double scalar_flux = particles->weight[ii]*distance_to_collision*inv_cell_volume[celly*(nx+2*PAD)+cellx];
+    double scalar_flux = 0.0;
+#if 0
+      particles->weight[ii]*distance_to_collision/edgedx[cellx]*edgedy[celly]);
+#endif // if 0
     double energy_deposition = calculate_energy_deposition(
         ii, particles, distance_to_collision, number_density, 
         particles->microscopic_cs_absorb[ii], 
@@ -551,7 +556,7 @@ void handle_census(
   const double inv_ntotal_particles = 1.0/ntotal_particles;
 
   /* HANDLE THE CENSUS EVENTS */
-#pragma omp parallel for simd
+#pragma omp parallel for 
   for(int ii = 0; ii < ntotal_particles; ++ii) {
     if(particles->next_event[ii] != CENSUS) {
       continue;
@@ -574,7 +579,10 @@ void handle_census(
     particles->mfp_to_collision[ii] -= 
       (distance_to_census*(macroscopic_cs_scatter+macroscopic_cs_absorb));
 
-    double scalar_flux = particles->weight[ii]*distance_to_census*inv_cell_volume[celly*(nx+2*PAD)+cellx];
+    double scalar_flux = 0.0;
+#if 0
+      particles->weight[ii]*distance_to_census/(edgedx[cellx]*edgedy[celly]);
+#endif // if 0
 
     // Calculate the energy deposition in the cell
     double energy_deposition = calculate_energy_deposition(
@@ -610,16 +618,21 @@ void calc_distance_to_facet(
     double u_x_inv = 1.0/(particles->omega_x[ii]*particles->particle_velocity[ii]);
     double u_y_inv = 1.0/(particles->omega_y[ii]*particles->particle_velocity[ii]);
 
+    double x0 = edgex[cellx];
+    double x1 = edgex[cellx+1];
+    double y0 = edgey[celly];
+    double y1 = edgey[celly+1];
+
     // The bound is open on the left and bottom so we have to correct for this and
     // required the movement to the facet to go slightly further than the edge
     // in the calculated values, using OPEN_BOUND_CORRECTION, which is the smallest
     // possible distance we can be from the closed bound e.g. 1.0e-14.
     double dt_x = (particles->omega_x[ii] >= 0.0)
-      ? ((edgex[cellx+1])-particles->x[ii])*u_x_inv
-      : ((edgex[cellx]-OPEN_BOUND_CORRECTION)-particles->x[ii])*u_x_inv;
+      ? (x1-particles->x[ii])*u_x_inv
+      : ((x0-OPEN_BOUND_CORRECTION)-particles->x[ii])*u_x_inv;
     double dt_y = (particles->omega_y[ii] >= 0.0)
-      ? ((edgey[celly+1])-particles->y[ii])*u_y_inv
-      : ((edgey[celly]-OPEN_BOUND_CORRECTION)-particles->y[ii])*u_y_inv;
+      ? (y1-particles->y[ii])*u_y_inv
+      : ((y0-OPEN_BOUND_CORRECTION)-particles->y[ii])*u_y_inv;
 
     // Calculated the projection to be
     // a = vector on first edge to be hit
@@ -638,21 +651,20 @@ void calc_distance_to_facet(
       // We are centered on the origin, so the y component is 0 after travelling
       // aint the x axis to the edge (ax, 0).(x, y)
       particles->distance_to_facet[ii] = (particles->omega_x[ii] >= 0.0)
-        ? ((edgex[cellx+1])-particles->x[ii])*mag_u0*u_x_inv
-        : ((edgex[cellx]-OPEN_BOUND_CORRECTION)-particles->x[ii])*mag_u0*u_x_inv;
+        ? (x1-particles->x[ii])*mag_u0*u_x_inv
+        : ((x0-OPEN_BOUND_CORRECTION)-particles->x[ii])*mag_u0*u_x_inv;
     }
     else {
       // We are centered on the origin, so the x component is 0 after travelling
       // along the y axis to the edge (0, ay).(x, y)
       particles->distance_to_facet[ii] = (particles->omega_y[ii] >= 0.0)
-        ? ((edgey[celly+1])-particles->y[ii])*mag_u0*u_y_inv
-        : ((edgey[celly]-OPEN_BOUND_CORRECTION)-particles->y[ii])*mag_u0*u_y_inv;
+        ? (y1-particles->y[ii])*mag_u0*u_y_inv
+        : ((y0-OPEN_BOUND_CORRECTION)-particles->y[ii])*mag_u0*u_y_inv;
     }
   }
 }
 
 // Tallies both the scalar flux and energy deposition in the cell
-#pragma omp declare simd
 void update_tallies(
     const int pindex, const int nx, const int x_off, const int y_off, 
     Particles* particles, const int cellx_pad, const int celly_pad, 
@@ -663,11 +675,13 @@ void update_tallies(
   const int cellx = cellx_pad-PAD;
   const int celly = celly_pad-PAD;
 
+#if 0
   //#pragma omp atomic update 
   scalar_flux_tally[celly*nx+cellx] += 
     scalar_flux*inv_ntotal_particles; 
+#endif // if 0
 
-//#pragma omp atomic update
+#pragma omp atomic update
   energy_deposition_tally[celly*nx+cellx] += 
     energy_deposition*inv_ntotal_particles;
 }

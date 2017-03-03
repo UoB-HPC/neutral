@@ -146,15 +146,12 @@ void initialise_bright_data(
   allocate_data(&bright_data->scalar_flux_tally, (mesh->local_nx)*(mesh->local_ny));
   allocate_data(&bright_data->energy_deposition_tally, (mesh->local_nx)*(mesh->local_ny));
 
-  inv_cell_volume = (double*)malloc(sizeof(double)*(mesh->local_nx)*(mesh->local_ny));
-
 #pragma omp parallel for
   for(int ii = 0; ii < (mesh->local_ny); ++ii) {
     for(int jj = 0; jj < (mesh->local_nx); ++jj) {
       const int ind = ii*(mesh->local_nx)+jj;
       bright_data->scalar_flux_tally[ind] = 0.0;
       bright_data->energy_deposition_tally[ind] = 0.0;
-      bright_data->inv_cell_volume[ind] = 1.0/(mesh->edgedx[jj]*mesh->edgedy[ii]);
     }
   }
 

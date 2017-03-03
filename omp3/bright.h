@@ -14,7 +14,6 @@ void handle_particles(
     double* energy_deposition_tally, RNPool* rn_pools);
 
 // Tallies both the scalar flux and energy deposition in the cell
-#pragma omp declare simd
 void update_tallies(
     const int pindex, const int nx, const int x_off, const int y_off, 
     Particles* particles, const int cellx, const int celly, 
