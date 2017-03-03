@@ -309,10 +309,14 @@ void handle_facets(
 {
   const double inv_ntotal_particles = 1.0/ntotal_particles;
 
-  int np_out = 0;
+  int np_out_east = 0;
+  int np_out_west = 0;
+  int np_out_north = 0;
+  int np_out_south = 0;
 
   /* HANDLE FACET ENCOUNTERS */
-#pragma omp parallel for simd reduction(+:np_out)
+#pragma omp parallel for simd \
+  reduction(+:np_out_east, np_out_west, np_out_north, np_out_south) 
   for(int ii = 0; ii < ntotal_particles; ++ii) {
     if(particles->next_event[ii] != FACET) {
       continue;
@@ -364,8 +368,7 @@ void handle_facets(
           // Check if we need to pass to another process
           if(particles->cellx[ii] >= nx+x_off) {
             send_and_mark_particle(neighbours[EAST], ii, particles);
-            nparticles_sent[EAST]++;
-            np_out++;
+            np_out_east++;
             continue;
           }
         }
@@ -382,8 +385,7 @@ void handle_facets(
           // Check if we need to pass to another process
           if(particles->cellx[ii] < x_off) {
             send_and_mark_particle(neighbours[WEST], ii, particles);
-            nparticles_sent[WEST]++;
-            np_out++;
+            np_out_west++;
             continue;
           }
         }
@@ -402,8 +404,7 @@ void handle_facets(
           // Check if we need to pass to another process
           if(particles->celly[ii] >= ny+y_off) {
             send_and_mark_particle(neighbours[NORTH], ii, particles);
-            nparticles_sent[NORTH]++;
-            np_out++;
+            np_out_north++;
             continue;
           }
         }
@@ -420,8 +421,7 @@ void handle_facets(
           // Check if we need to pass to another process
           if(particles->celly[ii] < y_off) {
             send_and_mark_particle(neighbours[SOUTH], ii, particles);
-            nparticles_sent[SOUTH]++;
-            np_out++;
+            np_out_south++;
             continue;
           }
         }
@@ -437,7 +437,11 @@ void handle_facets(
     particles->cell_mfp[ii] = 1.0/(macroscopic_cs_scatter+macroscopic_cs_absorb);
   }
 
-  *nparticles_out = np_out;
+  nparticles_sent[EAST] = np_out_east;
+  nparticles_sent[WEST] = np_out_west;
+  nparticles_sent[NORTH] = np_out_north;
+  nparticles_sent[SOUTH] = np_out_south;
+  *nparticles_out = np_out_west+np_out_north+np_out_south+np_out_east;
 }
 
 // Handle all of the collision events

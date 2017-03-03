@@ -14,6 +14,7 @@ void handle_particles(
     double* energy_deposition_tally, RNPool* rn_pools);
 
 // Tallies both the scalar flux and energy deposition in the cell
+#pragma omp declare simd
 void update_tallies(
     const int pindex, const int nx, const int x_off, const int y_off, 
     Particles* particles, const int cellx, const int celly, 
@@ -21,19 +22,12 @@ void update_tallies(
     const double scalar_flux, double* scalar_flux_tally, 
     double* energy_deposition_tally);
 
-// Makes the necessary updates to the particles given that
-// the facet was encountered
-int handle_facet_encounter(
-    const int pindex, const int global_nx, const int global_ny, const int nx, const int ny, 
-    const int x_off, const int y_off, const int* neighbours, 
-    const double distance_to_facet, int x_facet, int* nparticles_sent, 
-    Particles* particles);
-
 // Sends a particles to a neighbour and replaces in the particles list
 void send_and_mark_particle(
     const int destination, const int pindex, Particles* particles);
 
 // Calculate the energy deposition in the cell
+#pragma omp declare simd
 double calculate_energy_deposition(
     const int pindex, Particles* particles, const double path_length, 
     const double number_density, const double microscopic_cs_absorb, 

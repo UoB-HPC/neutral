@@ -1,15 +1,15 @@
 # User defined parameters
 KERNELS          = omp3
-COMPILER         = INTEL
+COMPILER         = INTEL_KNL
 MPI              = yes
 MAC_RPATH				 = -Wl,-rpath,${COMPILER_ROOT}/lib 
 CFLAGS_INTEL     = -O3 -no-prec-div -std=gnu99 -qopenmp -DINTEL \
 									 $(MAC_RPATH) -Wall -qopt-report=5 -g #-xhost
 CFLAGS_INTEL_KNL = -O3 -qopenmp -no-prec-div -std=gnu99 -DINTEL \
-									 -xMIC-AVX512 -Wall -g -qopt-report=5 
+									 -Wall -g -qopt-report=5  -xMIC-AVX512 
 CFLAGS_GCC       = -O3 -g -std=gnu99 -fopenmp -march=native -Wall 
 CFLAGS_CRAY      = -lrt -hlist=a
-OPTIONS         += -DTILES -DENABLE_PROFILING 
+OPTIONS         += -DTILES #-DENABLE_PROFILING 
 
 ifeq ($(DEBUG), yes)
   OPTIONS += -O0 -DDEBUG 
@@ -20,8 +20,8 @@ ifeq ($(MPI), yes)
 endif
 
 # Default compiler
-MULTI_COMPILER_CC   = cc
-MULTI_COMPILER_CPP  = CC
+MULTI_COMPILER_CC   = mpiicc
+MULTI_COMPILER_CPP  = mpiicpc
 MULTI_LINKER    		= $(MULTI_COMPILER_CC)
 MULTI_FLAGS     		= $(CFLAGS_$(COMPILER))
 MULTI_LDFLAGS   		= $(MULTI_FLAGS) -lm

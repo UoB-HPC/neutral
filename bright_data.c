@@ -94,7 +94,7 @@ void initialise_bright_data(
   // TODO: SHOULD PROBABLY PERFORM A REDUCTION OVER THE NUMBER OF LOCAL PARTICLES
   // TO MAKE SURE THAT THEY ALL SUM UP TO THE CORRECT VALUE!
 
-  const int vec_align = 64;
+  const int vec_align = 256;
   // THIS IS A LOT OF DATA...
   bright_data->local_particles = 
     (Particles*)_mm_malloc(sizeof(Particles), vec_align);
