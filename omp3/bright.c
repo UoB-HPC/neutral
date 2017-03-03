@@ -242,7 +242,7 @@ int handle_particle(
   // Update the cross sections, referencing into the padded mesh
   int cellx = particle->cellx-x_off+PAD;
   int celly = particle->celly-y_off+PAD;
-  double inv_cell_volume = 1.0/edgex[cellx]*edgey[celly];
+  double inv_cell_volume = 1.0/(edgex[cellx]*edgey[celly]);
   double local_density = density[celly*(nx+2*PAD)+cellx];
 
   // This makes some assumption about the units of the data stored globally.
@@ -635,7 +635,7 @@ double calculate_energy_deposition(
   const double absorption_heating = 
     (microscopic_cs_absorb/microscopic_cs_total)*average_exit_energy_absorb;
   const double average_exit_energy_scatter = 
-    particle->e*(MASS_NO*MASS_NO+2)/((MASS_NO+1)*(MASS_NO+1));
+    particle->e*((MASS_NO*MASS_NO+MASS_NO+1)/((MASS_NO+1)*(MASS_NO+1)));
   const double scattering_heating = 
     (1.0-(microscopic_cs_absorb/microscopic_cs_total))*average_exit_energy_scatter;
   const double heating_response =
