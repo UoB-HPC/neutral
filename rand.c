@@ -28,19 +28,16 @@ void init_rn_pools(
   const int nnon_master_pools = (nrn_pools-1);
   const int master_pool_index = nnon_master_pools;
 
-  double* buffer = (double*)malloc(sizeof(double)*buf_len);
-  rn_pools[master_pool_index].buffer = buffer;
+  allocate_data(&rn_pools[master_pool_index].buffer, buf_len);
   rn_pools[master_pool_index].buf_len = buf_len;
-  rn_pools[master_pool_index].buf_index = 0;
   rn_pools[master_pool_index].master = 1;
 
   // Give each of the non master random number pools an allocation in the
   // global space
   const int nlocal_slots = buf_len/nnon_master_pools;
   for(int ii = 0; ii < nnon_master_pools; ++ii) {
-    rn_pools[ii].buffer = buffer;
+    rn_pools[ii].buffer = &rn_pools[master_pool_index].buffer[ii*nlocal_slots];
     rn_pools[ii].buf_len = nlocal_slots;
-    rn_pools[ii].buf_index = ii*nlocal_slots;
   }
 }
 
@@ -63,12 +60,12 @@ double getrand(RNPool* rn_pool)
     fill_rn_buffer(rn_pool, rn_pool->buf_len);
 
     // TODO: CHECK FOR OVERFLOW CAUSED BY THE INCREMENT
-    if(rn_pool->counter.v[0]+NRANDOM_NUMBERS >= UINT64_MAX) {
+    if(rn_pool->counter.v[0]+rn_pool->buf_len >= UINT64_MAX) {
       TERMINATE("Overran the allowed space for the counter, our logic doesn't \
           permit carry yet.\n");
     }
     else {
-      rn_pool->counter.v[0] += NRANDOM_NUMBERS;
+      rn_pool->counter.v[0] += rn_pool->buf_len;
     }
   }
 

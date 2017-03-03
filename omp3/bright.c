@@ -154,8 +154,7 @@ void handle_particles(
 
   while(1) {
     START_PROFILING(&compute_profile);
-    update_rn_pool_master_keys(
-        rn_pools, nthreads+1, (*master_key)++);
+    update_rn_pool_master_keys(rn_pools, nthreads+1, (*master_key)++);
     STOP_PROFILING(&compute_profile, "update rn pool master keys");
 
     /* INITIALISATION */
@@ -211,7 +210,7 @@ void handle_particles(
   // Have now handled all events...
 
   // Correct the new total number of particles
-  *nparticles -= (nparticles_dead+nparticles_out);
+  // *nparticles -= (nparticles_dead+nparticles_out);
 
   printf("handled %d particles, with %d particles deleted\n", 
       nparticles_to_process, nparticles_dead+nparticles_out);
@@ -224,9 +223,9 @@ void event_initialisation(
     const int nthreads, RNPool* rn_pools, CrossSection* cs_scatter_table, 
     CrossSection* cs_absorb_table)
 {
+  RNPool* master_pool = &rn_pools[nthreads];
   // Generate random numbers for every particles...
-  fill_rn_buffer(
-      &rn_pools[nthreads], ntotal_particles);
+  fill_rn_buffer(master_pool, ntotal_particles);
 
   // Initialise all of the particles with their starting state
 #pragma omp parallel for simd
@@ -252,7 +251,7 @@ void event_initialisation(
     double macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
     double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
     particles->cell_mfp[ii] = 1.0/(macroscopic_cs_scatter+macroscopic_cs_absorb);
-    const double rn0 = rn_pools[nthreads].buffer[ii]; // Make this a function
+    const double rn0 = master_pool->buffer[ii]; // Make this a function
     particles->mfp_to_collision[ii] = -log(rn0)/macroscopic_cs_scatter;
   }
 }
@@ -271,8 +270,7 @@ int calc_next_event(
     }
 
     const double distance_to_collision = particles->mfp_to_collision[ii]*particles->cell_mfp[ii];
-    const double distance_to_census = 
-      particles->particle_velocity[ii]*particles->dt_to_census[ii];
+    const double distance_to_census = particles->particle_velocity[ii]*particles->dt_to_census[ii];
 
     if(distance_to_collision < distance_to_census && 
         distance_to_collision < particles->distance_to_facet[ii]) {
@@ -443,7 +441,7 @@ void handle_facets(
   nparticles_sent[WEST] = np_out_west;
   nparticles_sent[NORTH] = np_out_north;
   nparticles_sent[SOUTH] = np_out_south;
-  *nparticles_out = np_out_west+np_out_north+np_out_south+np_out_east;
+  *nparticles_out += np_out_west+np_out_north+np_out_south+np_out_east;
 }
 
 // Handle all of the collision events
@@ -548,7 +546,7 @@ void handle_collisions(
     particles->dt_to_census[ii] -= distance_to_collision/particles->particle_velocity[ii];
   }
 
-  *nparticles_dead = np_dead;
+  *nparticles_dead += np_dead;
 }
 
 // Handles all of the census events

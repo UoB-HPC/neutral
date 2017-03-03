@@ -8,8 +8,7 @@
 
 typedef struct {
   int buf_len;          // The local length of the random number buffer
-  int buf_index;        // The index into the global random number buffer
-  double* buffer;       // A pointer to the global buffer
+  double* buffer;       // A pointer to the local part of the global buffer
   int available;        // The number of available local random numbers
   int master;
 
