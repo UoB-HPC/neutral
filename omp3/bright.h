@@ -69,12 +69,15 @@ void handle_facets(
 void handle_collisions(
     const int ntotal_particles, const int nx, const int x_off, const int y_off, 
     Particles* particles, const double* edgex, const double* edgey, 
-    RNPool* rn_pools, int* nparticles_dead, double* scalar_flux_tally, 
+    RNPool* rn_pools, int* nparticles_dead, CrossSection* cs_scatter_table,
+    CrossSection* cs_absorb_table, double* scalar_flux_tally, 
     double* energy_deposition_tally);
 
 // Handles all of the census events
 void handle_census(
     const int ntotal_particles, const int nx, const int x_off, const int y_off, 
     Particles* particles, const double* density, const double* edgex, 
-    const double* edgey, double* scalar_flux_tally, double* energy_deposition_tally);
+    const double* edgey, CrossSection* cs_scatter_table, 
+    CrossSection* cs_absorb_table, double* scalar_flux_tally, 
+    double* energy_deposition_tally);
 

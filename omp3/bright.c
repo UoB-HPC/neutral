@@ -194,14 +194,16 @@ void handle_particles(
     START_PROFILING(&compute_profile);
     handle_collisions( 
         ntotal_particles, nx, x_off, y_off, particles, edgex, edgey, 
-        rn_pools, &nparticles_dead, scalar_flux_tally, energy_deposition_tally);
+        rn_pools, &nparticles_dead, cs_scatter_table, cs_absorb_table,
+        scalar_flux_tally, energy_deposition_tally);
     STOP_PROFILING(&compute_profile, "handle collisions");
   }
 
   START_PROFILING(&compute_profile);
   handle_census(
       ntotal_particles, nx, x_off, y_off, particles, density, edgex, 
-      edgey, scalar_flux_tally, energy_deposition_tally);
+      edgey, cs_scatter_table, cs_absorb_table, scalar_flux_tally, 
+      energy_deposition_tally);
   STOP_PROFILING(&compute_profile, "handle census");
 
   printf("left the main loop\n");
@@ -236,9 +238,9 @@ void event_initialisation(
       particles->next_event[ii] = FACET; 
     }
 
-    particles->microscopic_cs_scatter[ii] = microscopic_cs_for_energy(
+    double microscopic_cs_scatter = microscopic_cs_for_energy(
           cs_scatter_table, particles->e[ii], &particles->scatter_cs_index[ii]);
-    particles->microscopic_cs_absorb[ii] = microscopic_cs_for_energy(
+    double microscopic_cs_absorb = microscopic_cs_for_energy(
           cs_absorb_table, particles->e[ii], &particles->absorb_cs_index[ii]);
     particles->particle_velocity[ii] =
       sqrt((2.0*particles->e[ii]*eV_TO_J)*INV_PARTICLE_MASS);
@@ -247,8 +249,8 @@ void event_initialisation(
     int celly = particles->celly[ii]-y_off+PAD;
     particles->local_density[ii] = density[celly*(nx+2*PAD)+cellx];
     double number_density = (particles->local_density[ii]*AVOGADROS/MOLAR_MASS);
-    double macroscopic_cs_scatter = number_density*particles->microscopic_cs_scatter[ii]*BARNS;
-    double macroscopic_cs_absorb = number_density*particles->microscopic_cs_absorb[ii]*BARNS;
+    double macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
+    double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
     particles->cell_mfp[ii] = 1.0/(macroscopic_cs_scatter+macroscopic_cs_absorb);
     const double rn0 = rn_pools[nthreads].buffer[ii]; // Make this a function
     particles->mfp_to_collision[ii] = -log(rn0)/macroscopic_cs_scatter;
@@ -325,10 +327,12 @@ void handle_facets(
     int celly = particles->celly[ii]-y_off+PAD;
     double number_density = (particles->local_density[ii]*AVOGADROS/MOLAR_MASS);
 
-    double macroscopic_cs_scatter = 
-      number_density*particles->microscopic_cs_scatter[ii]*BARNS;
-    double macroscopic_cs_absorb = 
-      number_density*particles->microscopic_cs_absorb[ii]*BARNS;
+    double microscopic_cs_scatter = microscopic_cs_for_energy(
+          cs_scatter_table, particles->e[ii], &particles->scatter_cs_index[ii]);
+    double microscopic_cs_absorb = microscopic_cs_for_energy(
+          cs_absorb_table, particles->e[ii], &particles->absorb_cs_index[ii]);
+    double macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
+    double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
 
     // Update the mean free paths until collision
     particles->mfp_to_collision[ii] -=
@@ -343,8 +347,7 @@ void handle_facets(
 #endif // if 0
     double energy_deposition = calculate_energy_deposition(
         ii, particles, particles->distance_to_facet[ii], number_density, 
-        particles->microscopic_cs_absorb[ii], 
-        particles->microscopic_cs_scatter[ii]+particles->microscopic_cs_absorb[ii]);
+        microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb);
     update_tallies(
         ii, nx, x_off, y_off, particles, cellx, celly, inv_ntotal_particles, 
         energy_deposition, scalar_flux, scalar_flux_tally, energy_deposition_tally);
@@ -431,10 +434,8 @@ void handle_facets(
 
     particles->local_density[ii] = density[celly*(nx+2*PAD)+cellx];
     number_density = (particles->local_density[ii]*AVOGADROS/MOLAR_MASS);
-    macroscopic_cs_scatter = 
-      number_density*particles->microscopic_cs_scatter[ii]*BARNS;
-    macroscopic_cs_absorb = 
-      number_density*particles->microscopic_cs_absorb[ii]*BARNS;
+    macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
+    macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
     particles->cell_mfp[ii] = 1.0/(macroscopic_cs_scatter+macroscopic_cs_absorb);
   }
 
@@ -449,7 +450,8 @@ void handle_facets(
 void handle_collisions(
     const int ntotal_particles, const int nx, const int x_off, const int y_off, 
     Particles* particles, const double* edgex, const double* edgey, 
-    RNPool* rn_pools, int* nparticles_dead, double* scalar_flux_tally, 
+    RNPool* rn_pools, int* nparticles_dead, CrossSection* cs_scatter_table,
+    CrossSection* cs_absorb_table, double* scalar_flux_tally, 
     double* energy_deposition_tally)
 {
   const double inv_ntotal_particles = 1.0/ntotal_particles;
@@ -468,22 +470,25 @@ void handle_collisions(
     int celly = particles->celly[ii]-y_off+PAD;
     double number_density = 
       (particles->local_density[ii]*AVOGADROS/MOLAR_MASS);
+    double microscopic_cs_scatter = microscopic_cs_for_energy(
+        cs_scatter_table, particles->e[ii], &particles->scatter_cs_index[ii]);
+    double microscopic_cs_absorb = microscopic_cs_for_energy(
+        cs_absorb_table, particles->e[ii], &particles->absorb_cs_index[ii]);
     double macroscopic_cs_scatter = 
-      number_density*particles->microscopic_cs_scatter[ii]*BARNS;
+      number_density*microscopic_cs_scatter*BARNS;
     double macroscopic_cs_absorb = 
-      number_density*particles->microscopic_cs_absorb[ii]*BARNS;
+      number_density*microscopic_cs_absorb*BARNS;
     const double distance_to_collision = 
       particles->mfp_to_collision[ii]*particles->cell_mfp[ii];
 
     // Calculate the energy deposition in the cell
     double scalar_flux = 0.0;
 #if 0
-      particles->weight[ii]*distance_to_collision/edgedx[cellx]*edgedy[celly]);
+    particles->weight[ii]*distance_to_collision/edgedx[cellx]*edgedy[celly]);
 #endif // if 0
     double energy_deposition = calculate_energy_deposition(
         ii, particles, distance_to_collision, number_density, 
-        particles->microscopic_cs_absorb[ii], 
-        particles->microscopic_cs_scatter[ii]+particles->microscopic_cs_absorb[ii]);
+        microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb);
 
     // Moves the particles to the collision site
     particles->x[ii] += distance_to_collision*particles->omega_x[ii];
@@ -550,7 +555,9 @@ void handle_collisions(
 void handle_census(
     const int ntotal_particles, const int nx, const int x_off, const int y_off, 
     Particles* particles, const double* density, const double* edgex, 
-    const double* edgey, double* scalar_flux_tally, double* energy_deposition_tally)
+    const double* edgey, CrossSection* cs_scatter_table, 
+    CrossSection* cs_absorb_table, double* scalar_flux_tally, 
+    double* energy_deposition_tally)
 {
   // Not sure these make any difference with the event based approach
   const double inv_ntotal_particles = 1.0/ntotal_particles;
@@ -568,10 +575,12 @@ void handle_census(
     int celly = particles->celly[ii]-y_off+PAD;
     double local_density = density[celly*(nx+2*PAD)+cellx];
     double number_density = (local_density*AVOGADROS/MOLAR_MASS);
-    double macroscopic_cs_scatter = 
-      number_density*particles->microscopic_cs_scatter[ii]*BARNS;
-    double macroscopic_cs_absorb = 
-      number_density*particles->microscopic_cs_absorb[ii]*BARNS;
+    double microscopic_cs_scatter = microscopic_cs_for_energy(
+          cs_scatter_table, particles->e[ii], &particles->scatter_cs_index[ii]);
+    double microscopic_cs_absorb = microscopic_cs_for_energy(
+          cs_absorb_table, particles->e[ii], &particles->absorb_cs_index[ii]);
+    double macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
+    double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
 
     // We have not changed cell or energy level at this stage
     particles->x[ii] += distance_to_census*particles->omega_x[ii];
@@ -581,14 +590,13 @@ void handle_census(
 
     double scalar_flux = 0.0;
 #if 0
-      particles->weight[ii]*distance_to_census/(edgedx[cellx]*edgedy[celly]);
+    particles->weight[ii]*distance_to_census/(edgedx[cellx]*edgedy[celly]);
 #endif // if 0
 
     // Calculate the energy deposition in the cell
     double energy_deposition = calculate_energy_deposition(
         ii, particles, distance_to_census, number_density,
-        particles->microscopic_cs_absorb[ii], 
-        particles->microscopic_cs_scatter[ii]+particles->microscopic_cs_absorb[ii]);
+        microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb);
 
     // Need to store tally information as finished with particles
     update_tallies(
