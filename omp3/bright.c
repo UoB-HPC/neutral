@@ -242,7 +242,8 @@ int handle_particle(
   // Update the cross sections, referencing into the padded mesh
   int cellx = particle->cellx-x_off+PAD;
   int celly = particle->celly-y_off+PAD;
-  double inv_cell_volume = 1.0/(edgex[cellx]*edgey[celly]);
+  //double inv_cell_volume = 1.0/(edgedx[cellx]*edgedy[celly]);
+  double inv_cell_volume = 0.0;//1.0/(edgedx[cellx]*edgedy[celly]);
   double local_density = density[celly*(nx+2*PAD)+cellx];
 
   // This makes some assumption about the units of the data stored globally.
@@ -285,7 +286,7 @@ int handle_particle(
       (*collisions)++;
 
       // Don't need to tally into mesh on collision
-      scalar_flux += particle->weight*distance_to_collision*inv_cell_volume;
+      //scalar_flux += particle->weight*distance_to_collision*inv_cell_volume;
       energy_deposition += calculate_energy_deposition(
           global_nx, nx, x_off, y_off, particle, inv_ntotal_particles, 
           distance_to_collision, inv_cell_volume, number_density, 
@@ -329,7 +330,7 @@ int handle_particle(
       particle->dt_to_census -= (distance_to_facet/particle_velocity);
 
       // Don't need to tally into mesh on collision
-      scalar_flux += particle->weight*distance_to_facet*inv_cell_volume;
+      //scalar_flux += particle->weight*distance_to_facet*inv_cell_volume;
       energy_deposition += calculate_energy_deposition(
           global_nx, nx, x_off, y_off, particle, inv_ntotal_particles, 
           distance_to_facet, inv_cell_volume, number_density, microscopic_cs_absorb, 
@@ -353,7 +354,7 @@ int handle_particle(
       cellx = particle->cellx-x_off+PAD;
       celly = particle->celly-y_off+PAD;
       local_density = density[celly*(nx+2*PAD)+cellx];
-      inv_cell_volume = 1.0/(edgedx[cellx]*edgedy[celly]);
+      //inv_cell_volume = 1.0/(edgedx[cellx]*edgedy[celly]);
       number_density = (local_density*AVOGADROS/MOLAR_MASS);
       macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
       macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
@@ -364,7 +365,7 @@ int handle_particle(
       particle->x += distance_to_census*particle->omega_x;
       particle->y += distance_to_census*particle->omega_y;
       particle->mfp_to_collision -= (distance_to_census/cell_mfp);
-      scalar_flux += particle->weight*distance_to_census*inv_cell_volume;
+      //scalar_flux += particle->weight*distance_to_census*inv_cell_volume;
       energy_deposition += calculate_energy_deposition(
           global_nx, nx, x_off, y_off, particle, inv_ntotal_particles, 
           distance_to_census, inv_cell_volume, number_density, microscopic_cs_absorb, 
@@ -394,9 +395,11 @@ void update_tallies(
   const int cellx = particle->cellx-x_off;
   const int celly = particle->celly-y_off;
 
+#if 0
 #pragma omp atomic update 
   scalar_flux_tally[celly*nx+cellx] += 
     scalar_flux*inv_ntotal_particles; 
+#endif // if 0
 
 #pragma omp atomic update
   energy_deposition_tally[celly*nx+cellx] += 
