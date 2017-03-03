@@ -3,10 +3,10 @@ KERNELS          = omp3
 COMPILER         = INTEL_KNL
 MPI              = yes
 MAC_RPATH				 = -Wl,-rpath,${COMPILER_ROOT}/lib 
-CFLAGS_INTEL     = -O3 -no-prec-div -std=gnu99 -qopenmp -DINTEL \
+CFLAGS_INTEL     = -O3 -no-prec-div -restrict -std=gnu99 -qopenmp -DINTEL \
 									 $(MAC_RPATH) -Wall -qopt-report=5 -g #-xhost
 CFLAGS_INTEL_KNL = -O3 -qopenmp -no-prec-div -std=gnu99 -DINTEL \
-									 -Wall -g -qopt-report=5  -xMIC-AVX512 
+									 -Wall -g -qopt-report=5  -restrict -xMIC-AVX512 
 CFLAGS_GCC       = -O3 -g -std=gnu99 -fopenmp -march=native -Wall 
 CFLAGS_CRAY      = -lrt -hlist=a
 OPTIONS         += -DTILES -DENABLE_PROFILING 
@@ -24,7 +24,7 @@ MULTI_COMPILER_CC   = mpiicc
 MULTI_COMPILER_CPP  = mpiicpc
 MULTI_LINKER    		= $(MULTI_COMPILER_CC)
 MULTI_FLAGS     		= $(CFLAGS_$(COMPILER))
-MULTI_LDFLAGS   		= $(MULTI_FLAGS) -lm
+MULTI_LDFLAGS   		= $(MULTI_FLAGS) #-lm
 MULTI_BUILD_DIR 		= ../obj
 MULTI_DIR       		= ..
 
