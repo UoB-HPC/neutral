@@ -180,11 +180,13 @@ void handle_particles(
     nparticles_deleted += (result == PARTICLE_SENT || result == PARTICLE_DEAD);
   }
 
+#if 0
   compress_particle_list(
       nparticles_to_process, particles_start, nparticles_deleted);
+#endif // if 0
 
   // Correct the new total number of particles
-  *nparticles -= nparticles_deleted;
+  //*nparticles -= nparticles_deleted;
   *facets = nfacets;
   *collisions = ncollisions;
 
@@ -202,6 +204,8 @@ void compress_particle_list(
   // particles and therefore belong to another thread to handle, which will
   // skew the work for the final thread dramatically
 
+  ///TODO: THIS ISN'T ACTUALLY WORKING...
+  
   int particle_end_index = nparticles_to_process-1;
 #pragma omp parallel for shared(particle_end_index) 
   for(int pp = 0; pp < nparticles_to_process; ++pp) {
