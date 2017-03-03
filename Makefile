@@ -9,7 +9,7 @@ CFLAGS_INTEL_KNL = -O3 -qopenmp -no-prec-div -std=gnu99 -DINTEL \
 									 -Wall -g -qopt-report=5  -xMIC-AVX512 
 CFLAGS_GCC       = -O3 -g -std=gnu99 -fopenmp -march=native -Wall 
 CFLAGS_CRAY      = -lrt -hlist=a
-OPTIONS         += -DTILES #-DENABLE_PROFILING 
+OPTIONS         += -DTILES -DENABLE_PROFILING 
 
 ifeq ($(DEBUG), yes)
   OPTIONS += -O0 -DDEBUG 

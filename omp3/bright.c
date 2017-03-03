@@ -474,7 +474,7 @@ void handle_collisions(
       number_density*particles->microscopic_cs_absorb[ii]*BARNS;
     const double distance_to_collision = 
       particles->mfp_to_collision[ii]*particles->cell_mfp[ii];
-    //double inv_cell_volume = 1.0/(edgedx[cellx]*edgedy[celly]);
+    double inv_cell_volume = 1.0/(edgedx[cellx]*edgedy[celly]);
 
     // Calculate the energy deposition in the cell
     double scalar_flux = particles->weight[ii]*distance_to_collision*inv_cell_volume;
