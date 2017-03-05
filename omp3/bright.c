@@ -353,7 +353,7 @@ void handle_facets(
     particles->dt_to_census[ii] -=
       (particles->distance_to_facet[ii]/particles->particle_velocity[ii]);
 
-    double energy_deposition = calculate_energy_deposition(
+    particles->energy_deposition[ii] = calculate_energy_deposition(
         ii, particles, particles->distance_to_facet[ii], number_density, 
         microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb);
 
