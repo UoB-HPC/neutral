@@ -114,6 +114,7 @@ void initialise_bright_data(
   allocation += allocate_data(&particle->local_density,bright_data->nparticles*1.5);
   allocation += allocate_data(&particle->cell_mfp,bright_data->nparticles*1.5);
   allocation += allocate_data(&particle->particle_velocity,bright_data->nparticles*1.5);
+  allocation += allocate_data(&particle->energy_deposition,bright_data->nparticles*1.5);
   allocation += allocate_int_data(&particle->x_facet,bright_data->nparticles*1.5);
   allocation += allocate_int_data(&particle->cellx,bright_data->nparticles*1.5);
   allocation += allocate_int_data(&particle->celly,bright_data->nparticles*1.5);

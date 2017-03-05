@@ -8,17 +8,15 @@ void handle_particles(
     const int x_off, const int y_off, const double dt, const int* neighbours, 
     const double* density, const double* edgex, const double* edgey, int* facets, 
     int* collisions, int* nparticles_sent, uint64_t* master_key, 
-    const int ntotal_particles, const int nparticles_to_process, 
+    const int nparticles_total, const int nparticles_to_process, 
     int* nparticles, Particles* particles, CrossSection* cs_scatter_table, 
     CrossSection* cs_absorb_table, double* scalar_flux_tally, 
     double* energy_deposition_tally, RNPool* rn_pools);
 
 // Tallies both the scalar flux and energy deposition in the cell
 void update_tallies(
-    const int pindex, const int nx, const int x_off, const int y_off, 
-    Particles* particles, const int cellx, const int celly, 
-    const double inv_ntotal_particles, const double energy_deposition,
-    const double scalar_flux, double* scalar_flux_tally, 
+    const int nx, Particles* particles, const int x_off, const int y_off, 
+    const int nparticles, const int exclude_census, double* scalar_flux_tally, 
     double* energy_deposition_tally);
 
 // Sends a particles to a neighbour and replaces in the particles list
@@ -42,23 +40,23 @@ void validate(
     const int rank, double* energy_deposition_tally);
 
 void event_initialisation(
-    const int ntotal_particles, const int nx, const int x_off, const int y_off, 
+    const int nparticles_total, const int nx, const int x_off, const int y_off, 
     Particles* particles, const double dt, const double* density,
     const int nthreads, RNPool* rn_pools, CrossSection* cs_scatter_table, 
     CrossSection* cs_absorb_table);
 
 // Calculates the distance to the facet for all cells
 void calc_distance_to_facet(
-    const int ntotal_particles, const int x_off, const int y_off, 
+    const int nparticles_total, const int x_off, const int y_off, 
     Particles* particles, const double* edgex, const double* edgey);
 
 // Calculates the next event for each particle
 int calc_next_event(
-    const int ntotal_particles, Particles* particles, int* facets, int* collisions);
+    const int nparticles_total, Particles* particles, int* facets, int* collisions);
 
 // Handle all of the facet encounters
 void handle_facets(
-    const int ntotal_particles, const int global_nx, const int global_ny, 
+    const int nparticles_total, const int global_nx, const int global_ny, 
     const int nx, const int ny, const int x_off, const int y_off, 
     const int* neighbours, int* nparticles_sent, Particles* particles, 
     const double* edgex, const double* edgey, const double* density, 
@@ -67,7 +65,7 @@ void handle_facets(
 
 // Handle all of the collision events
 void handle_collisions(
-    const int ntotal_particles, const int nx, const int x_off, const int y_off, 
+    const int nparticles_total, const int nx, const int x_off, const int y_off, 
     Particles* particles, const double* edgex, const double* edgey, 
     RNPool* rn_pools, int* nparticles_dead, CrossSection* cs_scatter_table,
     CrossSection* cs_absorb_table, double* scalar_flux_tally, 
@@ -75,7 +73,7 @@ void handle_collisions(
 
 // Handles all of the census events
 void handle_census(
-    const int ntotal_particles, const int nx, const int x_off, const int y_off, 
+    const int nparticles_total, const int nx, const int x_off, const int y_off, 
     Particles* particles, const double* density, const double* edgex, 
     const double* edgey, CrossSection* cs_scatter_table, 
     CrossSection* cs_absorb_table, double* scalar_flux_tally, 

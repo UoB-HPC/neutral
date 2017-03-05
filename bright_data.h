@@ -50,6 +50,7 @@ typedef struct {
   double* local_density;
   double* cell_mfp;
   double* particle_velocity;
+  double* energy_deposition;
   int* x_facet;
   int* cellx;
   int* celly;
