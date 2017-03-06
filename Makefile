@@ -8,7 +8,11 @@ CFLAGS_INTEL     = -O3 -no-prec-div -restrict -std=gnu99 -qopenmp -DINTEL \
 CFLAGS_INTEL_KNL = -O3 -qopenmp -no-prec-div -std=gnu99 -DINTEL \
 									 -Wall -g -qopt-report=5  -restrict -xMIC-AVX512 
 CFLAGS_GCC       = -O3 -g -std=gnu99 -fopenmp -march=native -Wall 
-CFLAGS_CRAY      = -lrt -hlist=a
+CFLAGS_CRAY      = -lrt -hlist=a 
+CFLAGS_CLANG     = -O3 -fopenmp=libomp -fopenmp-targets=nvptx64-nvidia-cuda \
+									--cuda-path=/nfs/modules/cuda/8.0.44/ \
+									#-ffp-contract=fast -fopenmp-nonaliased-maps
+
 OPTIONS         += -DTILES -DENABLE_PROFILING 
 
 ifeq ($(DEBUG), yes)
@@ -24,7 +28,7 @@ MULTI_COMPILER_CC   = mpiicc
 MULTI_COMPILER_CPP  = mpiicpc
 MULTI_LINKER    		= $(MULTI_COMPILER_CC)
 MULTI_FLAGS     		= $(CFLAGS_$(COMPILER))
-MULTI_LDFLAGS   		= $(MULTI_FLAGS) #-lm
+MULTI_LDFLAGS   		= $(MULTI_FLAGS) # -lm
 MULTI_BUILD_DIR 		= ../obj
 MULTI_DIR       		= ..
 

@@ -284,8 +284,10 @@ int calc_next_event(
       continue;
     }
 
-    const double distance_to_collision = particles->mfp_to_collision[ii]*particles->cell_mfp[ii];
-    const double distance_to_census = particles->particle_velocity[ii]*particles->dt_to_census[ii];
+    const double distance_to_collision = 
+      particles->mfp_to_collision[ii]*particles->cell_mfp[ii];
+    const double distance_to_census = 
+      particles->particle_velocity[ii]*particles->dt_to_census[ii];
 
     if(distance_to_collision < distance_to_census && 
         distance_to_collision < particles->distance_to_facet[ii]) {
@@ -478,10 +480,8 @@ void handle_collisions(
         cs_scatter_table, particles->e[ii], &particles->scatter_cs_index[ii]);
     double microscopic_cs_absorb = microscopic_cs_for_energy(
         cs_absorb_table, particles->e[ii], &particles->absorb_cs_index[ii]);
-    double macroscopic_cs_scatter = 
-      number_density*microscopic_cs_scatter*BARNS;
-    double macroscopic_cs_absorb = 
-      number_density*microscopic_cs_absorb*BARNS;
+    double macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
+    double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
     const double distance_to_collision = 
       particles->mfp_to_collision[ii]*particles->cell_mfp[ii];
 
@@ -514,6 +514,7 @@ void handle_collisions(
 
       // Choose a random scattering angle between -1 and 1
       // TODO: THIS RANDOM NUMBER SELECTION DOESN'T WORK
+      // ...GOOD COMMENT BRO
       const double mu_cm = 1.0 - 2.0*getrand(local_rn_pool);
 
       // Calculate the new energy based on the relation to angle of incidence
