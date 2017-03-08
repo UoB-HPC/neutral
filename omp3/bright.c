@@ -180,45 +180,11 @@ void handle_particles(
     nparticles_deleted += (result == PARTICLE_SENT || result == PARTICLE_DEAD);
   }
 
-#if 0
-  compress_particle_list(
-      nparticles_to_process, particles_start, nparticles_deleted);
-#endif // if 0
-
-  // Correct the new total number of particles
-  //*nparticles -= nparticles_deleted;
   *facets = nfacets;
   *collisions = ncollisions;
 
   printf("handled %d particles, with %d particles deleted\n", 
       nparticles_to_process, nparticles_deleted);
-}
-
-void compress_particle_list(
-    const int nparticles_to_process, Particle* particles_start,
-    int nparticles_deleted)
-{
-  // The reason that we decouple this and do it after the main particle loop
-  // is because otherwise we could be in a situation where the particles
-  // that the thread attempts to select are at the end of this list of 
-  // particles and therefore belong to another thread to handle, which will
-  // skew the work for the final thread dramatically
-
-  ///TODO: THIS ISN'T ACTUALLY WORKING...
-  
-  int particle_end_index = nparticles_to_process-1;
-#pragma omp parallel for shared(particle_end_index) 
-  for(int pp = 0; pp < nparticles_to_process; ++pp) {
-    if(particles_start[pp].dead) {
-      // Acquire a particle to swap in
-      int particle_swap_index;
-
-#pragma omp atomic capture
-      particle_swap_index = particle_end_index--;
-
-      particles_start[pp] = particles_start[particle_swap_index];
-    }
-  }
 }
 
 // Handles an individual particle.
@@ -246,8 +212,6 @@ int handle_particle(
   // Update the cross sections, referencing into the padded mesh
   int cellx = particle->cellx-x_off+PAD;
   int celly = particle->celly-y_off+PAD;
-  //double inv_cell_volume = 1.0/(edgedx[cellx]*edgedy[celly]);
-  double inv_cell_volume = 0.0;//1.0/(edgedx[cellx]*edgedy[celly]);
   double local_density = density[celly*(nx+2*PAD)+cellx];
 
   // This makes some assumption about the units of the data stored globally.
@@ -290,10 +254,9 @@ int handle_particle(
       (*collisions)++;
 
       // Don't need to tally into mesh on collision
-      //scalar_flux += particle->weight*distance_to_collision*inv_cell_volume;
       energy_deposition += calculate_energy_deposition(
           global_nx, nx, x_off, y_off, particle, inv_ntotal_particles, 
-          distance_to_collision, inv_cell_volume, number_density, 
+          distance_to_collision, number_density, 
           microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb);
 
       // The cross sections for scattering and absorption were calculated on 
@@ -334,10 +297,9 @@ int handle_particle(
       particle->dt_to_census -= (distance_to_facet/particle_velocity);
 
       // Don't need to tally into mesh on collision
-      //scalar_flux += particle->weight*distance_to_facet*inv_cell_volume;
       energy_deposition += calculate_energy_deposition(
           global_nx, nx, x_off, y_off, particle, inv_ntotal_particles, 
-          distance_to_facet, inv_cell_volume, number_density, microscopic_cs_absorb, 
+          distance_to_facet, number_density, microscopic_cs_absorb, 
           microscopic_cs_scatter+microscopic_cs_absorb);
 
       // Update tallies as we leave a cell
@@ -358,7 +320,6 @@ int handle_particle(
       cellx = particle->cellx-x_off+PAD;
       celly = particle->celly-y_off+PAD;
       local_density = density[celly*(nx+2*PAD)+cellx];
-      //inv_cell_volume = 1.0/(edgedx[cellx]*edgedy[celly]);
       number_density = (local_density*AVOGADROS/MOLAR_MASS);
       macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
       macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
@@ -369,10 +330,9 @@ int handle_particle(
       particle->x += distance_to_census*particle->omega_x;
       particle->y += distance_to_census*particle->omega_y;
       particle->mfp_to_collision -= (distance_to_census/cell_mfp);
-      //scalar_flux += particle->weight*distance_to_census*inv_cell_volume;
       energy_deposition += calculate_energy_deposition(
           global_nx, nx, x_off, y_off, particle, inv_ntotal_particles, 
-          distance_to_census, inv_cell_volume, number_density, microscopic_cs_absorb, 
+          distance_to_census, number_density, microscopic_cs_absorb, 
           microscopic_cs_scatter+microscopic_cs_absorb);
 
       // Need to store tally information as finished with particle
@@ -634,7 +594,7 @@ void calc_distance_to_facet(
 double calculate_energy_deposition(
     const int global_nx, const int nx, const int x_off, const int y_off, 
     Particle* particle, const double inv_ntotal_particles, const double path_length, 
-    const double inv_cell_volume, const double number_density, 
+    const double number_density, 
     const double microscopic_cs_absorb, const double microscopic_cs_total)
 {
   // Calculate the energy deposition based on the path length
