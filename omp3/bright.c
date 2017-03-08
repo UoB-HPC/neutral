@@ -148,7 +148,6 @@ void handle_particles(
     nthreads = omp_get_num_threads();
   }
 
-  int initialised = 0;
   int nparticles_out = 0;
   int nparticles_dead = 0;
 
@@ -166,6 +165,8 @@ void handle_particles(
 
     }
 #endif // if 0
+
+    int initialised = 0;
 
     while(1) {
       START_PROFILING(&compute_profile);
@@ -274,7 +275,7 @@ void event_initialisation(
     double macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
     double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
     particles->cell_mfp[pindex] = 1.0/(macroscopic_cs_scatter+macroscopic_cs_absorb);
-    const double rn0 = master_pool->buffer[pindex]; // Make this a function
+    const double rn0 = master_pool->buffer[ii]; // Make this a function
     particles->mfp_to_collision[pindex] = -log(rn0)/macroscopic_cs_scatter;
   }
 }
