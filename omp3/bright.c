@@ -152,7 +152,7 @@ void handle_particles(
   int nparticles_dead = 0;
 
   // Block over the events
-  const int block_size = 10000;
+  const int block_size = 200000;
   const int nblocks = nparticles_total/block_size;
   for(int bb = 0; bb < nblocks; ++bb) {
     const int particles_offset = bb*block_size;
