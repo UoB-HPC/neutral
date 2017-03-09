@@ -157,15 +157,6 @@ void handle_particles(
   for(int bb = 0; bb < nblocks; ++bb) {
     const int particles_offset = bb*block_size;
 
-#if 0
-    /* PERFORM SOME FORM OF GAP FILLING TO MAKE SURE THAT WE WORK ON 
-     * VALID PARTICLES */
-#pragma omp parallel for
-    for(int ii = 0; ii < block_size; ++ii) {
-
-    }
-#endif // if 0
-
     int initialised = 0;
 
     while(1) {
@@ -585,8 +576,8 @@ void handle_census(
       particles->particle_velocity[pindex]*particles->dt_to_census[pindex];
     int cellx = particles->cellx[pindex]-x_off+PAD;
     int celly = particles->celly[pindex]-y_off+PAD;
-    double local_density = density[celly*(nx+2*PAD)+cellx];
-    double number_density = (local_density*AVOGADROS/MOLAR_MASS);
+    particles->local_density[pindex] = density[celly*(nx+2*PAD)+cellx];
+    double number_density = (particles->local_density[pindex]*AVOGADROS/MOLAR_MASS);
     double microscopic_cs_scatter = microscopic_cs_for_energy(
         cs_scatter_table, particles->e[pindex], &particles->scatter_cs_index[pindex]);
     double microscopic_cs_absorb = microscopic_cs_for_energy(
