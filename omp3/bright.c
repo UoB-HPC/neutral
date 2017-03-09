@@ -626,16 +626,13 @@ double microscopic_cs_for_energy(
 
   // Determine the correct search direction required to move towards the
   // new energy
-  const int direction = (energy-cs->value[*cs_index] > 0.0) ? 1 : -1; 
+  const int direction = (energy > cs->value[*cs_index]) ? 1 : -1; 
 
-  // TODO: The problem that occurred with the binary search appears to be an
-  // actual bug rather than just a performance issue. Now it is resolved it might
-  // not be necessary to actually have the linear search.
   if(*cs_index > -1) {
     // This search will move in the correct direction towards the new energy group
-    for(int ind = *cs_index; ind >= 0 && ind < cs->nentries; ind += direction) {
+    for(ind = *cs_index; ind >= 0 && ind < cs->nentries; ind += direction) {
       // Check if we have found the new energy group index
-      if(key[ind-1] > energy || key[ind] < energy) {
+      if(energy >= key[ind] && energy < key[ind+1]) {
         break;
       }
     }
@@ -644,8 +641,8 @@ double microscopic_cs_for_energy(
     // Use a simple binary search to find the energy group
     ind = cs->nentries/2;
     int width = ind/2;
-    while(key[ind-1] > energy || key[ind] < energy) {
-      ind += (key[ind] > energy) ? -width : width;
+    while(energy < key[ind] || energy >= key[ind+1]) {
+      ind += (energy < key[ind]) ? -width : width;
       width = max(1, width/2); // To handle odd cases, allows one extra walk
     }
   }
