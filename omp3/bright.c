@@ -206,7 +206,7 @@ void handle_particles(
 
       START_PROFILING(&compute_profile);
       update_tallies(
-          nx, particles, x_off, y_off, block_size, particles_offset, 1, 
+          nx, particles, x_off, y_off, block_size, particles_offset, 0, 
           scalar_flux_tally, energy_deposition_tally);
       STOP_PROFILING(&compute_profile, "update tallies");
     }
@@ -220,7 +220,7 @@ void handle_particles(
 
     START_PROFILING(&compute_profile);
     update_tallies(
-        nx, particles, x_off, y_off, block_size, particles_offset, 0, 
+        nx, particles, x_off, y_off, block_size, particles_offset, 1, 
         scalar_flux_tally, energy_deposition_tally);
     STOP_PROFILING(&compute_profile, "update tallies");
   }
@@ -493,7 +493,7 @@ void handle_collisions(
     const double distance_to_collision = 
       particles->mfp_to_collision[pindex]*particles->cell_mfp[pindex];
 
-    particles->energy_deposition[pindex] = calculate_energy_deposition(
+    particles->energy_deposition[pindex] += calculate_energy_deposition(
         pindex, particles, distance_to_collision, number_density, 
         microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb);
 
@@ -670,7 +670,7 @@ void calc_distance_to_facet(
 // Tallies both the scalar flux and energy deposition in the cell
 void update_tallies(
     const int nx, Particles* particles, const int x_off, const int y_off, 
-    const int nparticles, const int particles_offset, const int exclude_census, 
+    const int nparticles, const int particles_offset, const int tally_census, 
     double* scalar_flux_tally, double* energy_deposition_tally)
 {
   const double inv_nparticles_total = 1.0/nparticles;
@@ -678,8 +678,8 @@ void update_tallies(
 #pragma omp parallel for
   for(int ii = 0; ii < nparticles; ++ii) {
     const int pindex = particles_offset+ii;
-    if(particles->next_event[pindex] == DEAD || 
-        (exclude_census && particles->next_event[pindex] == CENSUS)) {
+    if((!tally_census && particles->next_event[pindex] != FACET) || 
+       (tally_census && particles->next_event[pindex] != CENSUS)) {
       continue;
     }
 
@@ -689,6 +689,7 @@ void update_tallies(
 #pragma omp atomic update
     energy_deposition_tally[celly*nx+cellx] += 
       particles->energy_deposition[pindex]*inv_nparticles_total;
+    particles->energy_deposition[pindex] = 0.0;
   }
 }
 
