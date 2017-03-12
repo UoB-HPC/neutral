@@ -4,9 +4,11 @@
 #include "../mesh.h"
 #include "../comms.h"
 
+#if 0
 #ifdef MPI
 #include "mpi.h"
 #endif
+#endif // if 0
 
 /* Problem-Independent Constants */
 #define eV_TO_J                1.60217646e-19       // 1 eV to Joules
@@ -84,10 +86,12 @@ typedef struct {
 
 } BrightData;
 
+#if 0
 #ifdef MPI
 // Global MPI particle type
 MPI_Datatype particle_type;
 #endif
+#endif // if 0
 
 // Initialises all of the Bright-specific data structures.
 void initialise_bright_data(

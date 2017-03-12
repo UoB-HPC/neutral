@@ -63,8 +63,8 @@ int main(int argc, char** argv)
   SharedData shared_data = {0};
   initialise_shared_data_2d(
       mesh.global_nx, mesh.global_ny, mesh.local_nx, mesh.local_ny, 
-      mesh.x_off, mesh.y_off, mesh.ndims, bright_data.neutral_params_filename, 
-      mesh.edgex, mesh.edgey, &shared_data);
+      mesh.x_off, mesh.y_off, mesh.width, mesh.height, 
+      bright_data.neutral_params_filename, mesh.edgex, mesh.edgey, &shared_data);
   initialise_bright_data(
       &bright_data, &mesh);
 

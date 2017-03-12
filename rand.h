@@ -17,6 +17,11 @@ typedef struct {
 
 } RNPool;
 
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // Prepare the random number pool
 void init_rn_pools(
     RNPool* rn_pools, const int nrn_pools, const int buf_len);
@@ -31,4 +36,8 @@ double getrand(RNPool* rn_pool);
 // Fills the rn buffer with random numbers
 void fill_rn_buffer(
     RNPool* rn_pool, const int nrandom_numbers);
+
+#ifdef __cplusplus
+}
+#endif
 

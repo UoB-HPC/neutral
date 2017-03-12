@@ -52,34 +52,43 @@ void initialise_bright_data(
         bright_data->neutral_params_filename);
   }
 
-  // Fetch the width and height of the mesh
-  const double mesh_width = mesh->edgex[mesh->global_nx+PAD];
-  const double mesh_height = mesh->edgey[mesh->global_ny+PAD];
-
   // The last four keys are the bound specification
-  const double source_xpos = values[nkeys-4]*mesh_width;
-  const double source_ypos = values[nkeys-3]*mesh_height;
-  const double source_width = values[nkeys-2]*mesh_width;
-  const double source_height = values[nkeys-1]*mesh_height;
-  const double rank_xpos_0 = mesh->edgex[mesh->x_off+PAD];
-  const double rank_ypos_0 = mesh->edgey[mesh->y_off+PAD];
-  const double rank_xpos_1 = mesh->edgex[local_nx+mesh->x_off+PAD];
-  const double rank_ypos_1 = mesh->edgey[local_ny+mesh->y_off+PAD];
+  const double source_xpos = values[nkeys-4]*mesh->width;
+  const double source_ypos = values[nkeys-3]*mesh->height;
+  const double source_width = values[nkeys-2]*mesh->width;
+  const double source_height = values[nkeys-1]*mesh->height;
+
+  double* mesh_edgex_0 = &mesh->edgex[mesh->x_off+PAD];
+  double* mesh_edgey_0 = &mesh->edgey[mesh->y_off+PAD];
+  double* mesh_edgex_1 = &mesh->edgex[local_nx+mesh->x_off+PAD];
+  double* mesh_edgey_1 = &mesh->edgey[local_ny+mesh->y_off+PAD];
+  double* rank_xpos_0;
+  double* rank_ypos_0;
+  double* rank_xpos_1;
+  double* rank_ypos_1;
+  allocate_host_data(&rank_xpos_0, 1);
+  allocate_host_data(&rank_ypos_0, 1);
+  allocate_host_data(&rank_xpos_1, 1);
+  allocate_host_data(&rank_ypos_1, 1);
+  sync_data(1, &mesh_edgex_0, &rank_xpos_0, RECV);
+  sync_data(1, &mesh_edgey_0, &rank_ypos_0, RECV);
+  sync_data(1, &mesh_edgex_1, &rank_xpos_1, RECV);
+  sync_data(1, &mesh_edgey_1, &rank_ypos_1, RECV);
 
   // Calculate the shaded bounds
   const double local_particle_left_off =
-    max(0.0, source_xpos-rank_xpos_0);
+    max(0.0, source_xpos-*rank_xpos_0);
   const double local_particle_bottom_off =
-    max(0.0, source_ypos-rank_ypos_0);
+    max(0.0, source_ypos-*rank_ypos_0);
   const double local_particle_right_off =
-    max(0.0, rank_xpos_1-(source_xpos+source_width));
+    max(0.0, *rank_xpos_1-(source_xpos+source_width));
   const double local_particle_top_off =
-    max(0.0, rank_ypos_1-(source_ypos+source_height));
+    max(0.0, *rank_ypos_1-(source_ypos+source_height));
   const double local_particle_width = 
-    max(0.0, (rank_xpos_1-rank_xpos_0)-
+    max(0.0, (*rank_xpos_1-*rank_xpos_0)-
         (local_particle_right_off+local_particle_left_off));
   const double local_particle_height = 
-    max(0.0, (rank_ypos_1-rank_ypos_0)-
+    max(0.0, (*rank_ypos_1-*rank_ypos_0)-
         (local_particle_top_off+local_particle_bottom_off));
 
   // Calculate the number of particles we need based on the shaded area that
@@ -132,15 +141,6 @@ void initialise_bright_data(
     TERMINATE("Could not allocate particle array.\n");
   }
 
-#pragma omp parallel for
-  for(int ii = 0; ii < (mesh->local_ny); ++ii) {
-    for(int jj = 0; jj < (mesh->local_nx); ++jj) {
-      const int ind = ii*(mesh->local_nx)+jj;
-      bright_data->scalar_flux_tally[ind] = 0.0;
-      bright_data->energy_deposition_tally[ind] = 0.0;
-    }
-  }
-
   // Inject some particles into the mesh if we need to
   if(bright_data->nlocal_particles) {
     inject_particles(
@@ -153,6 +153,12 @@ void initialise_bright_data(
   initialise_cross_sections(
       bright_data, mesh);
 
+  free(rank_xpos_0);
+  free(rank_ypos_0);
+  free(rank_xpos_1);
+  free(rank_ypos_1);
+
+#if 0
 #ifdef MPI
   // Had to initialise this in the package directly as the data structure is not
   // general enough to place in the multi-package 
@@ -163,6 +169,7 @@ void initialise_bright_data(
       2, blocks, disp, types, &particle_type);
   MPI_Type_commit(&particle_type);
 #endif
+#endif // if 0
 }
 
 // Acts as a particle source
