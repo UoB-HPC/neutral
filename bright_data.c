@@ -126,7 +126,7 @@ void initialise_bright_data(
   allocation += 
     allocate_data(&bright_data->energy_deposition_tally, (mesh->local_nx)*(mesh->local_ny));
 
-  printf("Allocating %lld bytes of data.\n", allocation);
+  printf("Allocating %zu bytes of data.\n", allocation);
 
   if(!bright_data->local_particles) {
     TERMINATE("Could not allocate particle array.\n");

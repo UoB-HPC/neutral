@@ -327,8 +327,6 @@ void handle_facets(
     double* energy_deposition_tally, CrossSection* cs_scatter_table, 
     CrossSection* cs_absorb_table)
 {
-  const double inv_nparticles_total = 1.0/nparticles;
-
   int np_out_east = 0;
   int np_out_west = 0;
   int np_out_north = 0;
@@ -480,8 +478,6 @@ void handle_collisions(
     }
 
     // Don't need to tally into mesh on collision
-    int cellx = particles->cellx[pindex]-x_off+PAD;
-    int celly = particles->celly[pindex]-y_off+PAD;
     double number_density = 
       (particles->local_density[pindex]*AVOGADROS/MOLAR_MASS);
     double microscopic_cs_scatter = microscopic_cs_for_energy(

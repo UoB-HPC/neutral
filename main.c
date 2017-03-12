@@ -71,8 +71,6 @@ int main(int argc, char** argv)
   // Make sure initialisation phase is complete
   barrier();
 
-  const int nparticles = bright_data.nparticles;
-
   // Main timestep loop where we will track each particle through time
   int tt;
   double wallclock = 0.0;
