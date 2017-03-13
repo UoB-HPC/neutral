@@ -24,6 +24,21 @@ void init_rn_pools(
     rn_pools[ii].buffer = NULL;
   }
 
+
+
+
+
+
+
+  return;
+
+
+
+
+
+
+
+
   // Setup the master pool to have access to the whole random number buffer
   const int nnon_master_pools = (nrn_pools-1);
   const int master_pool_index = nnon_master_pools;

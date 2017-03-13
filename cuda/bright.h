@@ -11,7 +11,8 @@ void handle_particles(
     const int nparticles_total, const int nparticles_to_process, 
     int* nparticles, Particles* particles, CrossSection* cs_scatter_table, 
     CrossSection* cs_absorb_table, double* scalar_flux_tally, 
-    double* energy_deposition_tally, RNPool* rn_pools);
+    double* energy_deposition_tally, RNPool* rn_pools, int* reduce_array0,
+    int* reduce_array1);
 
 // Initialises ready for the event cycles
 void event_initialisation(
@@ -23,7 +24,7 @@ void event_initialisation(
 // Calculates the next event for each particle
 int calc_next_event(
     const int nparticles, const int particles_offset, Particles* particles, 
-    int* facets, int* collisions);
+    int* facets, int* collisions, int* reduce_array0, int* reduce_array1);
 
 // Handle all of the facet encounters
 void handle_facets(
@@ -41,7 +42,7 @@ void handle_collisions(
     const int x_off, const int y_off, Particles* particles, const double* edgex, 
     const double* edgey, RNPool* rn_pools, int* nparticles_dead, 
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
-    double* scalar_flux_tally, double* energy_deposition_tally);
+    double* scalar_flux_tally, double* energy_deposition_tally, int* reduce_array);
 
 // Handles all of the census events
 void handle_census(

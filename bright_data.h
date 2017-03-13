@@ -82,6 +82,9 @@ typedef struct {
   double* scalar_flux_tally;
   double* energy_deposition_tally;
 
+  int* reduce_array0;
+  int* reduce_array1;
+
   const char* neutral_params_filename;
 
 } BrightData;

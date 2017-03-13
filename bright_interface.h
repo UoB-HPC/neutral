@@ -11,12 +11,13 @@ extern "C" {
   // Performs a solve of dependent variables for particle transport.
   void solve_transport_2d(
       const int nx, const int ny, const int global_nx, const int global_ny, 
-      const int x_off, const int y_off, const double dt, const int ntotal_particles,
+      const int x_off, const int y_off, const double dt, const int nparticles_total,
       int* nlocal_particles, uint64_t* master_key, const int* neighbours, 
       Particles* particles, const double* density, const double* edgex, 
       const double* edgey, const double* edgedx, const double* edgedy, 
       CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
-      double* scalar_flux_tally, double* energy_deposition_tally, RNPool* rn_pool);
+      double* scalar_flux_tally, double* energy_deposition_tally, RNPool* rn_pools,
+      int* reduce_array0, int* reduce_array1);
 
   // Acts as a particle source
   void inject_particles(

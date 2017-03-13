@@ -123,6 +123,9 @@ void initialise_bright_data(
   allocation += allocate_int_data(&particle->scatter_cs_index,bright_data->nparticles*1.5);
   allocation += allocate_int_data(&particle->absorb_cs_index,bright_data->nparticles*1.5);
   allocation += allocate_int_data(&particle->next_event,bright_data->nparticles*1.5);
+  // TODO: COULD SAVE SOME CAPACITY WITH THE REDUCE ARRAYS
+  allocation += allocate_int_data(&bright_data->reduce_array0, bright_data->nparticles*1.5);
+  allocation += allocate_int_data(&bright_data->reduce_array1, bright_data->nparticles*1.5);
   allocation += 
     allocate_data(&bright_data->scalar_flux_tally, (mesh->local_nx)*(mesh->local_ny));
   allocation += 

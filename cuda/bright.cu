@@ -25,7 +25,8 @@ void solve_transport_2d(
     Particles* particles, const double* density, const double* edgex, 
     const double* edgey, const double* edgedx, const double* edgedy, 
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
-    double* scalar_flux_tally, double* energy_deposition_tally, RNPool* rn_pools)
+    double* scalar_flux_tally, double* energy_deposition_tally, RNPool* rn_pools,
+    int* reduce_array0, int* reduce_array1)
 {
   // This is the known starting number of particles
   int facets = 0;
@@ -47,7 +48,8 @@ void solve_transport_2d(
       global_nx, global_ny, nx, ny, x_off, y_off, dt, neighbours, density, edgex, 
       edgey, &facets, &collisions, nparticles_sent, master_key, nparticles_total, 
       nparticles, &nparticles, particles, cs_scatter_table, 
-      cs_absorb_table, scalar_flux_tally, energy_deposition_tally, rn_pools);
+      cs_absorb_table, scalar_flux_tally, energy_deposition_tally, rn_pools,
+      reduce_array0, reduce_array1);
 
   *nlocal_particles = nparticles;
 
@@ -63,7 +65,8 @@ void handle_particles(
     const int nparticles_total, const int nparticles_to_process, 
     int* nparticles, Particles* particles, CrossSection* cs_scatter_table, 
     CrossSection* cs_absorb_table, double* scalar_flux_tally, 
-    double* energy_deposition_tally, RNPool* rn_pools)
+    double* energy_deposition_tally, RNPool* rn_pools, int* reduce_array0,
+    int* reduce_array1)
 {
   int nthreads                  = 0;
 
@@ -101,7 +104,8 @@ void handle_particles(
 
       START_PROFILING(&compute_profile);
       const int all_census = calc_next_event(
-          block_size, particles_offset, particles, facets, collisions);
+          block_size, particles_offset, particles, facets, collisions, 
+          reduce_array0, reduce_array1);
       STOP_PROFILING(&compute_profile, "calc next event");
 
       if(all_census) {
@@ -120,7 +124,7 @@ void handle_particles(
       handle_collisions( 
           block_size, particles_offset, nx, x_off, y_off, particles, edgex, edgey, 
           rn_pools, &nparticles_dead, cs_scatter_table, cs_absorb_table,
-          scalar_flux_tally, energy_deposition_tally);
+          scalar_flux_tally, energy_deposition_tally, reduce_array0);
       STOP_PROFILING(&compute_profile, "handle collisions");
 
       START_PROFILING(&compute_profile);
@@ -155,13 +159,10 @@ void event_initialisation(
     const double* density, const int nthreads, RNPool* rn_pools, 
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table)
 {
-  RNPool* master_pool = &rn_pools[nthreads];
-
-  // Generate random numbers for every particles...
-  fill_rn_buffer(master_pool, nparticles);
+  RNPool* master_pool = &rn_pools[0];
 
   // Initialise all of the particles with their starting state
-  const int nblocks = nparticles/(double)NTHREADS; 
+  const int nblocks = nparticles/((double)NTHREADS*NRANDOM_NUMBERS); 
   event_initialisation_kernel<<<nblocks, NTHREADS>>>(
       nparticles, particles_offset, dt, nx, x_off, y_off, cs_scatter_table->nentries, 
       cs_absorb_table->nentries, particles->e, particles->cellx, 
@@ -169,14 +170,16 @@ void event_initialisation(
       cs_absorb_table->keys, cs_absorb_table->values, density, particles->dt_to_census, 
       particles->next_event, particles->scatter_cs_index, 
       particles->absorb_cs_index, particles->particle_velocity, 
-      particles->local_density, particles->cell_mfp, particles->mfp_to_collision, 
-      master_pool->buffer); // THIS BUFFER NEEDS TO BE FIXED ON DEVICE SOMEHOW
+      particles->local_density, particles->cell_mfp, particles->mfp_to_collision,
+      master_pool->key.v[0]);  
+  // TODO: BE CAREFUL PASSING MASTER KEY HERE, MAKE SURE IT IS INITIALISED
+  // PROPERLY ETC..
 }
 
 // Calculates the next event for each particle
 int calc_next_event(
     const int nparticles, const int particles_offset, Particles* particles, 
-    int* facets, int* collisions)
+    int* facets, int* collisions, int* reduce_array0, int* reduce_array1)
 {
   /* CALCULATE THE EVENTS */
   int nfacets = 0;
@@ -185,7 +188,8 @@ int calc_next_event(
   calc_next_event_kernel<<<nblocks, NTHREADS>>>(
       nparticles, particles_offset, particles->mfp_to_collision, 
       particles->cell_mfp, particles->particle_velocity, particles->dt_to_census, 
-      particles->distance_to_facet, particles->next_event);
+      particles->distance_to_facet, particles->next_event, reduce_array0,
+      reduce_array1);
 
   *facets += nfacets;
   *collisions += ncollisions;
@@ -243,12 +247,24 @@ void handle_collisions(
     const int x_off, const int y_off, Particles* particles, const double* edgex, 
     const double* edgey, RNPool* rn_pools, int* nparticles_dead, 
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
-    double* scalar_flux_tally, double* energy_deposition_tally)
+    double* scalar_flux_tally, double* energy_deposition_tally, int* reduce_array)
 {
+  RNPool* master_pool = &rn_pools[0];
+
   int np_dead = 0;
 
   const int nblocks = nparticles/(double)NTHREADS; 
-  handle_collisions_kernel<<<nblocks, NTHREADS>>>();
+  handle_collisions_kernel<<<nblocks, NTHREADS>>>(
+    nparticles, particles_offset, nx, x_off, y_off, 
+    cs_scatter_table->nentries, cs_absorb_table->nentries, particles->e, 
+    particles->distance_to_facet, particles->weight, cs_scatter_table->keys, 
+    cs_scatter_table->values, cs_absorb_table->keys, cs_absorb_table->values,
+    particles->energy_deposition, particles->x, particles->y, 
+    particles->omega_x, particles->omega_y, particles->x_facet, particles->cellx, 
+    particles->celly, particles->dt_to_census, particles->next_event, 
+    particles->scatter_cs_index, particles->absorb_cs_index, 
+    particles->particle_velocity, particles->local_density, particles->cell_mfp, 
+    particles->mfp_to_collision, reduce_array, master_pool->key.v[0]);
 
   *nparticles_dead += np_dead;
 }
@@ -263,7 +279,15 @@ void handle_census(
 {
   /* HANDLE THE CENSUS EVENTS */
   const int nblocks = nparticles/(double)NTHREADS; 
-  handle_census_kernel<<<nblocks, NTHREADS>>>();
+  handle_census_kernel<<<nblocks, NTHREADS>>>(
+    nparticles, nx, x_off, y_off, particles_offset, particles->next_event, 
+    particles->particle_velocity, particles->dt_to_census, particles->cellx, 
+    particles->celly, particles->local_density, particles->e, 
+    particles->scatter_cs_index, particles->absorb_cs_index, particles->x, 
+    particles->y, particles->omega_x, particles->omega_y, particles->mfp_to_collision, 
+    particles->energy_deposition, density, cs_scatter_table->keys, 
+    cs_absorb_table->keys, cs_scatter_table->values, cs_absorb_table->values,
+    cs_scatter_table->nentries, cs_absorb_table->nentries, particles->weight);
 }
 
 // Calculates the distance to the facet for all cells
@@ -274,7 +298,13 @@ void calc_distance_to_facet(
 {
   /* DISTANCE TO FACET */
   const int nblocks = nparticles/(double)NTHREADS; 
-  calc_distance_to_facet_kernel<<<nblocks, NTHREADS>>>();
+  calc_distance_to_facet_kernel<<<nblocks, NTHREADS>>>(
+    nparticles, particles_offset, x_off, y_off, 
+    particles->distance_to_facet, particles->x, particles->y, particles->omega_x, 
+    particles->omega_y, particles->x_facet, particles->cellx, particles->celly,
+    particles->dt_to_census, particles->next_event, particles->scatter_cs_index,
+    particles->absorb_cs_index, particles->particle_velocity, 
+    particles->cell_mfp, particles->mfp_to_collision, edgex, edgey);
 }
 
 // Tallies both the scalar flux and energy deposition in the cell
@@ -286,7 +316,10 @@ void update_tallies(
   const double inv_nparticles_total = 1.0/nparticles;
 
   const int nblocks = nparticles/(double)NTHREADS; 
-  update_tallies_kernel<<<nblocks, NTHREADS>>>();
+  update_tallies_kernel<<<nblocks, NTHREADS>>>(
+    nparticles, particles_offset, tally_census, nx, x_off, y_off,
+    inv_nparticles_total, particles->next_event, particles->cellx, 
+    particles->celly, particles->energy_deposition, energy_deposition_tally);
 }
 
 // Sends a particles to a neighbour and replaces in the particles list
@@ -318,10 +351,19 @@ void inject_particles(
     const int nparticles, const double initial_energy, RNPool* rn_pools,
     Particles* particles)
 {
+  RNPool* master_pool = &rn_pools[0];
+
   START_PROFILING(&compute_profile);
 
   const int nblocks = nparticles/(double)NTHREADS; 
-  inject_particles_kernel<<<nblocks, NTHREADS>>>();
+  inject_particles_kernel<<<nblocks, NTHREADS>>>(
+    local_nx, local_ny, mesh->x_off, mesh->y_off, local_particle_left_off, 
+    local_particle_bottom_off, local_particle_width, local_particle_height, 
+    nparticles, mesh->dt, initial_energy, master_pool->key.v[0], mesh->edgex, mesh->edgey, 
+    particles->x, particles->y, particles->cellx, particles->celly, 
+    particles->omega_x, particles->omega_y, particles->e, particles->weight, 
+    particles->dt_to_census, particles->mfp_to_collision, 
+    particles->scatter_cs_index, particles->absorb_cs_index, particles->next_event);
 
   STOP_PROFILING(&compute_profile, "initialising particles");
 }

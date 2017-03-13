@@ -97,7 +97,8 @@ int main(int argc, char** argv)
         bright_data.local_particles, shared_data.rho, mesh.edgex, mesh.edgey, 
         mesh.edgedx, mesh.edgedy, bright_data.cs_scatter_table, 
         bright_data.cs_absorb_table, bright_data.scalar_flux_tally, 
-        bright_data.energy_deposition_tally, bright_data.rn_pools);
+        bright_data.energy_deposition_tally, bright_data.rn_pools,
+        bright_data.reduce_array0, bright_data.reduce_array1);
 
     barrier();
 
@@ -127,10 +128,13 @@ int main(int argc, char** argv)
       &bright_data, &mesh, tt, nparticles, elapsed_sim_time);
 #endif // if 0
 
+
+#if 0
   // TODO: WHAT SHOULD THE VALUE OF NINITIALPARTICLES BE IF FISSION ETC.
   validate(
       mesh.local_nx, mesh.local_ny, bright_data.neutral_params_filename, 
-      mesh.rank, bright_data.energy_deposition_tally);
+     mesh.rank, bright_data.energy_deposition_tally);
+#endif // if 0
 
   if(mesh.rank == MASTER) {
     PRINT_PROFILING_RESULTS(&compute_profile);
