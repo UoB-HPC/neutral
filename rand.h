@@ -22,20 +22,20 @@ typedef struct {
 extern "C" {
 #endif
 
-// Prepare the random number pool
-void init_rn_pools(
-    RNPool* rn_pools, const int nrn_pools, const int buf_len);
+  // Prepare the random number pool
+  void init_rn_pools(
+      RNPool* rn_pools, const int nrn_pools, const int buf_len);
 
-// Updates the master key of the set of rn pools
-void update_rn_pool_master_keys(
-    RNPool* rn_pools, const int nrn_pools, uint64_t master_key);
+  // Updates the master key of the set of rn pools
+  void update_rn_pool_master_keys(
+      RNPool* rn_pools, const int nrn_pools, uint64_t master_key);
 
-// Generates a random number used the Random 123 library
-double getrand(RNPool* rn_pool);
+  // Generates a random number used the Random 123 library
+  double getrand(RNPool* rn_pool);
 
-// Fills the rn buffer with random numbers
-void fill_rn_buffer(
-    RNPool* rn_pool, const int nrandom_numbers);
+  // Fills the rn buffer with random numbers
+  void fill_rn_buffer(
+      RNPool* rn_pool, const int nrandom_numbers);
 
 #ifdef __cplusplus
 }

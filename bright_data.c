@@ -3,26 +3,14 @@
 #include <stdlib.h>
 #include <omp.h>
 #include "bright_data.h"
+#include "bright_interface.h"
 #include "../profiler.h"
 #include "../shared.h"
 #include "../params.h"
 
-// Reads a cross section file
-void read_cs_file(
-    const char* filename, CrossSection* cs, Mesh* mesh);
-
 // Initialises the set of cross sections
 void initialise_cross_sections(
     BrightData* bright_data, Mesh* mesh);
-
-// Initialises a new particle ready for tracking
-void initialise_particle(
-    const int index, const int global_nx, const int local_nx, const int local_ny, 
-    const double local_particle_left_off, const double local_particle_bottom_off, 
-    const double local_particle_width, const double local_particle_height, 
-    const int x_off, const int y_off, const double dt, const double* edgex, 
-    const double* edgey, const double initial_energy, RNPool* rn_pool, 
-    Particles* particles);
 
 // Initialises all of the Bright-specific data structures.
 void initialise_bright_data(
@@ -91,6 +79,11 @@ void initialise_bright_data(
     max(0.0, (*rank_ypos_1-*rank_ypos_0)-
         (local_particle_top_off+local_particle_bottom_off));
 
+  deallocate_host_data(rank_xpos_0);
+  deallocate_host_data(rank_ypos_0);
+  deallocate_host_data(rank_xpos_1);
+  deallocate_host_data(rank_ypos_1);
+
   // Calculate the number of particles we need based on the shaded area that
   // is covered by our source
   const double nlocal_particles_real = 
@@ -153,11 +146,6 @@ void initialise_bright_data(
   initialise_cross_sections(
       bright_data, mesh);
 
-  free(rank_xpos_0);
-  free(rank_ypos_0);
-  free(rank_xpos_1);
-  free(rank_ypos_1);
-
 #if 0
 #ifdef MPI
   // Had to initialise this in the package directly as the data structure is not
@@ -170,82 +158,6 @@ void initialise_bright_data(
   MPI_Type_commit(&particle_type);
 #endif
 #endif // if 0
-}
-
-// Acts as a particle source
-void inject_particles(
-    Mesh* mesh, const int local_nx, const int local_ny, 
-    const double local_particle_left_off, const double local_particle_bottom_off,
-    const double local_particle_width, const double local_particle_height, 
-    const int nparticles, const double initial_energy, RNPool* rn_pools,
-    Particles* particles)
-{
-  START_PROFILING(&compute_profile);
-
-#pragma omp parallel for
-  for(int ii = 0; ii < nparticles; ++ii) {
-    initialise_particle(
-        ii, mesh->global_nx, local_nx, local_ny, local_particle_left_off, 
-        local_particle_bottom_off, local_particle_width, local_particle_height, 
-        mesh->x_off, mesh->y_off, mesh->dt, mesh->edgex, mesh->edgey, 
-        initial_energy, &rn_pools[omp_get_thread_num()], particles);
-  }
-  STOP_PROFILING(&compute_profile, "initialising particles");
-}
-
-// Initialises a new particle ready for tracking
-void initialise_particle(
-    const int index, const int global_nx, const int local_nx, const int local_ny, 
-    const double local_particle_left_off, const double local_particle_bottom_off, 
-    const double local_particle_width, const double local_particle_height, 
-    const int x_off, const int y_off, const double dt, const double* edgex, 
-    const double* edgey, const double initial_energy, RNPool* rn_pool, 
-    Particles* particles)
-{
-  // Set the initial nandom location of the particle inside the source region
-  particles->x[index] = local_particle_left_off + 
-    getrand(rn_pool)*local_particle_width;
-  particles->y[index] = local_particle_bottom_off + 
-    getrand(rn_pool)*local_particle_height;
-
-  // Check the location of the specific cell that the particle sits within.
-  // We have to check this explicitly because the mesh might be non-uniform.
-  int cellx = 0;
-  int celly = 0;
-  for(int ii = 0; ii < local_nx; ++ii) {
-    if(particles->x[index] >= edgex[ii+PAD] && 
-        particles->x[index] < edgex[ii+PAD+1]) {
-      cellx = x_off+ii;
-      break;
-    }
-  }
-  for(int ii = 0; ii < local_ny; ++ii) {
-    if(particles->y[index] >= edgey[ii+PAD] && 
-        particles->y[index] < edgey[ii+PAD+1]) {
-      celly = y_off+ii;
-      break;
-    }
-  }
-
-  particles->cellx[index] = cellx;
-  particles->celly[index] = celly;
-
-  // Generating theta has uniform density, however 0.0 and 1.0 produce the same 
-  // value which introduces very very very small bias...
-  const double theta = 2.0*M_PI*getrand(rn_pool);
-  particles->omega_x[index] = cos(theta);
-  particles->omega_y[index] = sin(theta);
-
-  // This approximation sets mono-energetic initial state for source particles  
-  particles->e[index] = initial_energy;
-
-  // Set a weight for the particle to track absorption
-  particles->weight[index] = 1.0;
-  particles->dt_to_census[index] = dt;
-  particles->mfp_to_collision[index] = 0.0;
-  particles->scatter_cs_index[index] = -1;
-  particles->absorb_cs_index[index] = -1;
-  particles->next_event[index] = FACET;
 }
 
 // Reads in a cross-sectional data file

@@ -1,8 +1,8 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "bright_data.h"
-#include "rand.h"
+#include "../bright_data.h"
+#include "../rand.h"
 
 // Generates NRANDOM_NUMBERS and places them in the buffer
 void generate_random_numbers(
@@ -81,6 +81,7 @@ void fill_rn_buffer(
   // The master pool can initialise random numbers in parallel
   uint64_t counter_start = rn_pool->counter.v[0];
   if(rn_pool->master) {
+#pragma omp parallel for
     for(int ii = 0; ii < nrandom_numbers/NRANDOM_NUMBERS; ++ii) {
       generate_random_numbers(rn_pool, ii, counter_start);
     }

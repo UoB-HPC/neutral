@@ -18,6 +18,14 @@ extern "C" {
       CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
       double* scalar_flux_tally, double* energy_deposition_tally, RNPool* rn_pool);
 
+  // Acts as a particle source
+  void inject_particles(
+      Mesh* mesh, const int local_nx, const int local_ny, 
+      const double local_particle_left_off, const double local_particle_bottom_off,
+      const double local_particle_width, const double local_particle_height, 
+      const int nparticles, const double initial_energy, RNPool* rn_pool,
+      Particles* particles);
+
   // Validates the results of the simulation
   void validate(
       const int nx, const int ny, const char* params_filename, 

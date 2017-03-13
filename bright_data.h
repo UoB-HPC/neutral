@@ -97,11 +97,3 @@ MPI_Datatype particle_type;
 void initialise_bright_data(
     BrightData* bright_data, Mesh* mesh);
 
-// Acts as a particle source
-void inject_particles(
-    Mesh* mesh, const int local_nx, const int local_ny, 
-    const double local_particle_left_off, const double local_particle_bottom_off,
-    const double local_particle_width, const double local_particle_height, 
-    const int nparticles, const double initial_energy, RNPool* rn_pool,
-    Particles* particles);
-

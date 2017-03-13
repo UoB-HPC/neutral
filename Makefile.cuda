@@ -1,0 +1,17 @@
+NVCC					 = nvcc
+
+NVCC_FLAGS		 = -arch=sm_35 $(OPTIONS)
+MULTI_LDFLAGS = -lcudart -L$(CUDA_PATH)/lib64
+MULTI_LINKER 	= $(MULTI_COMPILER_CPP)
+
+CUDA_SRC   			= $(wildcard $(KERNELS)/*.cu)
+CUDA_SRC  		 += $(wildcard $(MULTI_DIR)/$(KERNELS)/*.cu)
+CUDA_SRC_CLEAN  = $(subst $(MULTI_DIR)/,,$(CUDA_SRC))
+OBJS 			 			= $(patsubst %.cu, $(MULTI_BUILD_DIR)/%.o, $(CUDA_SRC_CLEAN))
+
+$(MULTI_BUILD_DIR)/%.o: %.cu Makefile
+	$(NVCC) -Xcompiler "-O3 -fopenmp $(OPTIONS)" $(NVCC_FLAGS) -c $< -o $@
+
+$(MULTI_BUILD_DIR)/%.o: $(MULTI_DIR)/%.cu Makefile
+	$(NVCC) -Xcompiler "-O3 -fopenmp $(OPTIONS)" $(NVCC_FLAGS) -c $< -o $@
+
