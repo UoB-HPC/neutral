@@ -209,8 +209,10 @@ void read_cs_file(
   // Copy the cross sectional table into device memory if appropriate
   allocate_data(&cs->keys, cs->nentries);
   allocate_data(&cs->values, cs->nentries);
-  sync_data(cs->nentries, &h_keys, &cs->keys, SEND);
-  sync_data(cs->nentries, &h_values, &cs->values, SEND);
+  copy_buffer(cs->nentries, &h_keys, &cs->keys, SEND);
+  copy_buffer(cs->nentries, &h_values, &cs->values, SEND);
+  deallocate_host_data(h_keys);
+  deallocate_host_data(h_values);
 }
 
 // Initialises the state 

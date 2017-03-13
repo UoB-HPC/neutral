@@ -1,5 +1,5 @@
 # User defined parameters
-KERNELS          = cuda
+KERNELS          = omp3
 COMPILER         = GCC
 MPI              = yes
 MAC_RPATH				 = -Wl,-rpath,${COMPILER_ROOT}/lib 
