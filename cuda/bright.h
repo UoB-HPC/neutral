@@ -73,10 +73,6 @@ double calculate_energy_deposition(
     const double number_density, const double microscopic_cs_absorb, 
     const double microscopic_cs_total);
 
-// Fetch the cross section for a particular energy value
-double microscopic_cs_for_energy(
-    const CrossSection* cs, const double energy, int* cs_index);
-
 // Validates the results of the simulation
 void validate(
     const int nx, const int ny, const char* params_filename, 

@@ -184,8 +184,10 @@ void read_cs_file(
 
   rewind(fp);
 
-  cs->key = (double*)malloc(sizeof(double)*cs->nentries);
-  cs->value = (double*)malloc(sizeof(double)*cs->nentries);
+  double* h_keys;
+  double* h_values;
+  allocate_host_data(&h_keys, cs->nentries);
+  allocate_host_data(&h_values, cs->nentries);
 
   for(int ii = 0; ii < cs->nentries; ++ii) {
     // Skip whitespace tokens
@@ -198,11 +200,17 @@ void read_cs_file(
     }
 
     ungetc(ch, fp);
-    fscanf(fp, "%lf", &cs->key[ii]);
+    fscanf(fp, "%lf", &h_keys[ii]);
     while((ch = fgetc(fp)) == ' '){};
     ungetc(ch, fp);
-    fscanf(fp, "%lf", &cs->value[ii]);
+    fscanf(fp, "%lf", &h_values[ii]);
   }
+
+  // Copy the cross sectional table into device memory if appropriate
+  allocate_data(&cs->keys, cs->nentries);
+  allocate_data(&cs->values, cs->nentries);
+  sync_data(cs->nentries, &h_keys, &cs->keys, SEND);
+  sync_data(cs->nentries, &h_values, &cs->values, SEND);
 }
 
 // Initialises the state 
