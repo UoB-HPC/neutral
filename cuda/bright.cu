@@ -3,9 +3,6 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <float.h>
-#if 0
-#include <omp.h>
-#endif // if 0
 #include "bright.h"
 #include "../bright_interface.h"
 #include "../../comms.h"
@@ -54,6 +51,82 @@ void solve_transport_2d(
       nparticles, &nparticles, particles, cs_scatter_table, 
       cs_absorb_table, scalar_flux_tally, energy_deposition_tally, rn_pools);
 
+#if 0
+#ifdef MPI
+  while(1) {
+    int nneighbours = 0;
+    int nparticles_recv[NNEIGHBOURS];
+    MPI_Request recv_req[NNEIGHBOURS];
+    MPI_Request send_req[NNEIGHBOURS];
+    for(int ii = 0; ii < NNEIGHBOURS; ++ii) {
+      // Initialise received particles
+      nparticles_recv[ii] = 0;
+
+      // No communication required at edge
+      if(neighbours[ii] == EDGE) {
+        continue;
+      }
+
+      // Check which neighbours are sending some particles
+      MPI_Irecv(
+          &nparticles_recv[ii], 1, MPI_INT, neighbours[ii],
+          TAG_SEND_RECV, MPI_COMM_WORLD, &recv_req[nneighbours]);
+      MPI_Isend(
+          &nparticles_sent[ii], 1, MPI_INT, neighbours[ii],
+          TAG_SEND_RECV, MPI_COMM_WORLD, &send_req[nneighbours++]);
+    }
+
+    MPI_Waitall(
+        nneighbours, recv_req, MPI_STATUSES_IGNORE);
+    nneighbours = 0;
+
+    // Manage all of the received particles
+    int nunprocessed_particles = 0;
+    const int unprocessed_start = nparticles;
+    for(int ii = 0; ii < NNEIGHBOURS; ++ii) {
+      if(neighbours[ii] == EDGE) {
+        continue;
+      }
+
+      // Receive the particles from this neighbour
+      for(int jj = 0; jj < nparticles_recv[ii]; ++jj) {
+        MPI_Recv(
+            &particles[unprocessed_start+nunprocessed_particles], 
+            1, particle_type, neighbours[ii], TAG_PARTICLE, 
+            MPI_COMM_WORLD, MPI_STATUSES_IGNORE);
+        nunprocessed_particles++;
+      }
+
+      nparticles_recv[ii] = 0;
+      nparticles_sent[ii] = 0;
+    }
+
+    nparticles += nunprocessed_particles;
+    if(nunprocessed_particles) {
+      handle_particles(
+          global_nx, global_ny, nx, ny, x_off, y_off, 0, dt, neighbours,
+          density, edgex, edgey, edgedx, edgedy, &facets, &collisions, 
+          nparticles_sent, nparticles_total, nunprocessed_particles, &nparticles, 
+          &particles[unprocessed_start], particles_out, cs_scatter_table, 
+          cs_absorb_table, scalar_flux_tally, energy_deposition_tally, rn_pools);
+    }
+
+    // Check if any of the ranks had unprocessed particles
+    int particles_to_process;
+    MPI_Allreduce(
+        &nunprocessed_particles, &particles_to_process, 
+        1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+
+    // All ranks have reached census
+    if(!particles_to_process) {
+      break;
+    }
+  }
+#endif
+
+  barrier();
+#endif // if 0
+
   *nlocal_particles = nparticles;
 
   printf("facets %d collisions %d\n", facets, collisions);
@@ -70,7 +143,7 @@ void handle_particles(
     CrossSection* cs_absorb_table, double* scalar_flux_tally, 
     double* energy_deposition_tally, RNPool* rn_pools)
 {
-  int nthreads = 1;
+  int nthreads                  = 0;
 
   int nparticles_out = 0;
   int nparticles_dead = 0;
@@ -414,8 +487,7 @@ void handle_collisions(
 
     const double p_absorb = macroscopic_cs_absorb*particles->cell_mfp[pindex];
 
-    //RNPool* local_rn_pool = &rn_pools[omp_get_thread_num()];
-    RNPool* local_rn_pool = &rn_pools[1337];
+    RNPool* local_rn_pool = &rn_pools[             0            ];
     if(getrand(local_rn_pool) < p_absorb) {
       /* Model particles absorption */
 
@@ -593,7 +665,7 @@ void update_tallies(
     const int cellx = particles->cellx[pindex]-x_off;
     const int celly = particles->celly[pindex]-y_off;
 
-//#pragma omp atomic update
+//////////////#pragma omp atomic update
     energy_deposition_tally[celly*nx+cellx] += 
       particles->energy_deposition[pindex]*inv_nparticles_total;
     particles->energy_deposition[pindex] = 0.0;
@@ -682,6 +754,68 @@ double microscopic_cs_for_energy(
   // TODO: perform some interesting interpolation here
   // Center weighted is poor accuracy but might even out over enough particles
   return (value[ind-1] + value[ind])/2.0;
+}
+
+// Acts as a particle source
+void inject_particles(
+    Mesh* mesh, const int local_nx, const int local_ny, 
+    const double local_particle_left_off, const double local_particle_bottom_off,
+    const double local_particle_width, const double local_particle_height, 
+    const int nparticles, const double initial_energy, RNPool* rn_pools,
+    Particles* particles)
+{
+  START_PROFILING(&compute_profile);
+
+  for(int pp = 0; pp < nparticles; ++pp) {
+
+    RNPool* rn_pool = &rn_pools[         0         ];
+
+    // Set the initial nandom location of the particle inside the source region
+    particles->x[pp] = local_particle_left_off + 
+      getrand(rn_pool)*local_particle_width;
+    particles->y[pp] = local_particle_bottom_off + 
+      getrand(rn_pool)*local_particle_height;
+
+    // Check the location of the specific cell that the particle sits within.
+    // We have to check this explicitly because the mesh might be non-uniform.
+    int cellx = 0;
+    int celly = 0;
+    for(int ii = 0; ii < local_nx; ++ii) {
+      if(particles->x[pp] >= mesh->edgex[pp+PAD] && 
+          particles->x[pp] < mesh->edgex[pp+PAD+1]) {
+        cellx = mesh->x_off+ii;
+        break;
+      }
+    }
+    for(int ii = 0; ii < local_ny; ++ii) {
+      if(particles->y[pp] >= mesh->edgey[pp+PAD] && 
+          particles->y[pp] < mesh->edgey[pp+PAD+1]) {
+        celly = mesh->y_off+ii;
+        break;
+      }
+    }
+
+    particles->cellx[pp] = cellx;
+    particles->celly[pp] = celly;
+
+    // Generating theta has uniform density, however 0.0 and 1.0 produce the same 
+    // value which introduces very very very small bias...
+    const double theta = 2.0*M_PI*getrand(rn_pool);
+    particles->omega_x[pp] = cos(theta);
+    particles->omega_y[pp] = sin(theta);
+
+    // This approximation sets mono-energetic initial state for source particles  
+    particles->e[pp] = initial_energy;
+
+    // Set a weight for the particle to track absorption
+    particles->weight[pp] = 1.0;
+    particles->dt_to_census[pp] = mesh->dt;
+    particles->mfp_to_collision[pp] = 0.0;
+    particles->scatter_cs_index[pp] = -1;
+    particles->absorb_cs_index[pp] = -1;
+    particles->next_event[pp] = FACET;
+  }
+  STOP_PROFILING(&compute_profile, "initialising particles");
 }
 
 // Validates the results of the simulation
