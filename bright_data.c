@@ -58,10 +58,10 @@ void initialise_bright_data(
   allocate_host_data(&rank_ypos_0, 1);
   allocate_host_data(&rank_xpos_1, 1);
   allocate_host_data(&rank_ypos_1, 1);
-  sync_data(1, &mesh_edgex_0, &rank_xpos_0, RECV);
-  sync_data(1, &mesh_edgey_0, &rank_ypos_0, RECV);
-  sync_data(1, &mesh_edgex_1, &rank_xpos_1, RECV);
-  sync_data(1, &mesh_edgey_1, &rank_ypos_1, RECV);
+  copy_buffer(1, &mesh_edgex_0, &rank_xpos_0, RECV);
+  copy_buffer(1, &mesh_edgey_0, &rank_ypos_0, RECV);
+  copy_buffer(1, &mesh_edgex_1, &rank_xpos_1, RECV);
+  copy_buffer(1, &mesh_edgey_1, &rank_ypos_1, RECV);
 
   // Calculate the shaded bounds
   const double local_particle_left_off =
