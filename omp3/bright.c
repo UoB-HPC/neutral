@@ -799,17 +799,17 @@ void inject_particles(
     // We have to check this explicitly because the mesh might be non-uniform.
     int cellx = 0;
     int celly = 0;
-    for(int ii = 0; ii < local_nx; ++ii) {
-      if(particles->x[ii] >= mesh->edgex[ii+PAD] && 
-          particles->x[ii] < mesh->edgex[ii+PAD+1]) {
-        cellx = mesh->x_off+ii;
+    for(int cc = 0; cc < local_nx; ++cc) {
+      if(particles->x[ii] >= mesh->edgex[cc+PAD] && 
+         particles->x[ii] < mesh->edgex[cc+PAD+1]) {
+        cellx = mesh->x_off+cc;
         break;
       }
     }
-    for(int ii = 0; ii < local_ny; ++ii) {
-      if(particles->y[ii] >= mesh->edgey[ii+PAD] && 
-          particles->y[ii] < mesh->edgey[ii+PAD+1]) {
-        celly = mesh->y_off+ii;
+    for(int cc = 0; cc < local_ny; ++cc) {
+      if(particles->y[ii] >= mesh->edgey[cc+PAD] && 
+         particles->y[ii] < mesh->edgey[cc+PAD+1]) {
+        celly = mesh->y_off+cc;
         break;
       }
     }

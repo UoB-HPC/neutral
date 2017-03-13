@@ -595,17 +595,17 @@ __global__ void inject_particles_kernel(
   // We have to check this explicitly because the mesh might be non-uniform.
   int cellx = 0;
   int celly = 0;
-  for(int ii = 0; ii < local_nx; ++ii) {
-    if(x[gid] >= edgex[gid+PAD] && 
-        x[gid] < edgex[gid+PAD+1]) {
-      cellx = x_off+ii;
+  for(int cc = 0; cc < local_nx; ++cc) {
+    if(x[gid] >= edgex[cc+PAD] && 
+       x[gid] < edgex[cc+PAD+1]) {
+      cellx = x_off+cc;
       break;
     }
   }
-  for(int ii = 0; ii < local_ny; ++ii) {
-    if(y[gid] >= edgey[gid+PAD] && 
-        y[gid] < edgey[gid+PAD+1]) {
-      celly = y_off+ii;
+  for(int cc = 0; cc < local_ny; ++cc) {
+    if(y[gid] >= edgey[cc+PAD] && 
+       y[gid] < edgey[cc+PAD+1]) {
+      celly = y_off+cc;
       break;
     }
   }

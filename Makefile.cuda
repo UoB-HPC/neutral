@@ -1,8 +1,14 @@
 NVCC					 = nvcc
 
-NVCC_FLAGS		 = -arch=sm_35 $(OPTIONS)
+NVCC_FLAGS		 = -arch=sm_35 $(OPTIONS) 
 MULTI_LDFLAGS = -lcudart -L$(CUDA_PATH)/lib64
 MULTI_LINKER 	= $(MULTI_COMPILER_CPP)
+
+ifeq ($(DEBUG), yes)
+  NVCC_FLAGS += -G
+else
+  NVCC_FLAGS += -O3
+endif
 
 CUDA_SRC   			= $(wildcard $(KERNELS)/*.cu)
 CUDA_SRC  		 += $(wildcard $(MULTI_DIR)/$(KERNELS)/*.cu)
