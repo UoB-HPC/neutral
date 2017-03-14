@@ -466,10 +466,10 @@ void handle_collisions(
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
     double* scalar_flux_tally, double* energy_deposition_tally)
 {
-  int np_dead = 0;
+  int ndead = 0;
 
   /* HANDLE COLLISIONS */
-#pragma omp parallel for reduction(+:np_dead)
+#pragma omp parallel for reduction(+:ndead)
 #pragma vector aligned
   for(int ii = 0; ii < nparticles; ++ii) {
     const int pindex = particles_offset+ii;
@@ -511,7 +511,7 @@ void handle_collisions(
       if(particles->e[pindex] < MIN_ENERGY_OF_INTEREST) {
         // Energy is too low, so mark the particles for deletion
         particles->next_event[pindex] = DEAD;
-        np_dead++;
+        ndead++;
       }
     }
     else {
@@ -548,7 +548,7 @@ void handle_collisions(
     particles->dt_to_census[pindex] -= distance_to_collision/particles->particle_velocity[pindex];
   }
 
-  *nparticles_dead += np_dead;
+  *nparticles_dead += ndead;
 }
 
 // Handles all of the census events

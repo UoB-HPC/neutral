@@ -82,8 +82,10 @@ int main(int argc, char** argv)
       printf("\nIteration %d\n", tt);
     }
 
+#if 0
     plot_particle_density(
         &bright_data, &mesh, tt, bright_data.nparticles, elapsed_sim_time);
+#endif // if 0
 
     double w0 = omp_get_wtime();
 
