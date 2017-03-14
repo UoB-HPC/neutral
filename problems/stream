@@ -4,6 +4,6 @@ nparticles        1000000       # How many particles per source injection
 initial_energy    1.0e6         # The initial energy of each particle
 source_location   0             # 0 - square left of mesh, 1 - even across mesh
 dt                1.0e-7
-nx                1000
-ny                1000
-iterations        1
+nx                4000
+ny                4000
+iterations        10
