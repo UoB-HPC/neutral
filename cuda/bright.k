@@ -17,7 +17,6 @@ __device__ double atomicAdd(double* address, double val)
 } 
 #endif
 
-
 // Fetch the cross section for a particular energy value
 __device__ double microscopic_cs_for_energy(
     const double* key, const double* value, const int nentries, 
@@ -576,11 +575,9 @@ __global__ void update_tallies_kernel(
 
     double ed = energy_deposition[pindex]*inv_nparticles_total;
     energy_deposition[pindex] = 0.0;
-#if 0
     const int cellx = particle_cellx[pindex]-x_off;
     const int celly = particle_celly[pindex]-y_off;
     atomicAdd(&energy_deposition_tally[celly*nx+cellx], ed);
-#endif // if 0
   }
 }
 
