@@ -6,8 +6,8 @@ enum { PARTICLE_SENT, PARTICLE_DEAD, PARTICLE_CENSUS };
 void handle_particles(
     const int global_nx, const int global_ny, const int nx, const int ny, 
     const int x_off, const int y_off, const double dt, const int* neighbours, 
-    const double* density, const double* edgex, const double* edgey, int* facets, 
-    int* collisions, int* nparticles_sent, uint64_t* master_key, 
+    const double* density, const double* edgex, const double* edgey, uint64_t* facets, 
+    uint64_t* collisions, int* nparticles_sent, uint64_t* master_key, 
     const int nparticles_total, const int nparticles_to_process, 
     int* nparticles, Particles* particles, CrossSection* cs_scatter_table, 
     CrossSection* cs_absorb_table, double* scalar_flux_tally, 
@@ -24,7 +24,7 @@ void event_initialisation(
 // Calculates the next event for each particle
 int calc_next_event(
     const int nparticles, const int particles_offset, Particles* particles, 
-    int* facets, int* collisions, int* reduce_array0, int* reduce_array1);
+    uint64_t* facets, uint64_t* collisions, int* reduce_array0, int* reduce_array1);
 
 // Handle all of the facet encounters
 void handle_facets(

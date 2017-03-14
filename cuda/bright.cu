@@ -29,8 +29,8 @@ void solve_transport_2d(
     int* reduce_array0, int* reduce_array1)
 {
   // This is the known starting number of particles
-  int facets = 0;
-  int collisions = 0;
+  uint64_t facets = 0;
+  uint64_t collisions = 0;
   int nparticles = *nlocal_particles;
   int nparticles_sent[NNEIGHBOURS];
 
@@ -53,15 +53,15 @@ void solve_transport_2d(
 
   *nlocal_particles = nparticles;
 
-  printf("facets %d collisions %d\n", facets, collisions);
+  printf("facets %llu collisions %llu\n", facets, collisions);
 }
 
 // Handles the current active batch of particles
 void handle_particles(
     const int global_nx, const int global_ny, const int nx, const int ny, 
     const int x_off, const int y_off, const double dt, const int* neighbours, 
-    const double* density, const double* edgex, const double* edgey, int* facets, 
-    int* collisions, int* nparticles_sent, uint64_t* master_key, 
+    const double* density, const double* edgex, const double* edgey, uint64_t* facets, 
+    uint64_t* collisions, int* nparticles_sent, uint64_t* master_key, 
     const int nparticles_total, const int nparticles_to_process, 
     int* nparticles, Particles* particles, CrossSection* cs_scatter_table, 
     CrossSection* cs_absorb_table, double* scalar_flux_tally, 
@@ -185,7 +185,7 @@ void event_initialisation(
 // Calculates the next event for each particle
 int calc_next_event(
     const int nparticles, const int particles_offset, Particles* particles, 
-    int* facets, int* collisions, int* reduce_array0, int* reduce_array1)
+    uint64_t* facets, uint64_t* collisions, int* reduce_array0, int* reduce_array1)
 {
   /* CALCULATE THE EVENTS */
   const int nblocks = ceil(nparticles/(double)NTHREADS); 
