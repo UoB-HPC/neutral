@@ -20,8 +20,13 @@ ifeq ($(MPI), yes)
 endif
 
 # Default compiler
+<<<<<<< Updated upstream
 MULTI_COMPILER_CC   = mpiicc
 MULTI_COMPILER_CPP  = mpiicpc
+=======
+MULTI_COMPILER_CC   = cc
+MULTI_COMPILER_CPP  = CC
+>>>>>>> Stashed changes
 MULTI_LINKER    		= $(MULTI_COMPILER_CC)
 MULTI_FLAGS     		= $(CFLAGS_$(COMPILER))
 MULTI_LDFLAGS   		= $(MULTI_FLAGS) #-lm
