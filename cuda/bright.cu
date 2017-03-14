@@ -73,8 +73,10 @@ void handle_particles(
   int nparticles_out = 0;
   int nparticles_dead = 0;
 
+  cudaDeviceSynchronize();
+
   // Block over the events
-  const int block_size = 1000000;
+  const int block_size = nparticles_total;
   const int nblocks = ceil(nparticles_total/(double)block_size);
   for(int bb = 0; bb < nblocks; ++bb) {
     const int particles_offset = bb*block_size;
@@ -172,6 +174,7 @@ void event_initialisation(
       particles->absorb_cs_index, particles->particle_velocity, 
       particles->local_density, particles->cell_mfp, particles->mfp_to_collision,
       master_pool->key.v[0]);  
+  gpu_check(cudaDeviceSynchronize());
 
   // TODO: BE CAREFUL PASSING MASTER KEY HERE, MAKE SURE IT IS INITIALISED
   // PROPERLY ETC..
@@ -196,6 +199,8 @@ int calc_next_event(
   finish_sum_int_reduce(nblocks, reduce_array1, &nfacets);
   *facets += nfacets;
   *collisions += ncollisions;
+
+  gpu_check(cudaDeviceSynchronize());
 
 #if 0
   printf("calculated the events collision %d facets %d census/dead %d\n",
@@ -234,6 +239,8 @@ void handle_facets(
       particles->absorb_cs_index, particles->particle_velocity, particles->local_density,
       particles->cell_mfp, particles->mfp_to_collision);
 
+  gpu_check(cudaDeviceSynchronize());
+
 #if 0
   nparticles_sent[EAST] = np_out_east;
   nparticles_sent[WEST] = np_out_west;
@@ -269,6 +276,8 @@ void handle_collisions(
       particles->particle_velocity, particles->local_density, particles->cell_mfp, 
       particles->mfp_to_collision, reduce_array, master_pool->key.v[0]);
 
+  gpu_check(cudaDeviceSynchronize());
+
   *nparticles_dead += np_dead;
 }
 
@@ -291,6 +300,8 @@ void handle_census(
       particles->energy_deposition, density, cs_scatter_table->keys, 
       cs_absorb_table->keys, cs_scatter_table->values, cs_absorb_table->values,
       cs_scatter_table->nentries, cs_absorb_table->nentries, particles->weight);
+
+  gpu_check(cudaDeviceSynchronize());
 }
 
 // Calculates the distance to the facet for all cells
@@ -308,6 +319,8 @@ void calc_distance_to_facet(
       particles->dt_to_census, particles->next_event, particles->scatter_cs_index,
       particles->absorb_cs_index, particles->particle_velocity, 
       particles->cell_mfp, particles->mfp_to_collision, edgex, edgey);
+
+  gpu_check(cudaDeviceSynchronize());
 }
 
 // Tallies both the scalar flux and energy deposition in the cell
@@ -317,12 +330,13 @@ void update_tallies(
     double* scalar_flux_tally, double* energy_deposition_tally)
 {
   const double inv_nparticles_total = 1.0/nparticles;
-
+  
   const int nblocks = ceil(nparticles/(double)NTHREADS); 
   update_tallies_kernel<<<nblocks, NTHREADS>>>(
-      nparticles, particles_offset, tally_census, nx, x_off, y_off,
-      inv_nparticles_total, particles->next_event, particles->cellx, 
+      nparticles, particles_offset, tally_census, nx, x_off, 
+      y_off, inv_nparticles_total, particles->next_event, particles->cellx, 
       particles->celly, particles->energy_deposition, energy_deposition_tally);
+  gpu_check(cudaDeviceSynchronize());
 }
 
 // Sends a particles to a neighbour and replaces in the particles list

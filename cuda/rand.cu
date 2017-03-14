@@ -75,7 +75,7 @@ double getrand(RNPool* rn_pool)
     fill_rn_buffer(rn_pool, rn_pool->buf_len);
 
     // TODO: HACKY NASTY NASTY
-    if(rn_pool->counter.v[0]+rn_pool->buf_len >= 0xFFFFFFFFFFFFFFFF) {
+    if(rn_pool->counter.v[0]+rn_pool->buf_len >= UINT64_C(0xFFFFFFFFFFFFFFFF)) {
       TERMINATE("Overran the allowed space for the counter, our logic doesn't \
           permit carry yet.\n");
     }

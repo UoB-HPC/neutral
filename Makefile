@@ -1,7 +1,7 @@
 # User defined parameters
 KERNELS          = cuda
 COMPILER         = GCC
-MPI              = yes
+MPI              = no#yes
 MAC_RPATH				 = -Wl,-rpath,${COMPILER_ROOT}/lib 
 CFLAGS_INTEL     = -O3 -no-prec-div -std=gnu99 -qopenmp -DINTEL \
 									 $(MAC_RPATH) -Wall -qopt-report=5 #-xhost

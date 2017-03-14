@@ -82,10 +82,8 @@ int main(int argc, char** argv)
       printf("\nIteration %d\n", tt);
     }
 
-#if 0
     plot_particle_density(
-        &bright_data, &mesh, tt, nparticles, elapsed_sim_time);
-#endif // if 0
+        &bright_data, &mesh, tt, bright_data.nparticles, elapsed_sim_time);
 
     double w0 = omp_get_wtime();
 
@@ -109,10 +107,13 @@ int main(int argc, char** argv)
     char tally_name[100];
     sprintf(tally_name, "energy%d", tt);
     int dneighbours[NNEIGHBOURS] = { EDGE, EDGE,  EDGE,  EDGE,  EDGE,  EDGE };
+    double* ed;
+    allocate_host_data(&ed, mesh.local_nx*mesh.local_ny);
+    copy_buffer(mesh.local_nx*mesh.local_ny, &bright_data.energy_deposition_tally, &ed, RECV);
     write_all_ranks_to_visit(
         mesh.global_nx, mesh.global_ny, mesh.local_nx-2*PAD, mesh.local_ny-2*PAD,
         mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, dneighbours, 
-        bright_data.energy_deposition_tally, tally_name, 0, elapsed_sim_time);
+        ed, tally_name, 0, elapsed_sim_time);
 #endif // if 0
 
     // Leave the simulation if we have reached the simulation end time
@@ -151,17 +152,22 @@ void plot_particle_density(
     BrightData* bright_data, Mesh* mesh, const int tt, 
     const int nparticles, const double elapsed_sim_time)
 {
-  double* temp = (double*)malloc(sizeof(double)*mesh->local_nx*mesh->local_ny);
-  if(!temp) {
-    TERMINATE("Could not allocate data for printing.\n");
-  }
+  int* cx;
+  int* cy;
+  allocate_host_int_data(&cx, nparticles);
+  allocate_host_int_data(&cy, nparticles);
+  copy_int_buffer(nparticles, &bright_data->local_particles->cellx, &cx, RECV);
+  copy_int_buffer(nparticles, &bright_data->local_particles->celly, &cy, RECV);
 
+  double* temp;
+  allocate_host_data(&temp, mesh->local_nx*mesh->local_ny);
   for(int ii = 0; ii < nparticles; ++ii) {
-    Particles* particles = bright_data->local_particles;
-    const int cellx = particles->cellx[ii]-mesh->x_off;
-    const int celly = particles->celly[ii]-mesh->y_off;
+    const int cellx = cx[ii]-mesh->x_off;
+    const int celly = cy[ii]-mesh->y_off;
     temp[celly*(mesh->local_nx)+cellx] += 1.0;
   }
+  deallocate_host_int_data(cx);
+  deallocate_host_int_data(cy);
 
   // Dummy neighbours that stops any padding from happening
   char particles_name[100];
@@ -170,6 +176,5 @@ void plot_particle_density(
       mesh->global_nx, mesh->global_ny, mesh->local_nx, mesh->local_ny, 
       mesh->x_off, mesh->y_off, mesh->rank, mesh->nranks, mesh->neighbours, temp, 
       particles_name, 0, elapsed_sim_time);
-  free(temp);
 }
 

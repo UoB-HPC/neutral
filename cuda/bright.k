@@ -1,6 +1,23 @@
 #include "../../cuda/shared.h"
 #include "../../cuda/reduction.k"
 
+#if __CUDA_ARCH__ < 600 
+__device__ double atomicAdd(double* address, double val) 
+{ 
+  unsigned long long int* address_as_ull = (unsigned long long int*)address;
+  unsigned long long int old = *address_as_ull, assumed;
+
+  do { 
+    assumed = old; 
+    old = atomicCAS(address_as_ull, assumed, 
+        __double_as_longlong(val + __longlong_as_double(assumed))); 
+    // Note: uses integer comparison to avoid hang in case of NaN (since NaN != NaN) 
+  } while (assumed != old); 
+  return __longlong_as_double(old); 
+} 
+#endif
+
+
 // Fetch the cross section for a particular energy value
 __device__ double microscopic_cs_for_energy(
     const double* key, const double* value, const int nentries, 
@@ -64,12 +81,13 @@ __device__ double calculate_energy_deposition(
 }
 
 __device__ void generate_random_numbers(
-    const int master_key, const int secondary_key, 
-    const int gid, double* rn0, double* rn1)
+    const uint64_t master_key, const uint64_t secondary_key, 
+    const uint64_t gid, double* rn0, double* rn1)
 {
   threefry2x64_ctr_t counter;
   threefry2x64_ctr_t key;
   counter.v[0] = gid;
+  counter.v[1] = 0;
   key.v[0] = master_key;
   key.v[1] = secondary_key;
 
@@ -77,7 +95,8 @@ __device__ void generate_random_numbers(
   threefry2x64_ctr_t rand = threefry2x64(counter, key);
 
   // Turn our random numbers from integrals to double precision
-  const double factor = 1.0/(0xFFFFFFFFFFFFFFFF + 1.0);
+  uint64_t max_uint64 = UINT64_C(0xFFFFFFFFFFFFFFFF);  
+  const double factor = 1.0/(max_uint64 + 1.0);
   const double half_factor = 0.5*factor;
   *rn0 = rand.v[0]*factor+half_factor;
   *rn1 = rand.v[1]*factor+half_factor;
@@ -96,18 +115,17 @@ __global__ void event_initialisation_kernel(
     int master_key)
 {
   const int gid = blockIdx.x*blockDim.x+threadIdx.x;
-  if(gid >= nparticles) return;
+  if(gid >= nparticles/NRANDOM_NUMBERS) return;
 
   double rn[NRANDOM_NUMBERS];
   generate_random_numbers(master_key, 0, gid, &rn[0], &rn[1]);
 
-  // TODO: MAKE THIS COALESCE
   // Use all generated random numbers
   for(int ii = 0; ii < NRANDOM_NUMBERS; ++ii) {
-    const int index = gid*NRANDOM_NUMBERS+ii;
+    const int index = (blockIdx.x*blockDim.x*NRANDOM_NUMBERS)+ii*blockDim.x+threadIdx.x;
     if(index >= nparticles) return;
-
     const int pindex = particles_offset+index;
+
     dt_to_census[pindex] = dt;
 
     // Reset living particles
@@ -239,7 +257,7 @@ __global__ void handle_facets_kernel(
       }
       else {
         // Definitely moving to right cell
-        particle_cellx[pindex] += 1;
+        particle_cellx[pindex]++;
 
 #if 0
         // Check if we need to pass to another process
@@ -258,7 +276,7 @@ __global__ void handle_facets_kernel(
       }
       else {
         // Definitely moving to left cell
-        particle_cellx[pindex] -= 1;
+        particle_cellx[pindex]--;
 
 #if 0
         // Check if we need to pass to another process
@@ -279,7 +297,7 @@ __global__ void handle_facets_kernel(
       }
       else {
         // Definitely moving to north cell
-        particle_celly[pindex] += 1;
+        particle_celly[pindex]++;
 
 #if 0
         // Check if we need to pass to another process
@@ -298,7 +316,7 @@ __global__ void handle_facets_kernel(
       }
       else {
         // Definitely moving to south cell
-        particle_celly[pindex] -= 1;
+        particle_celly[pindex]--;
 
 #if 0
         // Check if we need to pass to another process
@@ -371,7 +389,7 @@ __global__ void handle_collisions_kernel(
     const double p_absorb = macroscopic_cs_absorb*cell_mfp[pindex];
 
     double rn[NRANDOM_NUMBERS];
-    generate_random_numbers(master_key, 0, gid, &rn[0], &rn[1]);
+    generate_random_numbers(master_key, 1, gid, &rn[0], &rn[1]);
 
     if(rn[0] < p_absorb) {
       /* Model particles absorption */
@@ -414,7 +432,7 @@ __global__ void handle_collisions_kernel(
       particle_velocity[pindex] = sqrt((2.0*e_new*eV_TO_J)*INV_PARTICLE_MASS);
     }
     // TODO: IN THE SCATTERING CASE THIS COULD BE SAVED....
-    generate_random_numbers(master_key, 1, gid, &rn[0], &rn[1]);
+    generate_random_numbers(master_key, 2, gid, &rn[0], &rn[1]);
 
     mfp_to_collision[pindex] = -log(rn[0])/macroscopic_cs_scatter;
     dt_to_census[pindex] -= distance_to_collision/particle_velocity[pindex];
@@ -553,21 +571,22 @@ __global__ void update_tallies_kernel(
     int* particle_celly, double* energy_deposition, double* energy_deposition_tally)
 {
   const int gid = blockIdx.x*blockDim.x+threadIdx.x;
-  if(gid >= nparticles) return;
 
-  const int pindex = particles_offset+gid;
-  if((!tally_census && particle_event[pindex] != FACET) || 
-      (tally_census && particle_event[pindex] != CENSUS)) {
-    return;
+  for(int ii = gid; ii < nparticles; ii += blockDim.x*gridDim.x) {
+    const int pindex = particles_offset+ii;
+    if((!tally_census && particle_event[pindex] != FACET) || 
+        (tally_census && particle_event[pindex] != CENSUS)) {
+      return;
+    }
+
+    double ed = energy_deposition[pindex]*inv_nparticles_total;
+    energy_deposition[pindex] = 0.0;
+#if 0
+    const int cellx = particle_cellx[pindex]-x_off;
+    const int celly = particle_celly[pindex]-y_off;
+    atomicAdd(&energy_deposition_tally[celly*nx+cellx], ed);
+#endif // if 0
   }
-
-  const int cellx = particle_cellx[pindex]-x_off;
-  const int celly = particle_celly[pindex]-y_off;
-
-  double ed = energy_deposition[pindex]*inv_nparticles_total;
-  energy_deposition[pindex] = 0.0;
-
-  energy_deposition_tally[celly*nx+cellx] += ed;
 }
 
 __global__ void inject_particles_kernel(
@@ -585,7 +604,7 @@ __global__ void inject_particles_kernel(
   if(gid >= nparticles) return;
 
   double rn[NRANDOM_NUMBERS];
-  generate_random_numbers(master_key, 0, gid, &rn[0], &rn[1]);
+  generate_random_numbers(master_key, 3, gid, &rn[0], &rn[1]);
 
   // Set the initial nandom location of the particle inside the source region
   x[gid] = local_particle_left_off + rn[0]*local_particle_width;
@@ -597,14 +616,14 @@ __global__ void inject_particles_kernel(
   int celly = 0;
   for(int cc = 0; cc < local_nx; ++cc) {
     if(x[gid] >= edgex[cc+PAD] && 
-       x[gid] < edgex[cc+PAD+1]) {
+        x[gid] < edgex[cc+PAD+1]) {
       cellx = x_off+cc;
       break;
     }
   }
   for(int cc = 0; cc < local_ny; ++cc) {
     if(y[gid] >= edgey[cc+PAD] && 
-       y[gid] < edgey[cc+PAD+1]) {
+        y[gid] < edgey[cc+PAD+1]) {
       celly = y_off+cc;
       break;
     }
@@ -620,12 +639,12 @@ __global__ void inject_particles_kernel(
 
 
   // TODO: THIS CAN BE OPTIMISED, WE COULD BATCH UP AS WITH THE EVENT INITIALISATION
-  generate_random_numbers(master_key, 1, gid, &rn[0], &rn[1]);
+  generate_random_numbers(master_key, 4, gid, &rn[0], &rn[1]);
   const double theta = 2.0*M_PI*rn[0];
   omega_x[gid] = cos(theta);
   omega_y[gid] = sin(theta);
 
-  // This agidroximation sets mono-energetic initial state for source particles  
+  // This approximation sets mono-energetic initial state for source particles  
   e[gid] = initial_energy;
 
   // Set a weight for the particle to track absorption
