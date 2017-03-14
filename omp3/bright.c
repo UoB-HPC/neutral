@@ -23,7 +23,8 @@ void solve_transport_2d(
     Particles* particles, const double* density, const double* edgex, 
     const double* edgey, const double* edgedx, const double* edgedy, 
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
-    double* scalar_flux_tally, double* energy_deposition_tally, RNPool* rn_pools)
+    double* scalar_flux_tally, double* energy_deposition_tally, RNPool* rn_pools,
+    int* reduce_array0, int* reduce_array1)
 {
   // Initial idea is to use a kind of queue for handling the particles. Presumably
   // this doesn't have to be a carefully ordered queue but lets see how that goes.
@@ -675,7 +676,7 @@ void update_tallies(
   for(int ii = 0; ii < nparticles; ++ii) {
     const int pindex = particles_offset+ii;
     if((!tally_census && particles->next_event[pindex] != FACET) || 
-       (tally_census && particles->next_event[pindex] != CENSUS)) {
+        (tally_census && particles->next_event[pindex] != CENSUS)) {
       continue;
     }
 
@@ -801,14 +802,14 @@ void inject_particles(
     int celly = 0;
     for(int cc = 0; cc < local_nx; ++cc) {
       if(particles->x[ii] >= mesh->edgex[cc+PAD] && 
-         particles->x[ii] < mesh->edgex[cc+PAD+1]) {
+          particles->x[ii] < mesh->edgex[cc+PAD+1]) {
         cellx = mesh->x_off+cc;
         break;
       }
     }
     for(int cc = 0; cc < local_ny; ++cc) {
       if(particles->y[ii] >= mesh->edgey[cc+PAD] && 
-         particles->y[ii] < mesh->edgey[cc+PAD+1]) {
+          particles->y[ii] < mesh->edgey[cc+PAD+1]) {
         celly = mesh->y_off+cc;
         break;
       }

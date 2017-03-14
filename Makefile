@@ -1,13 +1,13 @@
 # User defined parameters
 KERNELS          = cuda
 COMPILER         = GCC
-MPI              = no#yes
+MPI              = yes
 MAC_RPATH				 = -Wl,-rpath,${COMPILER_ROOT}/lib 
 CFLAGS_INTEL     = -O3 -no-prec-div -std=gnu99 -qopenmp -DINTEL \
 									 $(MAC_RPATH) -Wall -qopt-report=5 #-xhost
 CFLAGS_INTEL_KNL = -O3 -qopenmp -no-prec-div -std=gnu99 -DINTEL \
 									 -Wall -qopt-report=5 -restrict -xMIC-AVX512 
-CFLAGS_GCC       = -O3 -fopenmp -march=native -Wall -std=gnu99 
+CFLAGS_GCC       = -O3 -march=native -Wall -std=gnu99 -fopenmp 
 CFLAGS_CRAY      = -lrt -hlist=a 
 CFLAGS_CLANG     = -O3 -fopenmp=libomp -fopenmp-targets=nvptx64-nvidia-cuda \
 									--cuda-path=/nfs/modules/cuda/8.0.44/ \

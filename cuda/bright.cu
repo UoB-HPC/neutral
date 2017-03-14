@@ -164,7 +164,10 @@ void event_initialisation(
   RNPool* master_pool = &rn_pools[0];
 
   // Initialise all of the particles with their starting state
+#if 0
   const int nblocks = ceil(nparticles/((double)NTHREADS*NRANDOM_NUMBERS)); 
+#endif // if 0
+  const int nblocks = ceil(nparticles/((double)NTHREADS)); 
   event_initialisation_kernel<<<nblocks, NTHREADS>>>(
       nparticles, particles_offset, dt, nx, x_off, y_off, cs_scatter_table->nentries, 
       cs_absorb_table->nentries, particles->e, particles->cellx, 
@@ -278,6 +281,7 @@ void handle_collisions(
 
   gpu_check(cudaDeviceSynchronize());
 
+  finish_sum_int_reduce(nblocks, reduce_array, &np_dead);
   *nparticles_dead += np_dead;
 }
 

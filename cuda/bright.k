@@ -115,16 +115,23 @@ __global__ void event_initialisation_kernel(
     int master_key)
 {
   const int gid = blockIdx.x*blockDim.x+threadIdx.x;
-  if(gid >= nparticles/NRANDOM_NUMBERS) return;
+#if 0
+  if(gid*NRANDOM_NUMBERS >= nparticles) return;
+#endif // if 0
+  if(gid >= nparticles) return;
 
   double rn[NRANDOM_NUMBERS];
   generate_random_numbers(master_key, 0, gid, &rn[0], &rn[1]);
 
   // Use all generated random numbers
+#if 0
   for(int ii = 0; ii < NRANDOM_NUMBERS; ++ii) {
     const int index = (blockIdx.x*blockDim.x*NRANDOM_NUMBERS)+ii*blockDim.x+threadIdx.x;
     if(index >= nparticles) return;
     const int pindex = particles_offset+index;
+#endif // if 0
+    const int pindex = particles_offset+gid;
+    const int ii = 0;
 
     dt_to_census[pindex] = dt;
 
@@ -150,7 +157,9 @@ __global__ void event_initialisation_kernel(
     const double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
     cell_mfp[pindex] = 1.0/(macroscopic_cs_scatter+macroscopic_cs_absorb);
     mfp_to_collision[pindex] = -log(rn[ii])/macroscopic_cs_scatter;
+#if 0
   }
+#endif // if 0
 }
 
 __global__ void calc_next_event_kernel(
@@ -168,24 +177,22 @@ __global__ void calc_next_event_kernel(
   const int gid = blockIdx.x*blockDim.x+threadIdx.x;
   if(gid < nparticles) {
     const int pindex = particles_offset+gid;
-    if(particle_event[pindex] == DEAD || particle_event[pindex] == CENSUS) {
-      return;
-    }
+    if(particle_event[pindex] != DEAD && particle_event[pindex] != CENSUS) {
+      const double distance_to_collision = mfp_to_collision[pindex]*cell_mfp[pindex];
+      const double distance_to_census = particle_velocity[pindex]*dt_to_census[pindex];
 
-    const double distance_to_collision = mfp_to_collision[pindex]*cell_mfp[pindex];
-    const double distance_to_census = particle_velocity[pindex]*dt_to_census[pindex];
-
-    if(distance_to_collision < distance_to_census && 
-        distance_to_collision < distance_to_facet[pindex]) {
-      particle_event[pindex] = COLLISION;
-      ncol_shared[tid]++;
-    }
-    else if(distance_to_facet[pindex] < distance_to_census) {
-      particle_event[pindex] = FACET;
-      nfac_shared[tid]++;
-    }
-    else {
-      particle_event[pindex] = CENSUS;
+      if(distance_to_collision < distance_to_census && 
+          distance_to_collision < distance_to_facet[pindex]) {
+        particle_event[pindex] = COLLISION;
+        ncol_shared[tid]++;
+      }
+      else if(distance_to_facet[pindex] < distance_to_census) {
+        particle_event[pindex] = FACET;
+        nfac_shared[tid]++;
+      }
+      else {
+        particle_event[pindex] = CENSUS;
+      }
     }
   }
   __syncthreads();
@@ -212,13 +219,11 @@ __global__ void handle_facets_kernel(
     double* local_density, double* cell_mfp, double* mfp_to_collision)
 {
   const int gid = blockIdx.x*blockDim.x+threadIdx.x;
-  if(gid >= nparticles) return;
-
   const int pindex = particles_offset+gid;
-
-  if(particle_event[pindex] != FACET) {
+  if(gid >= nparticles || particle_event[pindex] != FACET) {
     return;
   }
+
   int cellx = particle_cellx[pindex]-x_off+PAD;
   int celly = particle_celly[pindex]-y_off+PAD;
   double number_density = (local_density[pindex]*AVOGADROS/MOLAR_MASS);
@@ -357,85 +362,82 @@ __global__ void handle_collisions_kernel(
 
   const int gid = blockIdx.x*blockDim.x+threadIdx.x;
   if(gid < nparticles) {
-
     const int pindex = particles_offset+gid;
 
-    if(particle_event[pindex] != COLLISION) {
-      return;
-    }
+    if(particle_event[pindex] == COLLISION) {
+      // Don't need to tally into mesh on collision
+      double number_density = 
+        (local_density[pindex]*AVOGADROS/MOLAR_MASS);
+      const double microscopic_cs_scatter = microscopic_cs_for_energy(
+          cs_scatter_keys, cs_scatter_values, cs_scatter_nentries, e[pindex], 
+          &scatter_cs_index[pindex]);
+      const double microscopic_cs_absorb = microscopic_cs_for_energy(
+          cs_absorb_keys, cs_absorb_values, cs_absorb_nentries, e[pindex], 
+          &absorb_cs_index[pindex]);
+      double macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
+      double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
+      const double distance_to_collision = 
+        mfp_to_collision[pindex]*cell_mfp[pindex];
 
-    // Don't need to tally into mesh on collision
-    double number_density = 
-      (local_density[pindex]*AVOGADROS/MOLAR_MASS);
-    const double microscopic_cs_scatter = microscopic_cs_for_energy(
-        cs_scatter_keys, cs_scatter_values, cs_scatter_nentries, e[pindex], 
-        &scatter_cs_index[pindex]);
-    const double microscopic_cs_absorb = microscopic_cs_for_energy(
-        cs_absorb_keys, cs_absorb_values, cs_absorb_nentries, e[pindex], 
-        &absorb_cs_index[pindex]);
-    double macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
-    double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
-    const double distance_to_collision = 
-      mfp_to_collision[pindex]*cell_mfp[pindex];
+      energy_deposition[pindex] = calculate_energy_deposition(
+          pindex, distance_to_collision, e, weight, number_density, 
+          microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb);
 
-    energy_deposition[pindex] = calculate_energy_deposition(
-        pindex, distance_to_collision, e, weight, number_density, 
-        microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb);
+      // Moves the particles to the collision site
+      x[pindex] += distance_to_collision*omega_x[pindex];
+      y[pindex] += distance_to_collision*omega_y[pindex];
 
-    // Moves the particles to the collision site
-    x[pindex] += distance_to_collision*omega_x[pindex];
-    y[pindex] += distance_to_collision*omega_y[pindex];
+      const double p_absorb = macroscopic_cs_absorb*cell_mfp[pindex];
 
-    const double p_absorb = macroscopic_cs_absorb*cell_mfp[pindex];
+      double rn[NRANDOM_NUMBERS];
+      generate_random_numbers(master_key, 1, gid, &rn[0], &rn[1]);
 
-    double rn[NRANDOM_NUMBERS];
-    generate_random_numbers(master_key, 1, gid, &rn[0], &rn[1]);
+      if(rn[0] < p_absorb) {
+        /* Model particles absorption */
 
-    if(rn[0] < p_absorb) {
-      /* Model particles absorption */
+        // Find the new particles weight after absorption, saving the energy change
+        const double new_weight = weight[pindex]*(1.0 - p_absorb);
+        weight[pindex] = new_weight;
 
-      // Find the new particles weight after absorption, saving the energy change
-      const double new_weight = weight[pindex]*(1.0 - p_absorb);
-      weight[pindex] = new_weight;
-
-      if(e[pindex] < MIN_ENERGY_OF_INTEREST) {
-        // Energy is too low, so mark the particles for deletion
-        particle_event[pindex] = DEAD;
-        ndead_shared[tid]++;
+        if(e[pindex] < MIN_ENERGY_OF_INTEREST) {
+          // Energy is too low, so mark the particles for deletion
+          particle_event[pindex] = DEAD;
+          ndead_shared[tid]++;
+        }
       }
+      else {
+        /* Model elastic particles scattering */
+
+        // Choose a random scattering angle between -1 and 1
+        const double mu_cm = 1.0 - 2.0*rn[1];
+
+        // Calculate the new energy based on the relation to angle of incidence
+        const double e_new = e[pindex]*
+          (MASS_NO*MASS_NO + 2.0*MASS_NO*mu_cm + 1.0)/
+          ((MASS_NO + 1.0)*(MASS_NO + 1.0));
+
+        // Convert the angle into the laboratory frame of reference
+        double cos_theta =
+          0.5*((MASS_NO+1.0)*sqrt(e_new/e[pindex]) - 
+              (MASS_NO-1.0)*sqrt(e[pindex]/e_new));
+
+        // Alter the direction of the velocities
+        const double sin_theta = sqrt(1.0-cos_theta*cos_theta);
+        const double omega_x_new =
+          (omega_x[pindex]*cos_theta - omega_y[pindex]*sin_theta);
+        const double omega_y_new =
+          (omega_x[pindex]*sin_theta + omega_y[pindex]*cos_theta);
+        omega_x[pindex] = omega_x_new;
+        omega_y[pindex] = omega_y_new;
+        e[pindex] = e_new;
+        particle_velocity[pindex] = sqrt((2.0*e_new*eV_TO_J)*INV_PARTICLE_MASS);
+      }
+
+      // TODO: IN THE SCATTERING CASE THIS COULD BE SAVED....
+      generate_random_numbers(master_key, 2, gid, &rn[0], &rn[1]);
+      mfp_to_collision[pindex] = -log(rn[0])/macroscopic_cs_scatter;
+      dt_to_census[pindex] -= distance_to_collision/particle_velocity[pindex];
     }
-    else {
-      /* Model elastic particles scattering */
-
-      // Choose a random scattering angle between -1 and 1
-      const double mu_cm = 1.0 - 2.0*rn[1];
-
-      // Calculate the new energy based on the relation to angle of incidence
-      const double e_new = e[pindex]*
-        (MASS_NO*MASS_NO + 2.0*MASS_NO*mu_cm + 1.0)/
-        ((MASS_NO + 1.0)*(MASS_NO + 1.0));
-
-      // Convert the angle into the laboratory frame of reference
-      double cos_theta =
-        0.5*((MASS_NO+1.0)*sqrt(e_new/e[pindex]) - 
-            (MASS_NO-1.0)*sqrt(e[pindex]/e_new));
-
-      // Alter the direction of the velocities
-      const double sin_theta = sqrt(1.0-cos_theta*cos_theta);
-      const double omega_x_new =
-        (omega_x[pindex]*cos_theta - omega_y[pindex]*sin_theta);
-      const double omega_y_new =
-        (omega_x[pindex]*sin_theta + omega_y[pindex]*cos_theta);
-      omega_x[pindex] = omega_x_new;
-      omega_y[pindex] = omega_y_new;
-      e[pindex] = e_new;
-      particle_velocity[pindex] = sqrt((2.0*e_new*eV_TO_J)*INV_PARTICLE_MASS);
-    }
-    // TODO: IN THE SCATTERING CASE THIS COULD BE SAVED....
-    generate_random_numbers(master_key, 2, gid, &rn[0], &rn[1]);
-
-    mfp_to_collision[pindex] = -log(rn[0])/macroscopic_cs_scatter;
-    dt_to_census[pindex] -= distance_to_collision/particle_velocity[pindex];
   }
   __syncthreads();
 
@@ -443,7 +445,6 @@ __global__ void handle_collisions_kernel(
   if(tid == 0) {
     reduce_array[blockIdx.x] = ndead_shared[0];
   }
-
 }
 
 __global__ void handle_census_kernel(
@@ -458,11 +459,8 @@ __global__ void handle_census_kernel(
     const int cs_scatter_nentries, const int cs_absorb_nentries, const double* weight)
 {
   const int gid = blockIdx.x*blockDim.x+threadIdx.x;
-  if(gid >= nparticles) return;
-
   const int pindex = particles_offset+gid;
-
-  if(particle_event[pindex] != CENSUS) {
+  if(gid >= nparticles || particle_event[pindex] != CENSUS) {
     return;
   }
 

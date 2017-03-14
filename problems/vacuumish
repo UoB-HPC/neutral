@@ -1,9 +1,9 @@
 source xpos=0.45 ypos=0.45 width=0.1 height=0.1
 problem_0 density=1.0e-30 energy=1.0 xpos=0.0 ypos=0.0 width=1.0 height=1.0
-nparticles        100000        # How many particles per source injection
+nparticles        1000000       # How many particles per source injection
 initial_energy    1.0e6         # The initial energy of each particle
 source_location   0             # 0 - square left of mesh, 1 - even across mesh
 dt                1.0e-7
 nx                1000
 ny                1000
-iterations        10
+iterations        1
