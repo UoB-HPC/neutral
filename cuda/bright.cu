@@ -129,11 +129,13 @@ void handle_particles(
           scalar_flux_tally, energy_deposition_tally, reduce_array0);
       STOP_PROFILING(&compute_profile, "handle collisions");
 
+#if 0
       START_PROFILING(&compute_profile);
       update_tallies(
           nx, particles, x_off, y_off, block_size, particles_offset, 0, 
           scalar_flux_tally, energy_deposition_tally);
       STOP_PROFILING(&compute_profile, "update tallies");
+#endif // if 0
     }
 
     START_PROFILING(&compute_profile);
@@ -143,11 +145,13 @@ void handle_particles(
         energy_deposition_tally);
     STOP_PROFILING(&compute_profile, "handle census");
 
+#if 0
     START_PROFILING(&compute_profile);
     update_tallies(
         nx, particles, x_off, y_off, block_size, particles_offset, 1, 
         scalar_flux_tally, energy_deposition_tally);
     STOP_PROFILING(&compute_profile, "update tallies");
+#endif // if 0
   }
 
   printf("handled %d particles, with %d particles deleted\n", 
@@ -176,7 +180,7 @@ void event_initialisation(
       particles->next_event, particles->scatter_cs_index, 
       particles->absorb_cs_index, particles->particle_velocity, 
       particles->local_density, particles->cell_mfp, particles->mfp_to_collision,
-      master_pool->key.v[0]);  
+      master_pool->key.v[0], particles->energy_deposition);  
 
   // TODO: BE CAREFUL PASSING MASTER KEY HERE, MAKE SURE IT IS INITIALISED
   // PROPERLY ETC..
@@ -237,7 +241,7 @@ void handle_facets(
       particles->omega_y, particles->x_facet, particles->cellx, particles->celly,
       particles->dt_to_census, particles->next_event, particles->scatter_cs_index,
       particles->absorb_cs_index, particles->particle_velocity, particles->local_density,
-      particles->cell_mfp, particles->mfp_to_collision);
+      particles->cell_mfp, particles->mfp_to_collision, energy_deposition_tally);
 
 #if 0
   nparticles_sent[EAST] = np_out_east;
@@ -296,7 +300,8 @@ void handle_census(
       particles->y, particles->omega_x, particles->omega_y, particles->mfp_to_collision, 
       particles->energy_deposition, density, cs_scatter_table->keys, 
       cs_absorb_table->keys, cs_scatter_table->values, cs_absorb_table->values,
-      cs_scatter_table->nentries, cs_absorb_table->nentries, particles->weight);
+      cs_scatter_table->nentries, cs_absorb_table->nentries, particles->weight,
+      energy_deposition_tally);
 }
 
 // Calculates the distance to the facet for all cells

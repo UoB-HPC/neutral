@@ -111,7 +111,7 @@ __global__ void event_initialisation_kernel(
     const double* density, double* dt_to_census, int* particle_event, 
     int* scatter_cs_index, int* absorb_cs_index, double* particle_velocity, 
     double* local_density, double* cell_mfp, double* mfp_to_collision,
-    int master_key)
+    int master_key, double* energy_deposition)
 {
   const int gid = blockIdx.x*blockDim.x+threadIdx.x;
 #if 0
@@ -156,6 +156,7 @@ __global__ void event_initialisation_kernel(
     const double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
     cell_mfp[pindex] = 1.0/(macroscopic_cs_scatter+macroscopic_cs_absorb);
     mfp_to_collision[pindex] = -log(rn[ii])/macroscopic_cs_scatter;
+    energy_deposition[pindex] = 0.0;
 #if 0
   }
 #endif // if 0
@@ -215,7 +216,8 @@ __global__ void handle_facets_kernel(
     double* omega_x, double* omega_y, int* x_facet, int* particle_cellx, 
     int* particle_celly, double* dt_to_census, int* particle_event, 
     int* scatter_cs_index, int* absorb_cs_index, double* particle_velocity, 
-    double* local_density, double* cell_mfp, double* mfp_to_collision)
+    double* local_density, double* cell_mfp, double* mfp_to_collision,
+    double* energy_deposition_tally)
 {
   const int gid = blockIdx.x*blockDim.x+threadIdx.x;
   const int pindex = particles_offset+gid;
@@ -242,9 +244,11 @@ __global__ void handle_facets_kernel(
   dt_to_census[pindex] -=
     (distance_to_facet[pindex]/particle_velocity[pindex]);
 
-  energy_deposition[pindex] = calculate_energy_deposition(
+  const double ed = calculate_energy_deposition(
       pindex, distance_to_facet[pindex], e, weight, number_density, 
       microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb);
+  atomicAdd(&energy_deposition_tally[celly*nx+cellx], energy_deposition[pindex]+ed);
+  energy_deposition[pindex] = 0.0;
 
   // TODO: Make sure that the roundoff is handled here, perhaps actually set it
   // fully to one of the edges here
@@ -452,7 +456,8 @@ __global__ void handle_census_kernel(
     const double* omega_x, const double* omega_y, double* mfp_to_collision,
     double* energy_deposition, const double* density, const double* cs_scatter_keys,
     const double* cs_absorb_keys, const double* cs_scatter_values, const double* cs_absorb_values,
-    const int cs_scatter_nentries, const int cs_absorb_nentries, const double* weight)
+    const int cs_scatter_nentries, const int cs_absorb_nentries, const double* weight,
+    double* energy_deposition_tally)
 {
   const int gid = blockIdx.x*blockDim.x+threadIdx.x;
   const int pindex = particles_offset+gid;
@@ -482,9 +487,10 @@ __global__ void handle_census_kernel(
     (distance_to_census*(macroscopic_cs_scatter+macroscopic_cs_absorb));
 
   // Calculate the energy deposition in the cell
-  energy_deposition[pindex] += calculate_energy_deposition(
+  const double ed = calculate_energy_deposition(
       pindex, distance_to_census, e, weight, number_density, 
       microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb);
+  atomicAdd(&energy_deposition_tally[celly*nx+cellx], energy_deposition[pindex]+ed);
   dt_to_census[pindex] = 0.0;
 }
 
