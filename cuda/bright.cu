@@ -276,7 +276,8 @@ void handle_collisions(
       particles->celly, particles->dt_to_census, particles->next_event, 
       particles->scatter_cs_index, particles->absorb_cs_index, 
       particles->particle_velocity, particles->local_density, particles->cell_mfp, 
-      particles->mfp_to_collision, reduce_array, master_pool->key.v[0]);
+      particles->mfp_to_collision, reduce_array, master_pool->key.v[0],
+      energy_deposition_tally);
 
   finish_sum_int_reduce(nblocks, reduce_array, &np_dead);
   *nparticles_dead += np_dead;
@@ -387,9 +388,13 @@ void validate(
     const int nx, const int ny, const char* params_filename, 
     const int rank, double* energy_deposition_tally)
 {
+  double* h_energy_deposition_tally;
+  allocate_host_data(&h_energy_deposition_tally, nx*ny);
+  copy_buffer(nx*ny, &energy_deposition_tally, &h_energy_deposition_tally, RECV);
+
   double local_energy_tally = 0.0;
   for(int ii = 0; ii < nx*ny; ++ii) {
-    local_energy_tally += energy_deposition_tally[ii];
+    local_energy_tally += h_energy_deposition_tally[ii];
   }
 
   double global_energy_tally = reduce_all_sum(local_energy_tally);

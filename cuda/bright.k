@@ -29,17 +29,23 @@ __device__ double microscopic_cs_for_energy(
 
   int ind = 0; 
 
-  // Determine the correct search direction required to move towards the
-  // new energy
-  const int direction = (energy > value[*cs_index]) ? 1 : -1; 
-
   if(*cs_index > -1) {
+    // Determine the correct search direction required to move towards the
+    // new energy
+    const int direction = (energy > key[*cs_index]) ? 1 : -1; 
+
     // This search will move in the correct direction towards the new energy group
+    int found = 0;
     for(ind = *cs_index; ind >= 0 && ind < nentries; ind += direction) {
       // Check if we have found the new energy group index
       if(energy >= key[ind] && energy < key[ind+1]) {
+        found = 1;
         break;
       }
+    }
+
+    if(!found) {
+      // TODO: ADD AN ERROR HANDLER HERE...
     }
   }
   else {
@@ -56,7 +62,7 @@ __device__ double microscopic_cs_for_energy(
 
   // TODO: perform some interesting interpolation here
   // Center weighted is poor accuracy but might even out over enough particles
-  return (value[ind-1] + value[ind])/2.0;
+  return 0.5*(value[ind+1] + value[ind]);
 }
 
 // Calculate the energy deposition in the cell
@@ -247,7 +253,7 @@ __global__ void handle_facets_kernel(
   const double ed = calculate_energy_deposition(
       pindex, distance_to_facet[pindex], e, weight, number_density, 
       microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb);
-  atomicAdd(&energy_deposition_tally[celly*nx+cellx], energy_deposition[pindex]+ed);
+  atomicAdd(&energy_deposition_tally[celly*nx+cellx], (energy_deposition[pindex]+ed)/nparticles);
   energy_deposition[pindex] = 0.0;
 
   // TODO: Make sure that the roundoff is handled here, perhaps actually set it
@@ -357,7 +363,7 @@ __global__ void handle_collisions_kernel(
     int* particle_celly, double* dt_to_census, int* particle_event, 
     int* scatter_cs_index, int* absorb_cs_index, double* particle_velocity, 
     double* local_density, double* cell_mfp, double* mfp_to_collision,
-    int* reduce_array, const int master_key)
+    int* reduce_array, const int master_key, double* energy_deposition_tally)
 {
   __shared__ int ndead_shared[NTHREADS];
   const int tid = threadIdx.x;
@@ -404,6 +410,9 @@ __global__ void handle_collisions_kernel(
         // Energy is too low, so mark the particles for deletion
         particle_event[pindex] = DEAD;
         ndead_shared[tid]++;
+        int cellx = particle_cellx[pindex]-x_off+PAD;
+        int celly = particle_celly[pindex]-y_off+PAD;
+        atomicAdd(&energy_deposition_tally[celly*nx+cellx], (energy_deposition[pindex]/nparticles));
       }
     }
     else {
@@ -490,7 +499,7 @@ __global__ void handle_census_kernel(
   const double ed = calculate_energy_deposition(
       pindex, distance_to_census, e, weight, number_density, 
       microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb);
-  atomicAdd(&energy_deposition_tally[celly*nx+cellx], energy_deposition[pindex]+ed);
+  atomicAdd(&energy_deposition_tally[celly*nx+cellx], (energy_deposition[pindex]+ed)/nparticles);
   dt_to_census[pindex] = 0.0;
 }
 
@@ -583,7 +592,7 @@ __global__ void update_tallies_kernel(
     energy_deposition[pindex] = 0.0;
     const int cellx = particle_cellx[pindex]-x_off;
     const int celly = particle_celly[pindex]-y_off;
-    atomicAdd(&energy_deposition_tally[celly*nx+cellx], ed);
+    atomicAdd(&energy_deposition_tally[celly*nx+cellx], (ed/nparticles));
   }
 }
 
@@ -632,8 +641,6 @@ __global__ void inject_particles_kernel(
 
   // Generating theta has uniform density, however 0.0 and 1.0 produce the same 
   // value which introduces very very very small bias...
-
-
 
 
   // TODO: THIS CAN BE OPTIMISED, WE COULD BATCH UP AS WITH THE EVENT INITIALISATION

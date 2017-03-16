@@ -131,13 +131,10 @@ int main(int argc, char** argv)
       &bright_data, &mesh, tt, nparticles, elapsed_sim_time);
 #endif // if 0
 
-
-#if 0
   // TODO: WHAT SHOULD THE VALUE OF NINITIALPARTICLES BE IF FISSION ETC.
   validate(
       mesh.local_nx, mesh.local_ny, bright_data.neutral_params_filename, 
      mesh.rank, bright_data.energy_deposition_tally);
-#endif // if 0
 
   if(mesh.rank == MASTER) {
     PRINT_PROFILING_RESULTS(&compute_profile);
