@@ -383,8 +383,7 @@ __global__ void handle_collisions_kernel(
         &absorb_cs_index[pindex]);
     double macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
     double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
-    const double distance_to_collision = 
-      mfp_to_collision[pindex]*cell_mfp[pindex];
+    const double distance_to_collision = mfp_to_collision[pindex]*cell_mfp[pindex];
 
     energy_deposition[pindex] += calculate_energy_deposition(
         pindex, distance_to_collision, e, weight, number_density, 
@@ -476,9 +475,6 @@ __global__ void handle_census_kernel(
 
   const double distance_to_census = 
     particle_velocity[pindex]*dt_to_census[pindex];
-  int cellx = particle_cellx[pindex]-x_off+PAD;
-  int celly = particle_celly[pindex]-y_off+PAD;
-  local_density[pindex] = density[celly*(nx+2*PAD)+cellx];
   double number_density = (local_density[pindex]*AVOGADROS/MOLAR_MASS);
   const double microscopic_cs_scatter = microscopic_cs_for_energy(
       cs_scatter_keys, cs_scatter_values, cs_scatter_nentries, e[pindex], 
@@ -499,6 +495,8 @@ __global__ void handle_census_kernel(
   const double ed = calculate_energy_deposition(
       pindex, distance_to_census, e, weight, number_density, 
       microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb);
+  const int cellx = particle_cellx[pindex]-x_off+PAD;
+  const int celly = particle_celly[pindex]-y_off+PAD;
   atomicAdd(&energy_deposition_tally[celly*nx+cellx], (energy_deposition[pindex]+ed)/nparticles);
   dt_to_census[pindex] = 0.0;
 }
