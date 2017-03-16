@@ -29,8 +29,8 @@ void solve_transport_2d(
   // this doesn't have to be a carefully ordered queue but lets see how that goes.
 
   // This is the known starting number of particles
-  int facets = 0;
-  int collisions = 0;
+  uint64_t facets = 0;
+  uint64_t collisions = 0;
   int nparticles = *nlocal_particles;
   int nparticles_sent[NNEIGHBOURS];
 
@@ -129,7 +129,7 @@ void solve_transport_2d(
 
   *nlocal_particles = nparticles;
 
-  printf("facets %d collisions %d\n", facets, collisions);
+  printf("facets %llu collisions %llu\n", facets, collisions);
 }
 
 // Handles the current active batch of particles
@@ -137,8 +137,8 @@ void handle_particles(
     const int global_nx, const int global_ny, const int nx, const int ny, 
     const int x_off, const int y_off, const int initial, const double dt, 
     const int* neighbours, const double* density, const double* edgex, 
-    const double* edgey, const double* edgedx, const double* edgedy, int* facets, 
-    int* collisions, int* nparticles_sent, uint64_t* master_key, 
+    const double* edgey, const double* edgedx, const double* edgedy, uint64_t* facets, 
+    uint64_t* collisions, int* nparticles_sent, uint64_t* master_key, 
     const int ntotal_particles, const int nparticles_to_process, 
     int* nparticles, Particle* particles_start, CrossSection* cs_scatter_table, 
     CrossSection* cs_absorb_table, double* scalar_flux_tally, 
@@ -154,8 +154,8 @@ void handle_particles(
     init_rn_pool(&rn_pools[omp_get_thread_num()], (*master_key));
   }
 
-  int nfacets = 0;
-  int ncollisions = 0;
+  uint64_t nfacets = 0;
+  uint64_t ncollisions = 0;
   int nparticles_deleted = 0;
 
 #pragma omp parallel for schedule(guided) \
@@ -194,8 +194,8 @@ int handle_particle(
     const int initial, const int ntotal_particles, const double* density, 
     const double* edgex, const double* edgey, const double* edgedx, 
     const double* edgedy, const CrossSection* cs_scatter_table, 
-    const CrossSection* cs_absorb_table, int* nparticles_sent, int* facets, 
-    int* collisions, Particle* particle, double* scalar_flux_tally, 
+    const CrossSection* cs_absorb_table, int* nparticles_sent, uint64_t* facets, 
+    uint64_t* collisions, Particle* particle, double* scalar_flux_tally, 
     double* energy_deposition_tally, RNPool* rn_pool)
 {
   // (1) particle can stream and reach census
@@ -301,6 +301,7 @@ int handle_particle(
           global_nx, nx, x_off, y_off, particle, inv_ntotal_particles, 
           distance_to_facet, number_density, microscopic_cs_absorb, 
           microscopic_cs_scatter+microscopic_cs_absorb);
+      energy_deposition = 0.0;
 
       // Update tallies as we leave a cell
       update_tallies(
@@ -316,7 +317,6 @@ int handle_particle(
 
       // Update the data based on new cell
       scalar_flux = 0.0;
-      energy_deposition = 0.0;
       cellx = particle->cellx-x_off+PAD;
       celly = particle->celly-y_off+PAD;
       local_density = density[celly*(nx+2*PAD)+cellx];
@@ -358,12 +358,6 @@ void update_tallies(
   // Store the scalar flux
   const int cellx = particle->cellx-x_off;
   const int celly = particle->celly-y_off;
-
-#if 0
-#pragma omp atomic update 
-  scalar_flux_tally[celly*nx+cellx] += 
-    scalar_flux*inv_ntotal_particles; 
-#endif // if 0
 
 #pragma omp atomic update
   energy_deposition_tally[celly*nx+cellx] += 
