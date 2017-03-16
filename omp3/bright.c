@@ -301,12 +301,12 @@ int handle_particle(
           global_nx, nx, x_off, y_off, particle, inv_ntotal_particles, 
           distance_to_facet, number_density, microscopic_cs_absorb, 
           microscopic_cs_scatter+microscopic_cs_absorb);
-      energy_deposition = 0.0;
 
       // Update tallies as we leave a cell
       update_tallies(
           nx, x_off, y_off, particle, inv_ntotal_particles, energy_deposition,
           scalar_flux, scalar_flux_tally, energy_deposition_tally);
+      energy_deposition = 0.0;
 
       // Encounter facet, and jump out if particle left this rank's domain
       if(handle_facet_encounter(
