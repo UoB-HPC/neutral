@@ -618,17 +618,23 @@ double microscopic_cs_for_energy(
   double* key = cs->key;
   double* value = cs->value;
 
-  // Determine the correct search direction required to move towards the
-  // new energy
-  const int direction = (energy > cs->value[*cs_index]) ? 1 : -1; 
-
   if(*cs_index > -1) {
+    // Determine the correct search direction required to move towards the
+    // new energy
+    const int direction = (energy > key[*cs_index]) ? 1 : -1; 
+
     // This search will move in the correct direction towards the new energy group
+    int found = 0;
     for(ind = *cs_index; ind >= 0 && ind < cs->nentries; ind += direction) {
       // Check if we have found the new energy group index
       if(energy >= key[ind] && energy < key[ind+1]) {
+        found = 1;
         break;
       }
+    }
+
+    if(!found) {
+      TERMINATE("No key for energy %.12e in cross sectional lookup.\n", energy);
     }
   }
   else {
@@ -645,7 +651,7 @@ double microscopic_cs_for_energy(
 
   // TODO: perform some interesting interpolation here
   // Center weighted is poor accuracy but might even out over enough particles
-  return (value[ind-1] + value[ind])/2.0;
+  return 0.5*(value[ind+1] + value[ind]);
 }
 
 // Validates the results of the simulation
