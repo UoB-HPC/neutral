@@ -62,7 +62,7 @@ typedef struct {
 
 } Particles;
 
-enum { COLLISION, FACET, CENSUS, DEAD };
+enum { COLLISION, FACET, CENSUS, NEW_DEAD, DEAD };
 
 // Contains the configuration and state data for the application
 typedef struct {

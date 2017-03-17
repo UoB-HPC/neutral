@@ -1,7 +1,5 @@
 #include "../bright_interface.h"
 
-enum { PARTICLE_SENT, PARTICLE_DEAD, PARTICLE_CENSUS };
-
 // Handles the current active batch of particles
 void handle_particles(
     const int global_nx, const int global_ny, const int nx, const int ny, 

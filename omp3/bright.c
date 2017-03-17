@@ -269,6 +269,7 @@ void event_initialisation(
     particles->cell_mfp[pindex] = 1.0/(macroscopic_cs_scatter+macroscopic_cs_absorb);
     const double rn0 = master_pool->buffer[ii]; // Make this a function
     particles->mfp_to_collision[pindex] = -log(rn0)/macroscopic_cs_scatter;
+    particles->energy_deposition[pindex] = 0.0;
   }
 }
 
@@ -522,7 +523,7 @@ void handle_collisions(
 
       if(particles->e[pindex] < MIN_ENERGY_OF_INTEREST) {
         // Energy is too low, so mark the particles for deletion
-        particles->next_event[pindex] = DEAD;
+        particles->next_event[pindex] = NEW_DEAD;
         ndead++;
       }
     }
@@ -687,18 +688,24 @@ void update_tallies(
 #pragma omp parallel for
   for(int ii = 0; ii < nparticles; ++ii) {
     const int pindex = particles_offset+ii;
-    if((!tally_census && particles->next_event[pindex] != FACET) || 
-        (tally_census && particles->next_event[pindex] != CENSUS)) {
-      continue;
-    }
 
-    const int cellx = particles->cellx[pindex]-x_off;
-    const int celly = particles->celly[pindex]-y_off;
+    // We only want to tally for facet encounters or census
+    if((tally_census && particles->next_event[pindex] == CENSUS) ||
+       (!tally_census && (particles->next_event[pindex] == FACET ||
+                          particles->next_event[pindex] == NEW_DEAD))) {
+
+      if(particles->next_event[pindex] == NEW_DEAD) {
+        particles->next_event[pindex] = DEAD;
+      }
+
+      const int cellx = particles->cellx[pindex]-x_off;
+      const int celly = particles->celly[pindex]-y_off;
 
 #pragma omp atomic update
-    energy_deposition_tally[celly*nx+cellx] += 
-      particles->energy_deposition[pindex]*inv_nparticles_total;
-    particles->energy_deposition[pindex] = 0.0;
+      energy_deposition_tally[celly*nx+cellx] += 
+        particles->energy_deposition[pindex]*inv_nparticles_total;
+      particles->energy_deposition[pindex] = 0.0;
+    }
   }
 }
 
