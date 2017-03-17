@@ -30,8 +30,8 @@ void solve_transport_2d(
   // this doesn't have to be a carefully ordered queue but lets see how that goes.
 
   // This is the known starting number of particles
-  int facets = 0;
-  int collisions = 0;
+  uint64_t facets = 0;
+  uint64_t collisions = 0;
   int nparticles = *nlocal_particles;
   int nparticles_sent[NNEIGHBOURS];
 
@@ -129,19 +129,19 @@ void solve_transport_2d(
 
   *nlocal_particles = nparticles;
 
-  printf("facets %d collisions %d\n", facets, collisions);
+  printf("facets %llu collisions %llu\n", facets, collisions);
 }
 
 // Handles the current active batch of particles
 void handle_particles(
     const int global_nx, const int global_ny, const int nx, const int ny, 
     const int x_off, const int y_off, const double dt, const int* neighbours, 
-    const double* density, const double* edgex, const double* edgey, int* facets, 
-    int* collisions, int* nparticles_sent, uint64_t* master_key, 
-    const int nparticles_total, const int nparticles_to_process, 
-    int* nparticles, Particles* particles, CrossSection* cs_scatter_table, 
-    CrossSection* cs_absorb_table, double* scalar_flux_tally, 
-    double* energy_deposition_tally, RNPool* rn_pools)
+    const double* density, const double* edgex, const double* edgey, 
+    uint64_t* facets, uint64_t* collisions, int* nparticles_sent, 
+    uint64_t* master_key, const int nparticles_total, 
+    const int nparticles_to_process, int* nparticles, Particles* particles, 
+    CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
+    double* scalar_flux_tally, double* energy_deposition_tally, RNPool* rn_pools)
 {
   int nthreads;
 #pragma omp parallel
@@ -153,7 +153,7 @@ void handle_particles(
   int nparticles_dead = 0;
 
   // Block over the events
-  const int block_size = 200000;
+  const int block_size = nparticles_total;
   const int nblocks = nparticles_total/block_size;
   for(int bb = 0; bb < nblocks; ++bb) {
     const int particles_offset = bb*block_size;
@@ -275,11 +275,11 @@ void event_initialisation(
 // Calculates the next event for each particle
 int calc_next_event(
     const int nparticles, const int particles_offset, Particles* particles, 
-    int* facets, int* collisions)
+    uint64_t* facets, uint64_t* collisions)
 {
   /* CALCULATE THE EVENTS */
-  int nfacets = 0;
-  int ncollisions = 0;
+  uint64_t nfacets = 0;
+  uint64_t ncollisions = 0;
 #pragma omp parallel for simd reduction(+: ncollisions, nfacets)
 #pragma vector aligned
   for(int ii = 0; ii < nparticles; ++ii) {
@@ -328,13 +328,15 @@ void handle_facets(
     double* energy_deposition_tally, CrossSection* cs_scatter_table, 
     CrossSection* cs_absorb_table)
 {
+#if 0
   int np_out_east = 0;
   int np_out_west = 0;
   int np_out_north = 0;
   int np_out_south = 0;
+#endif // if 0
 
   /* HANDLE FACET ENCOUNTERS */
-#pragma omp parallel for simd \
+#pragma omp parallel for simd //\
   reduction(+:np_out_east, np_out_west, np_out_north, np_out_south) 
 #pragma vector aligned
   for(int ii = 0; ii < nparticles; ++ii) {
@@ -379,14 +381,16 @@ void handle_facets(
         }
         else {
           // Definitely moving to right cell
-          particles->cellx[pindex] += 1;
+          particles->cellx[pindex]++;
 
+#if 0
           // Check if we need to pass to another process
           if(particles->cellx[pindex] >= nx+x_off) {
             //send_and_mark_particle(neighbours[EAST], pindex, particles);
             np_out_east++;
             continue;
           }
+#endif // if 0
         }
       }
       else if(particles->omega_x[pindex] < 0.0) {
@@ -396,14 +400,16 @@ void handle_facets(
         }
         else {
           // Definitely moving to left cell
-          particles->cellx[pindex] -= 1;
+          particles->cellx[pindex]--;
 
+#if 0
           // Check if we need to pass to another process
           if(particles->cellx[pindex] < x_off) {
             //send_and_mark_particle(neighbours[WEST], pindex, particles);
             np_out_west++;
             continue;
           }
+#endif // if 0
         }
       }
     }
@@ -415,14 +421,16 @@ void handle_facets(
         }
         else {
           // Definitely moving to north cell
-          particles->celly[pindex] += 1;
+          particles->celly[pindex]++;
 
+#if 0
           // Check if we need to pass to another process
           if(particles->celly[pindex] >= ny+y_off) {
             //send_and_mark_particle(neighbours[NORTH], pindex, particles);
             np_out_north++;
             continue;
           }
+#endif // if 0
         }
       }
       else if(particles->omega_y[pindex] < 0.0) {
@@ -432,14 +440,16 @@ void handle_facets(
         }
         else {
           // Definitely moving to south cell
-          particles->celly[pindex] -= 1;
+          particles->celly[pindex]--;
 
+#if 0
           // Check if we need to pass to another process
           if(particles->celly[pindex] < y_off) {
             //send_and_mark_particle(neighbours[SOUTH], pindex, particles);
             np_out_south++;
             continue;
           }
+#endif // if 0
         }
       }
     }
@@ -451,11 +461,13 @@ void handle_facets(
     particles->cell_mfp[pindex] = 1.0/(macroscopic_cs_scatter+macroscopic_cs_absorb);
   }
 
+#if 0
   nparticles_sent[EAST] = np_out_east;
   nparticles_sent[WEST] = np_out_west;
   nparticles_sent[NORTH] = np_out_north;
   nparticles_sent[SOUTH] = np_out_south;
   *nparticles_out += np_out_west+np_out_north+np_out_south+np_out_east;
+#endif // if 0
 }
 
 // Handle all of the collision events
@@ -728,8 +740,8 @@ double calculate_energy_deposition(
   const double heating_response =
     (particles->e[pindex]-scattering_heating-absorption_heating);
 
-  return particles->weight[pindex]*path_length*(microscopic_cs_total*BARNS)*
-    heating_response*number_density;
+  return particles->weight[pindex]*path_length*
+    (microscopic_cs_total*BARNS)*heating_response*number_density;
 }
 
 // Fetch the cross section for a particular energy value
@@ -742,8 +754,8 @@ double microscopic_cs_for_energy(
    * approximation in this particular case */
 
   int ind = 0; 
-  double* key = cs->key;
-  double* value = cs->value;
+  double* key = cs->keys;
+  double* value = cs->values;
 
   if(*cs_index > -1) {
     // Determine the correct search direction required to move towards the
