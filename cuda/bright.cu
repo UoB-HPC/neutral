@@ -224,15 +224,9 @@ void handle_facets(
     double* energy_deposition_tally, CrossSection* cs_scatter_table, 
     CrossSection* cs_absorb_table)
 {
-#if 0
-  int np_out_east = 0;
-  int np_out_west = 0;
-  int np_out_north = 0;
-  int np_out_south = 0;
-#endif // if 0
-
-  const int nblocks = ceil(nparticles/(double)NTHREADS); 
-  handle_facets_kernel<<<nblocks, NTHREADS>>>(
+  const int nthreads = 1024;
+  const int nblocks = 15;//ceil(nparticles/(double)NTHREADS); 
+  handle_facets_kernel<<<nblocks, nthreads>>>(
       nparticles, particles_offset, global_nx, global_ny, nx, x_off, y_off, 
       cs_scatter_table->nentries, cs_absorb_table->nentries, particles->e, 
       particles->distance_to_facet, particles->weight, cs_scatter_table->keys, 
@@ -243,13 +237,6 @@ void handle_facets(
       particles->absorb_cs_index, particles->particle_velocity, particles->local_density,
       particles->cell_mfp, particles->mfp_to_collision, energy_deposition_tally);
 
-#if 0
-  nparticles_sent[EAST] = np_out_east;
-  nparticles_sent[WEST] = np_out_west;
-  nparticles_sent[NORTH] = np_out_north;
-  nparticles_sent[SOUTH] = np_out_south;
-  *nparticles_out += np_out_west+np_out_north+np_out_south+np_out_east;
-#endif // if 0
   *nparticles_out = 0;
 }
 
@@ -265,8 +252,9 @@ void handle_collisions(
 
   int np_dead = 0;
 
-  const int nblocks = ceil(nparticles/(double)NTHREADS); 
-  handle_collisions_kernel<<<nblocks, NTHREADS>>>(
+  const int nthreads = 1024;
+  const int nblocks = 15;//ceil(nparticles/(double)NTHREADS); 
+  handle_collisions_kernel<<<nblocks, nthreads>>>(
       nparticles, particles_offset, nx, x_off, y_off, 
       cs_scatter_table->nentries, cs_absorb_table->nentries, particles->e, 
       particles->distance_to_facet, particles->weight, cs_scatter_table->keys, 
