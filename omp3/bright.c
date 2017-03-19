@@ -329,16 +329,8 @@ void handle_facets(
     double* energy_deposition_tally, CrossSection* cs_scatter_table, 
     CrossSection* cs_absorb_table)
 {
-#if 0
-  int np_out_east = 0;
-  int np_out_west = 0;
-  int np_out_north = 0;
-  int np_out_south = 0;
-#endif // if 0
-
   /* HANDLE FACET ENCOUNTERS */
-#pragma omp parallel for simd //\
-  reduction(+:np_out_east, np_out_west, np_out_north, np_out_south) 
+#pragma omp parallel for simd
 #pragma vector aligned
   for(int ii = 0; ii < nparticles; ++ii) {
     const int pindex = particles_offset+ii;
@@ -383,15 +375,6 @@ void handle_facets(
         else {
           // Definitely moving to right cell
           particles->cellx[pindex]++;
-
-#if 0
-          // Check if we need to pass to another process
-          if(particles->cellx[pindex] >= nx+x_off) {
-            //send_and_mark_particle(neighbours[EAST], pindex, particles);
-            np_out_east++;
-            continue;
-          }
-#endif // if 0
         }
       }
       else if(particles->omega_x[pindex] < 0.0) {
@@ -402,15 +385,6 @@ void handle_facets(
         else {
           // Definitely moving to left cell
           particles->cellx[pindex]--;
-
-#if 0
-          // Check if we need to pass to another process
-          if(particles->cellx[pindex] < x_off) {
-            //send_and_mark_particle(neighbours[WEST], pindex, particles);
-            np_out_west++;
-            continue;
-          }
-#endif // if 0
         }
       }
     }
@@ -423,15 +397,6 @@ void handle_facets(
         else {
           // Definitely moving to north cell
           particles->celly[pindex]++;
-
-#if 0
-          // Check if we need to pass to another process
-          if(particles->celly[pindex] >= ny+y_off) {
-            //send_and_mark_particle(neighbours[NORTH], pindex, particles);
-            np_out_north++;
-            continue;
-          }
-#endif // if 0
         }
       }
       else if(particles->omega_y[pindex] < 0.0) {
@@ -442,15 +407,6 @@ void handle_facets(
         else {
           // Definitely moving to south cell
           particles->celly[pindex]--;
-
-#if 0
-          // Check if we need to pass to another process
-          if(particles->celly[pindex] < y_off) {
-            //send_and_mark_particle(neighbours[SOUTH], pindex, particles);
-            np_out_south++;
-            continue;
-          }
-#endif // if 0
         }
       }
     }
@@ -461,14 +417,28 @@ void handle_facets(
     macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
     particles->cell_mfp[pindex] = 1.0/(macroscopic_cs_scatter+macroscopic_cs_absorb);
   }
+}
 
-#if 0
-  nparticles_sent[EAST] = np_out_east;
-  nparticles_sent[WEST] = np_out_west;
-  nparticles_sent[NORTH] = np_out_north;
-  nparticles_sent[SOUTH] = np_out_south;
-  *nparticles_out += np_out_west+np_out_north+np_out_south+np_out_east;
-#endif // if 0
+void gen_random_numbers(
+    const uint64_t master_key, const uint64_t secondary_key, 
+    const uint64_t gid, double* rn0, double* rn1)
+{
+  threefry2x64_ctr_t counter;
+  threefry2x64_ctr_t key;
+  counter.v[0] = gid;
+  counter.v[1] = 0;
+  key.v[0] = master_key;
+  key.v[1] = secondary_key;
+
+  // Generate the random numbers
+  threefry2x64_ctr_t rand = threefry2x64(counter, key);
+
+  // Turn our random numbers from integrals to double precision
+  uint64_t max_uint64 = UINT64_C(0xFFFFFFFFFFFFFFFF);  
+  const double factor = 1.0/(max_uint64 + 1.0);
+  const double half_factor = 0.5*factor;
+  *rn0 = rand.v[0]*factor+half_factor;
+  *rn1 = rand.v[1]*factor+half_factor;
 }
 
 // Handle all of the collision events
@@ -479,10 +449,11 @@ void handle_collisions(
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
     double* scalar_flux_tally, double* energy_deposition_tally)
 {
-  int ndead = 0;
+  uint64_t ndead = 0;
+  uint64_t master_key = rn_pools[0].key.v[0];
 
   /* HANDLE COLLISIONS */
-#pragma omp parallel for reduction(+:ndead)
+#pragma omp parallel for simd reduction(+:ndead)
 #pragma vector aligned
   for(int ii = 0; ii < nparticles; ++ii) {
     const int pindex = particles_offset+ii;
@@ -513,8 +484,9 @@ void handle_collisions(
 
     const double p_absorb = macroscopic_cs_absorb*particles->cell_mfp[pindex];
 
-    RNPool* local_rn_pool = &rn_pools[omp_get_thread_num()];
-    if(getrand(local_rn_pool) < p_absorb) {
+    double rn[NRANDOM_NUMBERS];
+    gen_random_numbers(master_key, 1000, ii, &rn[0], &rn[1]);
+    if(rn[0] < p_absorb) {
       /* Model particles absorption */
 
       // Find the new particles weight after absorption, saving the energy change
@@ -529,11 +501,10 @@ void handle_collisions(
     }
     else {
       /* Model elastic particles scattering */
-
       // Choose a random scattering angle between -1 and 1
       // TODO: THIS RANDOM NUMBER SELECTION DOESN'T WORK
       // ...GOOD COMMENT BRO
-      const double mu_cm = 1.0 - 2.0*getrand(local_rn_pool);
+      const double mu_cm = 1.0 - 2.0*rn[1];
 
       // Calculate the new energy based on the relation to angle of incidence
       const double e_new = particles->e[pindex]*
@@ -557,7 +528,8 @@ void handle_collisions(
       particles->particle_velocity[pindex] = sqrt((2.0*e_new*eV_TO_J)*INV_PARTICLE_MASS);
     }
 
-    particles->mfp_to_collision[pindex] = -log(getrand(local_rn_pool))/macroscopic_cs_scatter;
+    gen_random_numbers(master_key, 1001, ii, &rn[0], &rn[1]);
+    particles->mfp_to_collision[pindex] = -log(rn[0])/macroscopic_cs_scatter;
     particles->dt_to_census[pindex] -= distance_to_collision/particles->particle_velocity[pindex];
   }
 
@@ -691,8 +663,8 @@ void update_tallies(
 
     // We only want to tally for facet encounters or census
     if((tally_census && particles->next_event[pindex] == CENSUS) ||
-       (!tally_census && (particles->next_event[pindex] == FACET ||
-                          particles->next_event[pindex] == NEW_DEAD))) {
+        (!tally_census && (particles->next_event[pindex] == FACET ||
+                           particles->next_event[pindex] == NEW_DEAD))) {
 
       if(particles->next_event[pindex] == NEW_DEAD) {
         particles->next_event[pindex] = DEAD;
@@ -752,6 +724,7 @@ double calculate_energy_deposition(
 }
 
 // Fetch the cross section for a particular energy value
+#pragma omp declare simd
 double microscopic_cs_for_energy(
     const CrossSection* cs, const double energy, int* cs_index)
 {
@@ -779,126 +752,133 @@ double microscopic_cs_for_energy(
       }
     }
 
+#if 0
     if(!found) {
       TERMINATE("No key for energy %.12e in cross sectional lookup.\n", energy);
     }
+#endif // if 0
   }
   else {
-    // Use a simple binary search to find the energy group
+#if 0
+    // Use a binary search to find the energy group
+    for(int width = ind/2; width > 0; width /= 2) { //max(1, width/2)) { 
+      ind += (energy < key[ind]) ? -width : width;
+    }
+#endif // if 0
     ind = cs->nentries/2;
     int width = ind/2;
     while(energy < key[ind] || energy >= key[ind+1]) {
       ind += (energy < key[ind]) ? -width : width;
       width = max(1, width/2); // To handle odd cases, allows one extra walk
     }
+    }
+
+    *cs_index = ind;
+
+    // TODO: perform some interesting interpolation here
+    // Center weighted is poor accuracy but might even out over enough particles
+    return 0.5*(value[ind+1] + value[ind]);
   }
 
-  *cs_index = ind;
-
-  // TODO: perform some interesting interpolation here
-  // Center weighted is poor accuracy but might even out over enough particles
-  return 0.5*(value[ind+1] + value[ind]);
-}
-
-// Acts as a particle source
-void inject_particles(
-    Mesh* mesh, const int local_nx, const int local_ny, 
-    const double local_particle_left_off, const double local_particle_bottom_off,
-    const double local_particle_width, const double local_particle_height, 
-    const int nparticles, const double initial_energy, RNPool* rn_pools,
-    Particles* particles)
-{
-  START_PROFILING(&compute_profile);
+  // Acts as a particle source
+  void inject_particles(
+      Mesh* mesh, const int local_nx, const int local_ny, 
+      const double local_particle_left_off, const double local_particle_bottom_off,
+      const double local_particle_width, const double local_particle_height, 
+      const int nparticles, const double initial_energy, RNPool* rn_pools,
+      Particles* particles)
+  {
+    START_PROFILING(&compute_profile);
 
 #pragma omp parallel for
-  for(int ii = 0; ii < nparticles; ++ii) {
+    for(int ii = 0; ii < nparticles; ++ii) {
 
-    RNPool* rn_pool = &rn_pools[omp_get_thread_num()];
+      RNPool* rn_pool = &rn_pools[omp_get_thread_num()];
 
-    // Set the initial nandom location of the particle inside the source region
-    particles->x[ii] = local_particle_left_off + 
-      getrand(rn_pool)*local_particle_width;
-    particles->y[ii] = local_particle_bottom_off + 
-      getrand(rn_pool)*local_particle_height;
+      // Set the initial nandom location of the particle inside the source region
+      particles->x[ii] = local_particle_left_off + 
+        getrand(rn_pool)*local_particle_width;
+      particles->y[ii] = local_particle_bottom_off + 
+        getrand(rn_pool)*local_particle_height;
 
-    // Check the location of the specific cell that the particle sits within.
-    // We have to check this explicitly because the mesh might be non-uniform.
-    int cellx = 0;
-    int celly = 0;
-    for(int cc = 0; cc < local_nx; ++cc) {
-      if(particles->x[ii] >= mesh->edgex[cc+PAD] && 
-          particles->x[ii] < mesh->edgex[cc+PAD+1]) {
-        cellx = mesh->x_off+cc;
-        break;
+      // Check the location of the specific cell that the particle sits within.
+      // We have to check this explicitly because the mesh might be non-uniform.
+      int cellx = 0;
+      int celly = 0;
+      for(int cc = 0; cc < local_nx; ++cc) {
+        if(particles->x[ii] >= mesh->edgex[cc+PAD] && 
+            particles->x[ii] < mesh->edgex[cc+PAD+1]) {
+          cellx = mesh->x_off+cc;
+          break;
+        }
       }
-    }
-    for(int cc = 0; cc < local_ny; ++cc) {
-      if(particles->y[ii] >= mesh->edgey[cc+PAD] && 
-          particles->y[ii] < mesh->edgey[cc+PAD+1]) {
-        celly = mesh->y_off+cc;
-        break;
+      for(int cc = 0; cc < local_ny; ++cc) {
+        if(particles->y[ii] >= mesh->edgey[cc+PAD] && 
+            particles->y[ii] < mesh->edgey[cc+PAD+1]) {
+          celly = mesh->y_off+cc;
+          break;
+        }
       }
+
+      particles->cellx[ii] = cellx;
+      particles->celly[ii] = celly;
+
+      // Generating theta has uniform density, however 0.0 and 1.0 produce the same 
+      // value which introduces very very very small bias...
+      const double theta = 2.0*M_PI*getrand(rn_pool);
+      particles->omega_x[ii] = cos(theta);
+      particles->omega_y[ii] = sin(theta);
+
+      // This approximation sets mono-energetic initial state for source particles  
+      particles->e[ii] = initial_energy;
+
+      // Set a weight for the particle to track absorption
+      particles->weight[ii] = 1.0;
+      particles->dt_to_census[ii] = mesh->dt;
+      particles->mfp_to_collision[ii] = 0.0;
+      particles->scatter_cs_index[ii] = -1;
+      particles->absorb_cs_index[ii] = -1;
+      particles->next_event[ii] = FACET;
+    }
+    STOP_PROFILING(&compute_profile, "initialising particles");
+  }
+
+  // Validates the results of the simulation
+  void validate(
+      const int nx, const int ny, const char* params_filename, 
+      const int rank, double* energy_deposition_tally)
+  {
+    double local_energy_tally = 0.0;
+    for(int ii = 0; ii < nx*ny; ++ii) {
+      local_energy_tally += energy_deposition_tally[ii];
     }
 
-    particles->cellx[ii] = cellx;
-    particles->celly[ii] = celly;
+    double global_energy_tally = reduce_all_sum(local_energy_tally);
 
-    // Generating theta has uniform density, however 0.0 and 1.0 produce the same 
-    // value which introduces very very very small bias...
-    const double theta = 2.0*M_PI*getrand(rn_pool);
-    particles->omega_x[ii] = cos(theta);
-    particles->omega_y[ii] = sin(theta);
+    if(rank != MASTER) {
+      return;
+    }
 
-    // This approximation sets mono-energetic initial state for source particles  
-    particles->e[ii] = initial_energy;
+    printf("\nFinal global_energy_tally %.15e\n", global_energy_tally);
 
-    // Set a weight for the particle to track absorption
-    particles->weight[ii] = 1.0;
-    particles->dt_to_census[ii] = mesh->dt;
-    particles->mfp_to_collision[ii] = 0.0;
-    particles->scatter_cs_index[ii] = -1;
-    particles->absorb_cs_index[ii] = -1;
-    particles->next_event[ii] = FACET;
+    int nresults = 0;
+    char* keys = (char*)malloc(sizeof(char)*MAX_KEYS*(MAX_STR_LEN+1));
+    double* values = (double*)malloc(sizeof(double)*MAX_KEYS);
+    if(!get_key_value_parameter(
+          params_filename, NEUTRAL_TESTS, keys, values, &nresults)) {
+      printf("Warning. Test entry was not found, could NOT validate.\n");
+      return;
+    }
+
+    printf("Expected %.12e, result was %.12e.\n", values[0], global_energy_tally);
+    if(within_tolerance(values[0], global_energy_tally, VALIDATE_TOLERANCE)) {
+      printf("PASSED validation.\n");
+    }
+    else {
+      printf("FAILED validation.\n");
+    }
+
+    free(keys);
+    free(values);
   }
-  STOP_PROFILING(&compute_profile, "initialising particles");
-}
-
-// Validates the results of the simulation
-void validate(
-    const int nx, const int ny, const char* params_filename, 
-    const int rank, double* energy_deposition_tally)
-{
-  double local_energy_tally = 0.0;
-  for(int ii = 0; ii < nx*ny; ++ii) {
-    local_energy_tally += energy_deposition_tally[ii];
-  }
-
-  double global_energy_tally = reduce_all_sum(local_energy_tally);
-
-  if(rank != MASTER) {
-    return;
-  }
-
-  printf("\nFinal global_energy_tally %.15e\n", global_energy_tally);
-
-  int nresults = 0;
-  char* keys = (char*)malloc(sizeof(char)*MAX_KEYS*(MAX_STR_LEN+1));
-  double* values = (double*)malloc(sizeof(double)*MAX_KEYS);
-  if(!get_key_value_parameter(
-        params_filename, NEUTRAL_TESTS, keys, values, &nresults)) {
-    printf("Warning. Test entry was not found, could NOT validate.\n");
-    return;
-  }
-
-  printf("Expected %.12e, result was %.12e.\n", values[0], global_energy_tally);
-  if(within_tolerance(values[0], global_energy_tally, VALIDATE_TOLERANCE)) {
-    printf("PASSED validation.\n");
-  }
-  else {
-    printf("FAILED validation.\n");
-  }
-
-  free(keys);
-  free(values);
-}
 
