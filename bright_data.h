@@ -35,6 +35,7 @@ typedef struct {
   double* keys;
   double* values;
   int nentries;
+  int log_width;
 
 } CrossSection;
 

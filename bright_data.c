@@ -185,6 +185,8 @@ void read_cs_file(
     printf("File %s contains %d entries\n", filename, cs->nentries);
   }
 
+  cs->log_width = log(cs->nentries)*1.44269504088896340736;
+
   rewind(fp);
 
   double* h_keys;

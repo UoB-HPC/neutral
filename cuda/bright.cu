@@ -128,14 +128,6 @@ void handle_particles(
           rn_pools, &nparticles_dead, cs_scatter_table, cs_absorb_table,
           scalar_flux_tally, energy_deposition_tally, reduce_array0);
       STOP_PROFILING(&compute_profile, "handle collisions");
-
-#if 0
-      START_PROFILING(&compute_profile);
-      update_tallies(
-          nx, particles, x_off, y_off, block_size, particles_offset, 0, 
-          scalar_flux_tally, energy_deposition_tally);
-      STOP_PROFILING(&compute_profile, "update tallies");
-#endif // if 0
     }
 
     START_PROFILING(&compute_profile);
@@ -144,14 +136,6 @@ void handle_particles(
         edgey, cs_scatter_table, cs_absorb_table, scalar_flux_tally, 
         energy_deposition_tally);
     STOP_PROFILING(&compute_profile, "handle census");
-
-#if 0
-    START_PROFILING(&compute_profile);
-    update_tallies(
-        nx, particles, x_off, y_off, block_size, particles_offset, 1, 
-        scalar_flux_tally, energy_deposition_tally);
-    STOP_PROFILING(&compute_profile, "update tallies");
-#endif // if 0
   }
 
   printf("handled %d particles, with %d particles deleted\n", 
@@ -176,7 +160,9 @@ void event_initialisation(
       nparticles, particles_offset, dt, nx, x_off, y_off, cs_scatter_table->nentries, 
       cs_absorb_table->nentries, particles->e, particles->cellx, 
       particles->celly, cs_scatter_table->keys, cs_scatter_table->values, 
-      cs_absorb_table->keys, cs_absorb_table->values, density, particles->dt_to_census, 
+      cs_absorb_table->keys, cs_absorb_table->values, 
+      cs_scatter_table->log_width, cs_absorb_table->log_width,
+      density, particles->dt_to_census, 
       particles->next_event, particles->scatter_cs_index, 
       particles->absorb_cs_index, particles->particle_velocity, 
       particles->local_density, particles->cell_mfp, particles->mfp_to_collision,
@@ -230,7 +216,8 @@ void handle_facets(
       nparticles, particles_offset, global_nx, global_ny, nx, x_off, y_off, 
       cs_scatter_table->nentries, cs_absorb_table->nentries, particles->e, 
       particles->distance_to_facet, particles->weight, cs_scatter_table->keys, 
-      cs_scatter_table->values, cs_absorb_table->keys, cs_absorb_table->values, density, 
+      cs_scatter_table->values, cs_absorb_table->keys, cs_absorb_table->values, 
+      cs_scatter_table->log_width, cs_absorb_table->log_width, density, 
       particles->energy_deposition, particles->x, particles->y, particles->omega_x, 
       particles->omega_y, particles->x_facet, particles->cellx, particles->celly,
       particles->dt_to_census, particles->next_event, particles->scatter_cs_index,
@@ -259,6 +246,7 @@ void handle_collisions(
       cs_scatter_table->nentries, cs_absorb_table->nentries, particles->e, 
       particles->distance_to_facet, particles->weight, cs_scatter_table->keys, 
       cs_scatter_table->values, cs_absorb_table->keys, cs_absorb_table->values,
+      cs_scatter_table->log_width, cs_absorb_table->log_width,
       particles->energy_deposition, particles->x, particles->y, 
       particles->omega_x, particles->omega_y, particles->x_facet, particles->cellx, 
       particles->celly, particles->dt_to_census, particles->next_event, 
@@ -289,6 +277,7 @@ void handle_census(
       particles->y, particles->omega_x, particles->omega_y, particles->mfp_to_collision, 
       particles->energy_deposition, density, cs_scatter_table->keys, 
       cs_absorb_table->keys, cs_scatter_table->values, cs_absorb_table->values,
+      cs_scatter_table->log_width, cs_absorb_table->log_width,
       cs_scatter_table->nentries, cs_absorb_table->nentries, particles->weight,
       energy_deposition_tally);
 }

@@ -20,7 +20,7 @@ __device__ double atomicAdd(double* address, double val)
 // Fetch the cross section for a particular energy value
 __device__ double microscopic_cs_for_energy(
     const double* key, const double* value, const int nentries, 
-    const double energy, int* cs_index)
+    const int log_width, const double energy, int* cs_index)
 {
   /* Attempt an optimisation of the search by performing a linear operation
    * if there is an existing location. We assume that the energy has
@@ -114,6 +114,7 @@ __global__ void event_initialisation_kernel(
     const double* e, const int* particle_cellx, const int* particle_celly,
     const double* cs_scatter_keys, const double* cs_scatter_values,
     const double* cs_absorb_keys, const double* cs_absorb_values,
+    const int cs_scatter_log_width, const int cs_absorb_log_width,
     const double* density, double* dt_to_census, int* particle_event, 
     int* scatter_cs_index, int* absorb_cs_index, double* particle_velocity, 
     double* local_density, double* cell_mfp, double* mfp_to_collision,
@@ -146,11 +147,11 @@ __global__ void event_initialisation_kernel(
     }
 
     const double microscopic_cs_scatter = microscopic_cs_for_energy(
-        cs_scatter_keys, cs_scatter_values, cs_scatter_nentries, e[pindex], 
-        &scatter_cs_index[pindex]);
+        cs_scatter_keys, cs_scatter_values, cs_scatter_nentries, 
+        cs_scatter_log_width, e[pindex], &scatter_cs_index[pindex]);
     const double microscopic_cs_absorb = microscopic_cs_for_energy(
-        cs_absorb_keys, cs_absorb_values, cs_absorb_nentries, e[pindex], 
-        &absorb_cs_index[pindex]);
+        cs_absorb_keys, cs_absorb_values, cs_absorb_nentries, 
+        cs_absorb_log_width, e[pindex], &absorb_cs_index[pindex]);
     particle_velocity[pindex] =
       sqrt((2.0*e[pindex]*eV_TO_J)*INV_PARTICLE_MASS);
 
@@ -218,6 +219,7 @@ __global__ void handle_facets_kernel(
     const double* distance_to_facet, const double* weight,
     const double* cs_scatter_keys, const double* cs_scatter_values,
     const double* cs_absorb_keys, const double* cs_absorb_values,
+    const int cs_scatter_log_width, const int cs_absorb_log_width,
     const double* density, double* energy_deposition, double* x, double* y, 
     double* omega_x, double* omega_y, int* x_facet, int* particle_cellx, 
     int* particle_celly, double* dt_to_census, int* particle_event, 
@@ -238,11 +240,11 @@ __global__ void handle_facets_kernel(
     double number_density = (local_density[pindex]*AVOGADROS/MOLAR_MASS);
 
     const double microscopic_cs_scatter = microscopic_cs_for_energy(
-        cs_scatter_keys, cs_scatter_values, cs_scatter_nentries, e[pindex], 
-        &scatter_cs_index[pindex]);
+        cs_scatter_keys, cs_scatter_values, cs_scatter_nentries, 
+        cs_scatter_log_width, e[pindex], &scatter_cs_index[pindex]);
     const double microscopic_cs_absorb = microscopic_cs_for_energy(
-        cs_absorb_keys, cs_absorb_values, cs_absorb_nentries, e[pindex], 
-        &absorb_cs_index[pindex]);
+        cs_absorb_keys, cs_absorb_values, cs_absorb_nentries, 
+        cs_absorb_log_width, e[pindex], &absorb_cs_index[pindex]);
     double macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
     double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
 
@@ -255,7 +257,7 @@ __global__ void handle_facets_kernel(
     const double ed = calculate_energy_deposition(
         pindex, distance_to_facet[pindex], e, weight, number_density, 
         microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb);
-    atomicAdd(&energy_deposition_tally[gid],//celly*nx+cellx],
+    atomicAdd(&energy_deposition_tally[celly*nx+cellx],
         (energy_deposition[pindex]+ed)/nparticles);
     energy_deposition[pindex] = 0.0;
 
@@ -326,6 +328,7 @@ __global__ void handle_collisions_kernel(
     const double* distance_to_facet, double* weight,
     const double* cs_scatter_keys, const double* cs_scatter_values,
     const double* cs_absorb_keys, const double* cs_absorb_values,
+    const int cs_scatter_log_width, const int cs_absorb_log_width,
     double* energy_deposition, double* x, double* y, 
     double* omega_x, double* omega_y, int* x_facet, int* particle_cellx, 
     int* particle_celly, double* dt_to_census, int* particle_event, 
@@ -345,11 +348,11 @@ __global__ void handle_collisions_kernel(
       double number_density = 
         (local_density[pindex]*AVOGADROS/MOLAR_MASS);
       const double microscopic_cs_scatter = microscopic_cs_for_energy(
-          cs_scatter_keys, cs_scatter_values, cs_scatter_nentries, e[pindex], 
-          &scatter_cs_index[pindex]);
+          cs_scatter_keys, cs_scatter_values, cs_scatter_nentries, 
+          cs_scatter_log_width, e[pindex], &scatter_cs_index[pindex]);
       const double microscopic_cs_absorb = microscopic_cs_for_energy(
-          cs_absorb_keys, cs_absorb_values, cs_absorb_nentries, e[pindex], 
-          &absorb_cs_index[pindex]);
+          cs_absorb_keys, cs_absorb_values, cs_absorb_nentries, 
+          cs_absorb_log_width, e[pindex], &absorb_cs_index[pindex]);
       double macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
       double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
       const double distance_to_collision = mfp_to_collision[pindex]*cell_mfp[pindex];
@@ -434,10 +437,13 @@ __global__ void handle_census_kernel(
     const int particles_offset, const int* particle_event,
     const double* particle_velocity, double* dt_to_census, int* particle_cellx,
     int* particle_celly, double* local_density, const double* e, 
-    int* scatter_cs_index, int* absorb_cs_index, double* x, double* y, 
+    int* scatter_cs_index, int* absorb_cs_index,
+    double* x, double* y, 
     const double* omega_x, const double* omega_y, double* mfp_to_collision,
     double* energy_deposition, const double* density, const double* cs_scatter_keys,
-    const double* cs_absorb_keys, const double* cs_scatter_values, const double* cs_absorb_values,
+    const double* cs_absorb_keys, const double* cs_scatter_values, 
+    const double* cs_absorb_values,
+    const int cs_scatter_log_width, const int cs_absorb_log_width,
     const int cs_scatter_nentries, const int cs_absorb_nentries, const double* weight,
     double* energy_deposition_tally)
 {
@@ -451,11 +457,11 @@ __global__ void handle_census_kernel(
     particle_velocity[pindex]*dt_to_census[pindex];
   double number_density = (local_density[pindex]*AVOGADROS/MOLAR_MASS);
   const double microscopic_cs_scatter = microscopic_cs_for_energy(
-      cs_scatter_keys, cs_scatter_values, cs_scatter_nentries, e[pindex], 
-      &scatter_cs_index[pindex]);
+      cs_scatter_keys, cs_scatter_values, cs_scatter_nentries, 
+      cs_scatter_log_width, e[pindex], &scatter_cs_index[pindex]);
   const double microscopic_cs_absorb = microscopic_cs_for_energy(
-      cs_absorb_keys, cs_absorb_values, cs_absorb_nentries, e[pindex], 
-      &absorb_cs_index[pindex]);
+      cs_absorb_keys, cs_absorb_values, cs_absorb_nentries, 
+      cs_absorb_log_width, e[pindex], &absorb_cs_index[pindex]);
   double macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
   double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
 

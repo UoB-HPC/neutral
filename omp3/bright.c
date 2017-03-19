@@ -437,8 +437,8 @@ void gen_random_numbers(
   uint64_t max_uint64 = UINT64_C(0xFFFFFFFFFFFFFFFF);  
   const double factor = 1.0/(max_uint64 + 1.0);
   const double half_factor = 0.5*factor;
-  *rn0 = rand.v[0]*factor+half_factor;
-  *rn1 = rand.v[1]*factor+half_factor;
+  *rn0 = (double)rand.v[0]*factor+half_factor;
+  *rn1 = (double)rand.v[1]*factor+half_factor;
 }
 
 // Handle all of the collision events
@@ -733,152 +733,136 @@ double microscopic_cs_for_energy(
    * reduced rather than increased, which seems to be a legitimate 
    * approximation in this particular case */
 
-  int ind = 0; 
   double* key = cs->keys;
   double* value = cs->values;
+  int log_width = cs->log_width;
 
   if(*cs_index > -1) {
-    // Determine the correct search direction required to move towards the
-    // new energy
+    // Move towards energy change
     const int direction = (energy > key[*cs_index]) ? 1 : -1; 
-
     // This search will move in the correct direction towards the new energy group
-    int found = 0;
-    for(ind = *cs_index; ind >= 0 && ind < cs->nentries; ind += direction) {
+    for(int ind = *cs_index; ind >= 0 && ind < cs->nentries; ind += direction) {
       // Check if we have found the new energy group index
       if(energy >= key[ind] && energy < key[ind+1]) {
-        found = 1;
+        *cs_index = ind;
+        break;
+      }
+    }
+  }
+  else {
+    // Use a binary search to find the energy bin
+    *cs_index = cs->nentries/2;
+    int width = cs->nentries/2;
+    for(int ii = 0; ii < log_width; ++ii) {
+      width /= 2;
+      *cs_index += (energy < key[*cs_index]) ? -width : width;
+    }
+  }
+
+  // TODO: perform some interesting interpolation here
+  // Center weighted is poor accuracy but might even out over enough particles
+  return 0.5*(value[*cs_index] + value[*cs_index+1]);
+}
+
+// Acts as a particle source
+void inject_particles(
+    Mesh* mesh, const int local_nx, const int local_ny, 
+    const double local_particle_left_off, const double local_particle_bottom_off,
+    const double local_particle_width, const double local_particle_height, 
+    const int nparticles, const double initial_energy, RNPool* rn_pools,
+    Particles* particles)
+{
+  START_PROFILING(&compute_profile);
+
+#pragma omp parallel for
+  for(int ii = 0; ii < nparticles; ++ii) {
+
+    RNPool* rn_pool = &rn_pools[omp_get_thread_num()];
+
+    // Set the initial nandom location of the particle inside the source region
+    particles->x[ii] = local_particle_left_off + 
+      getrand(rn_pool)*local_particle_width;
+    particles->y[ii] = local_particle_bottom_off + 
+      getrand(rn_pool)*local_particle_height;
+
+    // Check the location of the specific cell that the particle sits within.
+    // We have to check this explicitly because the mesh might be non-uniform.
+    int cellx = 0;
+    int celly = 0;
+    for(int cc = 0; cc < local_nx; ++cc) {
+      if(particles->x[ii] >= mesh->edgex[cc+PAD] && 
+          particles->x[ii] < mesh->edgex[cc+PAD+1]) {
+        cellx = mesh->x_off+cc;
+        break;
+      }
+    }
+    for(int cc = 0; cc < local_ny; ++cc) {
+      if(particles->y[ii] >= mesh->edgey[cc+PAD] && 
+          particles->y[ii] < mesh->edgey[cc+PAD+1]) {
+        celly = mesh->y_off+cc;
         break;
       }
     }
 
-#if 0
-    if(!found) {
-      TERMINATE("No key for energy %.12e in cross sectional lookup.\n", energy);
-    }
-#endif // if 0
+    particles->cellx[ii] = cellx;
+    particles->celly[ii] = celly;
+
+    // Generating theta has uniform density, however 0.0 and 1.0 produce the same 
+    // value which introduces very very very small bias...
+    const double theta = 2.0*M_PI*getrand(rn_pool);
+    particles->omega_x[ii] = cos(theta);
+    particles->omega_y[ii] = sin(theta);
+
+    // This approximation sets mono-energetic initial state for source particles  
+    particles->e[ii] = initial_energy;
+
+    // Set a weight for the particle to track absorption
+    particles->weight[ii] = 1.0;
+    particles->dt_to_census[ii] = mesh->dt;
+    particles->mfp_to_collision[ii] = 0.0;
+    particles->scatter_cs_index[ii] = -1;
+    particles->absorb_cs_index[ii] = -1;
+    particles->next_event[ii] = FACET;
+  }
+  STOP_PROFILING(&compute_profile, "initialising particles");
+}
+
+// Validates the results of the simulation
+void validate(
+    const int nx, const int ny, const char* params_filename, 
+    const int rank, double* energy_deposition_tally)
+{
+  double local_energy_tally = 0.0;
+  for(int ii = 0; ii < nx*ny; ++ii) {
+    local_energy_tally += energy_deposition_tally[ii];
+  }
+
+  double global_energy_tally = reduce_all_sum(local_energy_tally);
+
+  if(rank != MASTER) {
+    return;
+  }
+
+  printf("\nFinal global_energy_tally %.15e\n", global_energy_tally);
+
+  int nresults = 0;
+  char* keys = (char*)malloc(sizeof(char)*MAX_KEYS*(MAX_STR_LEN+1));
+  double* values = (double*)malloc(sizeof(double)*MAX_KEYS);
+  if(!get_key_value_parameter(
+        params_filename, NEUTRAL_TESTS, keys, values, &nresults)) {
+    printf("Warning. Test entry was not found, could NOT validate.\n");
+    return;
+  }
+
+  printf("Expected %.12e, result was %.12e.\n", values[0], global_energy_tally);
+  if(within_tolerance(values[0], global_energy_tally, VALIDATE_TOLERANCE)) {
+    printf("PASSED validation.\n");
   }
   else {
-#if 0
-    // Use a binary search to find the energy group
-    for(int width = ind/2; width > 0; width /= 2) { //max(1, width/2)) { 
-      ind += (energy < key[ind]) ? -width : width;
-    }
-#endif // if 0
-    ind = cs->nentries/2;
-    int width = ind/2;
-    while(energy < key[ind] || energy >= key[ind+1]) {
-      ind += (energy < key[ind]) ? -width : width;
-      width = max(1, width/2); // To handle odd cases, allows one extra walk
-    }
-    }
-
-    *cs_index = ind;
-
-    // TODO: perform some interesting interpolation here
-    // Center weighted is poor accuracy but might even out over enough particles
-    return 0.5*(value[ind+1] + value[ind]);
+    printf("FAILED validation.\n");
   }
 
-  // Acts as a particle source
-  void inject_particles(
-      Mesh* mesh, const int local_nx, const int local_ny, 
-      const double local_particle_left_off, const double local_particle_bottom_off,
-      const double local_particle_width, const double local_particle_height, 
-      const int nparticles, const double initial_energy, RNPool* rn_pools,
-      Particles* particles)
-  {
-    START_PROFILING(&compute_profile);
-
-#pragma omp parallel for
-    for(int ii = 0; ii < nparticles; ++ii) {
-
-      RNPool* rn_pool = &rn_pools[omp_get_thread_num()];
-
-      // Set the initial nandom location of the particle inside the source region
-      particles->x[ii] = local_particle_left_off + 
-        getrand(rn_pool)*local_particle_width;
-      particles->y[ii] = local_particle_bottom_off + 
-        getrand(rn_pool)*local_particle_height;
-
-      // Check the location of the specific cell that the particle sits within.
-      // We have to check this explicitly because the mesh might be non-uniform.
-      int cellx = 0;
-      int celly = 0;
-      for(int cc = 0; cc < local_nx; ++cc) {
-        if(particles->x[ii] >= mesh->edgex[cc+PAD] && 
-            particles->x[ii] < mesh->edgex[cc+PAD+1]) {
-          cellx = mesh->x_off+cc;
-          break;
-        }
-      }
-      for(int cc = 0; cc < local_ny; ++cc) {
-        if(particles->y[ii] >= mesh->edgey[cc+PAD] && 
-            particles->y[ii] < mesh->edgey[cc+PAD+1]) {
-          celly = mesh->y_off+cc;
-          break;
-        }
-      }
-
-      particles->cellx[ii] = cellx;
-      particles->celly[ii] = celly;
-
-      // Generating theta has uniform density, however 0.0 and 1.0 produce the same 
-      // value which introduces very very very small bias...
-      const double theta = 2.0*M_PI*getrand(rn_pool);
-      particles->omega_x[ii] = cos(theta);
-      particles->omega_y[ii] = sin(theta);
-
-      // This approximation sets mono-energetic initial state for source particles  
-      particles->e[ii] = initial_energy;
-
-      // Set a weight for the particle to track absorption
-      particles->weight[ii] = 1.0;
-      particles->dt_to_census[ii] = mesh->dt;
-      particles->mfp_to_collision[ii] = 0.0;
-      particles->scatter_cs_index[ii] = -1;
-      particles->absorb_cs_index[ii] = -1;
-      particles->next_event[ii] = FACET;
-    }
-    STOP_PROFILING(&compute_profile, "initialising particles");
-  }
-
-  // Validates the results of the simulation
-  void validate(
-      const int nx, const int ny, const char* params_filename, 
-      const int rank, double* energy_deposition_tally)
-  {
-    double local_energy_tally = 0.0;
-    for(int ii = 0; ii < nx*ny; ++ii) {
-      local_energy_tally += energy_deposition_tally[ii];
-    }
-
-    double global_energy_tally = reduce_all_sum(local_energy_tally);
-
-    if(rank != MASTER) {
-      return;
-    }
-
-    printf("\nFinal global_energy_tally %.15e\n", global_energy_tally);
-
-    int nresults = 0;
-    char* keys = (char*)malloc(sizeof(char)*MAX_KEYS*(MAX_STR_LEN+1));
-    double* values = (double*)malloc(sizeof(double)*MAX_KEYS);
-    if(!get_key_value_parameter(
-          params_filename, NEUTRAL_TESTS, keys, values, &nresults)) {
-      printf("Warning. Test entry was not found, could NOT validate.\n");
-      return;
-    }
-
-    printf("Expected %.12e, result was %.12e.\n", values[0], global_energy_tally);
-    if(within_tolerance(values[0], global_energy_tally, VALIDATE_TOLERANCE)) {
-      printf("PASSED validation.\n");
-    }
-    else {
-      printf("FAILED validation.\n");
-    }
-
-    free(keys);
-    free(values);
-  }
+  free(keys);
+  free(values);
+}
 
