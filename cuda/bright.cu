@@ -239,9 +239,8 @@ void handle_collisions(
 
   int np_dead = 0;
 
-  const int nthreads = 1024;
-  const int nblocks = 15;//ceil(nparticles/(double)NTHREADS); 
-  handle_collisions_kernel<<<nblocks, nthreads>>>(
+  const int nblocks = ceil(nparticles/(double)NTHREADS); 
+  handle_collisions_kernel<<<nblocks, NTHREADS>>>(
       nparticles, particles_offset, nx, x_off, y_off, 
       cs_scatter_table->nentries, cs_absorb_table->nentries, particles->e, 
       particles->distance_to_facet, particles->weight, cs_scatter_table->keys, 
@@ -297,21 +296,6 @@ void calc_distance_to_facet(
       particles->dt_to_census, particles->next_event, particles->scatter_cs_index,
       particles->absorb_cs_index, particles->particle_velocity, 
       particles->cell_mfp, particles->mfp_to_collision, edgex, edgey);
-}
-
-// Tallies both the scalar flux and energy deposition in the cell
-void update_tallies(
-    const int nx, Particles* particles, const int x_off, const int y_off, 
-    const int nparticles, const int particles_offset, const int tally_census, 
-    double* scalar_flux_tally, double* energy_deposition_tally)
-{
-  const double inv_nparticles_total = 1.0/nparticles;
-  
-  const int nblocks = ceil(nparticles/(double)NTHREADS); 
-  update_tallies_kernel<<<nblocks, NTHREADS>>>(
-      nparticles, particles_offset, tally_census, nx, x_off, 
-      y_off, inv_nparticles_total, particles->next_event, particles->cellx, 
-      particles->celly, particles->energy_deposition, energy_deposition_tally);
 }
 
 // Sends a particles to a neighbour and replaces in the particles list
