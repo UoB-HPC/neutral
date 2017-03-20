@@ -152,8 +152,7 @@ __global__ void event_initialisation_kernel(
     const double microscopic_cs_absorb = microscopic_cs_for_energy(
         cs_absorb_keys, cs_absorb_values, cs_absorb_nentries, 
         cs_absorb_log_width, e[pindex], &absorb_cs_index[pindex]);
-    particle_velocity[pindex] =
-      sqrt((2.0*e[pindex]*eV_TO_J)*INV_PARTICLE_MASS);
+    double velocity = sqrt((2.0*e[pindex]*eV_TO_J)*INV_PARTICLE_MASS);
 
     const int cellx = particle_cellx[pindex]-x_off+PAD;
     const int celly = particle_celly[pindex]-y_off+PAD;
@@ -173,7 +172,7 @@ __global__ void calc_next_event_kernel(
     const int nparticles, const int particles_offset, const double* mfp_to_collision, 
     const double* cell_mfp, const double* particle_velocity, const double* dt_to_census, 
     const double* distance_to_facet, int* particle_event, int* reduce_array0,
-    int* reduce_array1)
+    int* reduce_array1, const double* e)
 {
   const int tid = threadIdx.x;
   __shared__ int ncol_shared[NTHREADS];
@@ -186,7 +185,8 @@ __global__ void calc_next_event_kernel(
     const int pindex = particles_offset+gid;
     if(particle_event[pindex] == COLLISION || particle_event[pindex] == FACET) {
       const double distance_to_collision = mfp_to_collision[pindex]*cell_mfp[pindex];
-      const double distance_to_census = particle_velocity[pindex]*dt_to_census[pindex];
+      double velocity = sqrt((2.0*e[pindex]*eV_TO_J)*INV_PARTICLE_MASS);
+      const double distance_to_census = velocity*dt_to_census[pindex];
 
       if(distance_to_collision < distance_to_census && 
           distance_to_collision < distance_to_facet[pindex]) {
@@ -249,10 +249,11 @@ __global__ void handle_facets_kernel(
     double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
 
     // Update the mean free paths until collision
+    double velocity = sqrt((2.0*e[pindex]*eV_TO_J)*INV_PARTICLE_MASS);
     mfp_to_collision[pindex] -=
       (distance_to_facet[pindex]*(macroscopic_cs_scatter+macroscopic_cs_absorb));
     dt_to_census[pindex] -=
-      (distance_to_facet[pindex]/particle_velocity[pindex]);
+      (distance_to_facet[pindex]/velocity);
 
     const double ed = calculate_energy_deposition(
         pindex, distance_to_facet[pindex], e, weight, number_density, 
@@ -354,6 +355,7 @@ __global__ void handle_collisions_kernel(
     double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
     double macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
     const double distance_to_collision = mfp_to_collision[pindex]*cell_mfp[pindex];
+    double velocity = sqrt((2.0*e[pindex]*eV_TO_J)*INV_PARTICLE_MASS);
 
     energy_deposition[pindex] += calculate_energy_deposition(
         pindex, distance_to_collision, e, weight, number_density, 
@@ -408,11 +410,11 @@ __global__ void handle_collisions_kernel(
       omega_x[pindex] = omega_x_new;
       omega_y[pindex] = omega_y_new;
       e[pindex] = e_new;
-      particle_velocity[pindex] = sqrt((2.0*e_new*eV_TO_J)*INV_PARTICLE_MASS);
+      velocity = sqrt((2.0*e_new*eV_TO_J)*INV_PARTICLE_MASS);
     }
 
     mfp_to_collision[pindex] = -log(rn[1])/macroscopic_cs_scatter;
-    dt_to_census[pindex] -= distance_to_collision/particle_velocity[pindex];
+    dt_to_census[pindex] -= distance_to_collision/velocity;
   }
 
   __syncthreads();
@@ -453,7 +455,8 @@ __global__ void handle_census_kernel(
         cs_absorb_keys, cs_absorb_values, cs_absorb_nentries, 
         cs_absorb_log_width, e[pindex], &absorb_cs_index[pindex]);
     // We have not changed cell or energy level at this stage
-    const double distance_to_census = particle_velocity[pindex]*dt_to_census[pindex];
+    double velocity = sqrt((2.0*e[pindex]*eV_TO_J)*INV_PARTICLE_MASS);
+    const double distance_to_census = velocity*dt_to_census[pindex];
     x[pindex] += distance_to_census*omega_x[pindex];
     y[pindex] += distance_to_census*omega_y[pindex];
 
@@ -486,7 +489,7 @@ __global__ void calc_distance_to_facet_kernel(
     int* particle_celly, double* dt_to_census, int* particle_event, 
     int* scatter_cs_index, int* absorb_cs_index, double* particle_velocity, 
     double* cell_mfp, double* mfp_to_collision,
-    const double* edgex, const double* edgey)
+    const double* edgex, const double* edgey, const double* e)
 {
   const int gid = blockIdx.x*blockDim.x+threadIdx.x;
   const int pindex = particles_offset+gid;
@@ -499,8 +502,9 @@ __global__ void calc_distance_to_facet_kernel(
   // If the velocity is positive then the top or right boundary will be hit
   const int cellx = particle_cellx[pindex]-x_off+PAD;
   const int celly = particle_celly[pindex]-y_off+PAD;
-  double u_x_inv = 1.0/(omega_x[pindex]*particle_velocity[pindex]);
-  double u_y_inv = 1.0/(omega_y[pindex]*particle_velocity[pindex]);
+  double velocity = sqrt((2.0*e[pindex]*eV_TO_J)*INV_PARTICLE_MASS);
+  double u_x_inv = 1.0/(omega_x[pindex]*velocity);
+  double u_y_inv = 1.0/(omega_y[pindex]*velocity);
 
   double x0 = edgex[cellx];
   double x1 = edgex[cellx+1];
@@ -522,7 +526,7 @@ __global__ void calc_distance_to_facet_kernel(
   // a = vector on first edge to be hit
   // u = velocity vector
 
-  double mag_u0 = particle_velocity[pindex];
+  double mag_u0 = velocity;
 
   x_facet[pindex] = (dt_x < dt_y) ? 1 : 0;
   if(x_facet[pindex]) {

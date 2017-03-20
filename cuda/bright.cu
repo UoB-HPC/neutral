@@ -183,7 +183,7 @@ int calc_next_event(
       nparticles, particles_offset, particles->mfp_to_collision, 
       particles->cell_mfp, particles->particle_velocity, particles->dt_to_census, 
       particles->distance_to_facet, particles->next_event, reduce_array0,
-      reduce_array1);
+      reduce_array1, particles->e);
 
   int nfacets = 0;
   int ncollisions = 0;
@@ -295,7 +295,7 @@ void calc_distance_to_facet(
       particles->omega_y, particles->x_facet, particles->cellx, particles->celly,
       particles->dt_to_census, particles->next_event, particles->scatter_cs_index,
       particles->absorb_cs_index, particles->particle_velocity, 
-      particles->cell_mfp, particles->mfp_to_collision, edgex, edgey);
+      particles->cell_mfp, particles->mfp_to_collision, edgex, edgey, particles->e);
 }
 
 // Sends a particles to a neighbour and replaces in the particles list
