@@ -30,7 +30,7 @@ void handle_facets(
     const int global_ny, const int nx, const int ny, const int x_off, 
     const int y_off, const int* neighbours, int* nparticles_sent, 
     Particles* particles, const double* edgex, const double* edgey, 
-    const double* density, int* nparticles_out, double* scalar_flux_tally, 
+    const double* density, uint64_t* nparticles_out, double* scalar_flux_tally, 
     double* energy_deposition_tally, CrossSection* cs_scatter_table, 
     CrossSection* cs_absorb_table, uint64_t* nfacets, uint64_t* ncollisions);
 
@@ -38,7 +38,7 @@ void handle_facets(
 void handle_collisions(
     const int nparticles, const int particles_offset, const int nx, 
     const int x_off, const int y_off, Particles* particles, const double* edgex, 
-    const double* edgey, RNPool* rn_pools, int* nparticles_dead, 
+    const double* edgey, RNPool* rn_pools, uint64_t* nparticles_dead, 
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
     double* scalar_flux_tally, double* energy_deposition_tally, 
     uint64_t* nfacets, uint64_t* ncollisions);

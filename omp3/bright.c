@@ -149,8 +149,8 @@ void handle_particles(
     nthreads = omp_get_num_threads();
   }
 
-  int nparticles_out = 0;
-  int nparticles_dead = 0;
+  uint64_t nparticles_out = 0;
+  uint64_t nparticles_dead = 0;
 
   // Block over the events
   const int block_size = nparticles_total;
@@ -232,7 +232,7 @@ void handle_particles(
     STOP_PROFILING(&compute_profile, "update tallies");
   }
 
-  printf("handled %d particles, with %d particles deleted\n", 
+  printf("handled %d particles, with %llu particles deleted\n", 
       nparticles_to_process, nparticles_dead+nparticles_out);
 }
 
@@ -383,7 +383,7 @@ void handle_facets(
     const int global_ny, const int nx, const int ny, const int x_off, 
     const int y_off, const int* neighbours, int* nparticles_sent, 
     Particles* particles, const double* edgex, const double* edgey, 
-    const double* density, int* nparticles_out, double* scalar_flux_tally, 
+    const double* density, uint64_t* nparticles_out, double* scalar_flux_tally, 
     double* energy_deposition_tally, CrossSection* cs_scatter_table, 
     CrossSection* cs_absorb_table, uint64_t* nfacets, uint64_t* ncollisions)
 {
@@ -557,7 +557,7 @@ void handle_facets(
 void handle_collisions(
     const int nparticles, const int particles_offset, const int nx, 
     const int x_off, const int y_off, Particles* particles, const double* edgex, 
-    const double* edgey, RNPool* rn_pools, int* nparticles_dead, 
+    const double* edgey, RNPool* rn_pools, uint64_t* nparticles_dead, 
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
     double* scalar_flux_tally, double* energy_deposition_tally, uint64_t* nfacets,
     uint64_t* ncollisions)
@@ -612,6 +612,7 @@ void handle_collisions(
         // Energy is too low, so mark the particles for deletion
         particles->next_event[pindex] = NEW_DEAD;
         ndead++;
+        continue;
       }
     }
     else {
