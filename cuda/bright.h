@@ -24,7 +24,8 @@ void event_initialisation(
 // Calculates the next event for each particle
 int calc_next_event(
     const int nparticles, const int particles_offset, Particles* particles, 
-    uint64_t* facets, uint64_t* collisions, int* reduce_array0, int* reduce_array1);
+    uint64_t* facets, uint64_t* collisions, int* reduce_array0, int* reduce_array1,
+    const int x_off, const int y_off, const double* edgex, const double* edgey);
 
 // Handle all of the facet encounters
 void handle_facets(

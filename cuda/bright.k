@@ -171,8 +171,11 @@ __global__ void event_initialisation_kernel(
 __global__ void calc_next_event_kernel(
     const int nparticles, const int particles_offset, const double* mfp_to_collision, 
     const double* cell_mfp, const double* particle_velocity, const double* dt_to_census, 
-    const double* distance_to_facet, int* particle_event, int* reduce_array0,
-    int* reduce_array1, const double* e)
+    double* distance_to_facet, int* particle_event, int* reduce_array0,
+    int* reduce_array1, const double* e, const int x_off, const int y_off, 
+    double* x, double* y, double* omega_x, double* omega_y, int* x_facet, 
+    int* particle_cellx, int* particle_celly, int* scatter_cs_index, 
+    int* absorb_cs_index, const double* edgex, const double* edgey)
 {
   const int tid = threadIdx.x;
   __shared__ int ncol_shared[NTHREADS];
@@ -181,8 +184,62 @@ __global__ void calc_next_event_kernel(
   nfac_shared[tid] = 0;
 
   const int gid = blockIdx.x*blockDim.x+threadIdx.x;
+
   if(gid < nparticles) {
     const int pindex = particles_offset+gid;
+
+    // Check the timestep required to move the particles along a single axis
+    // If the velocity is positive then the top or right boundary will be hit
+    const int cellx = particle_cellx[pindex]-x_off+PAD;
+    const int celly = particle_celly[pindex]-y_off+PAD;
+    double velocity = sqrt((2.0*e[pindex]*eV_TO_J)*INV_PARTICLE_MASS);
+    double u_x_inv = 1.0/(omega_x[pindex]*velocity);
+    double u_y_inv = 1.0/(omega_y[pindex]*velocity);
+
+    double x0 = edgex[cellx];
+    double x1 = edgex[cellx+1];
+    double y0 = edgey[celly];
+    double y1 = edgey[celly+1];
+
+    // The bound is open on the left and bottom so we have to correct for this and
+    // required the movement to the facet to go slightly further than the edge
+    // in the calculated values, using OPEN_BOUND_CORRECTION, which is the smallest
+    // possible distance we can be from the closed bound e.g. 1.0e-14.
+    double dt_x = (omega_x[pindex] >= 0.0)
+      ? (x1-x[pindex])*u_x_inv
+      : ((x0-OPEN_BOUND_CORRECTION)-x[pindex])*u_x_inv;
+    double dt_y = (omega_y[pindex] >= 0.0)
+      ? (y1-y[pindex])*u_y_inv
+      : ((y0-OPEN_BOUND_CORRECTION)-y[pindex])*u_y_inv;
+
+    // Calculated the projection to be
+    // a = vector on first edge to be hit
+    // u = velocity vector
+
+    double mag_u0 = velocity;
+
+    x_facet[pindex] = (dt_x < dt_y) ? 1 : 0;
+    if(x_facet[pindex]) {
+      // cos(theta) = ||(x, 0)||/||(u_x', u_y')|| - u' is u at boundary
+      // cos(theta) = (x.u)/(||x||.||u||)
+      // x_x/||u'|| = (x_x, 0)*(u_x, u_y) / (x_x.||u||)
+      // x_x/||u'|| = (x_x.u_x / x_x.||u||)
+      // x_x/||u'|| = u_x/||u||
+      // ||u'|| = (x_x.||u||)/u_x
+      // We are centered on the origin, so the y component is 0 after travelling
+      // aint the x axis to the edge (ax, 0).(x, y)
+      distance_to_facet[pindex] = (omega_x[pindex] >= 0.0)
+        ? (x1-x[pindex])*mag_u0*u_x_inv
+        : ((x0-OPEN_BOUND_CORRECTION)-x[pindex])*mag_u0*u_x_inv;
+    }
+    else {
+      // We are centered on the origin, so the x component is 0 after travelling
+      // along the y axis to the edge (0, ay).(x, y)
+      distance_to_facet[pindex] = (omega_y[pindex] >= 0.0)
+        ? (y1-y[pindex])*mag_u0*u_y_inv
+        : ((y0-OPEN_BOUND_CORRECTION)-y[pindex])*mag_u0*u_y_inv;
+    }
+
     if(particle_event[pindex] == COLLISION || particle_event[pindex] == FACET) {
       const double distance_to_collision = mfp_to_collision[pindex]*cell_mfp[pindex];
       double velocity = sqrt((2.0*e[pindex]*eV_TO_J)*INV_PARTICLE_MASS);
@@ -479,76 +536,6 @@ __global__ void handle_census_kernel(
   const int celly = particle_celly[pindex]-y_off+PAD;
   atomicAdd(&energy_deposition_tally[celly*nx+cellx], 
       (energy_deposition[pindex]+ed)/nparticles);
-}
-
-__global__ void calc_distance_to_facet_kernel(
-    const int nparticles, const int particles_offset, 
-    const int x_off, const int y_off, 
-    double* distance_to_facet, double* x, double* y, 
-    double* omega_x, double* omega_y, int* x_facet, int* particle_cellx, 
-    int* particle_celly, double* dt_to_census, int* particle_event, 
-    int* scatter_cs_index, int* absorb_cs_index, double* particle_velocity, 
-    double* cell_mfp, double* mfp_to_collision,
-    const double* edgex, const double* edgey, const double* e)
-{
-  const int gid = blockIdx.x*blockDim.x+threadIdx.x;
-  const int pindex = particles_offset+gid;
-  if(gid >= nparticles || particle_event[pindex] == DEAD || 
-      particle_event[pindex] == CENSUS) {
-    return;
-  }
-
-  // Check the timestep required to move the particles along a single axis
-  // If the velocity is positive then the top or right boundary will be hit
-  const int cellx = particle_cellx[pindex]-x_off+PAD;
-  const int celly = particle_celly[pindex]-y_off+PAD;
-  double velocity = sqrt((2.0*e[pindex]*eV_TO_J)*INV_PARTICLE_MASS);
-  double u_x_inv = 1.0/(omega_x[pindex]*velocity);
-  double u_y_inv = 1.0/(omega_y[pindex]*velocity);
-
-  double x0 = edgex[cellx];
-  double x1 = edgex[cellx+1];
-  double y0 = edgey[celly];
-  double y1 = edgey[celly+1];
-
-  // The bound is open on the left and bottom so we have to correct for this and
-  // required the movement to the facet to go slightly further than the edge
-  // in the calculated values, using OPEN_BOUND_CORRECTION, which is the smallest
-  // possible distance we can be from the closed bound e.g. 1.0e-14.
-  double dt_x = (omega_x[pindex] >= 0.0)
-    ? (x1-x[pindex])*u_x_inv
-    : ((x0-OPEN_BOUND_CORRECTION)-x[pindex])*u_x_inv;
-  double dt_y = (omega_y[pindex] >= 0.0)
-    ? (y1-y[pindex])*u_y_inv
-    : ((y0-OPEN_BOUND_CORRECTION)-y[pindex])*u_y_inv;
-
-  // Calculated the projection to be
-  // a = vector on first edge to be hit
-  // u = velocity vector
-
-  double mag_u0 = velocity;
-
-  x_facet[pindex] = (dt_x < dt_y) ? 1 : 0;
-  if(x_facet[pindex]) {
-    // cos(theta) = ||(x, 0)||/||(u_x', u_y')|| - u' is u at boundary
-    // cos(theta) = (x.u)/(||x||.||u||)
-    // x_x/||u'|| = (x_x, 0)*(u_x, u_y) / (x_x.||u||)
-    // x_x/||u'|| = (x_x.u_x / x_x.||u||)
-    // x_x/||u'|| = u_x/||u||
-    // ||u'|| = (x_x.||u||)/u_x
-    // We are centered on the origin, so the y component is 0 after travelling
-    // aint the x axis to the edge (ax, 0).(x, y)
-    distance_to_facet[pindex] = (omega_x[pindex] >= 0.0)
-      ? (x1-x[pindex])*mag_u0*u_x_inv
-      : ((x0-OPEN_BOUND_CORRECTION)-x[pindex])*mag_u0*u_x_inv;
-  }
-  else {
-    // We are centered on the origin, so the x component is 0 after travelling
-    // along the y axis to the edge (0, ay).(x, y)
-    distance_to_facet[pindex] = (omega_y[pindex] >= 0.0)
-      ? (y1-y[pindex])*mag_u0*u_y_inv
-      : ((y0-OPEN_BOUND_CORRECTION)-y[pindex])*mag_u0*u_y_inv;
-  }
 }
 
 __global__ void update_tallies_kernel(

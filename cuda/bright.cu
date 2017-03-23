@@ -98,16 +98,10 @@ void handle_particles(
         STOP_PROFILING(&compute_profile, "initialisation");
       }
 
-      // Calculates the distance to the facet for all cells
-      START_PROFILING(&compute_profile);
-      calc_distance_to_facet(
-          block_size, particles_offset, x_off, y_off, particles, edgex, edgey);
-      STOP_PROFILING(&compute_profile, "calc dist to facet");
-
       START_PROFILING(&compute_profile);
       const int all_census = calc_next_event(
           block_size, particles_offset, particles, facets, collisions, 
-          reduce_array0, reduce_array1);
+          reduce_array0, reduce_array1, x_off, y_off, edgex, edgey);
       STOP_PROFILING(&compute_profile, "calc next event");
 
       if(all_census) {
@@ -175,7 +169,8 @@ void event_initialisation(
 // Calculates the next event for each particle
 int calc_next_event(
     const int nparticles, const int particles_offset, Particles* particles, 
-    uint64_t* facets, uint64_t* collisions, int* reduce_array0, int* reduce_array1)
+    uint64_t* facets, uint64_t* collisions, int* reduce_array0, int* reduce_array1,
+    const int x_off, const int y_off, const double* edgex, const double* edgey)
 {
   /* CALCULATE THE EVENTS */
   const int nblocks = ceil(nparticles/(double)NTHREADS); 
@@ -183,7 +178,10 @@ int calc_next_event(
       nparticles, particles_offset, particles->mfp_to_collision, 
       particles->cell_mfp, particles->particle_velocity, particles->dt_to_census, 
       particles->distance_to_facet, particles->next_event, reduce_array0,
-      reduce_array1, particles->e);
+      reduce_array1, particles->e, x_off, y_off, particles->x, particles->y, 
+      particles->omega_x, particles->omega_y, particles->x_facet, 
+      particles->cellx, particles->celly, particles->scatter_cs_index, 
+      particles->absorb_cs_index, edgex, edgey);
 
   int nfacets = 0;
   int ncollisions = 0;
@@ -279,23 +277,6 @@ void handle_census(
       cs_scatter_table->log_width, cs_absorb_table->log_width,
       cs_scatter_table->nentries, cs_absorb_table->nentries, particles->weight,
       energy_deposition_tally);
-}
-
-// Calculates the distance to the facet for all cells
-void calc_distance_to_facet(
-    const int nparticles, const int particles_offset, const int x_off, 
-    const int y_off, Particles* particles, 
-    const double* edgex, const double* edgey)
-{
-  /* DISTANCE TO FACET */
-  const int nblocks = ceil(nparticles/(double)NTHREADS); 
-  calc_distance_to_facet_kernel<<<nblocks, NTHREADS>>>(
-      nparticles, particles_offset, x_off, y_off, 
-      particles->distance_to_facet, particles->x, particles->y, particles->omega_x, 
-      particles->omega_y, particles->x_facet, particles->cellx, particles->celly,
-      particles->dt_to_census, particles->next_event, particles->scatter_cs_index,
-      particles->absorb_cs_index, particles->particle_velocity, 
-      particles->cell_mfp, particles->mfp_to_collision, edgex, edgey, particles->e);
 }
 
 // Sends a particles to a neighbour and replaces in the particles list
