@@ -175,6 +175,7 @@ void handle_particles(
         STOP_PROFILING(&compute_profile, "initialisation");
       }
 
+#if 0
       START_PROFILING(&compute_profile);
       const int all_census = calc_next_event(
           block_size, particles_offset, particles, facets, collisions,
@@ -184,27 +185,37 @@ void handle_particles(
       if(all_census) {
         break;
       }
+#endif // if 0
+      uint64_t ncollisions = 0;
+      uint64_t nfacets = 0;
 
       START_PROFILING(&compute_profile);
       handle_facets(
           block_size, particles_offset, global_nx, global_ny, nx, ny, x_off, 
           y_off, neighbours, nparticles_sent, particles, edgex, edgey, density, 
           &nparticles_out, scalar_flux_tally, energy_deposition_tally,
-          cs_scatter_table, cs_absorb_table);
+          cs_scatter_table, cs_absorb_table, &nfacets, &ncollisions);
       STOP_PROFILING(&compute_profile, "handle facets");
 
       START_PROFILING(&compute_profile);
       handle_collisions( 
           block_size, particles_offset, nx, x_off, y_off, particles, edgex, edgey, 
           rn_pools, &nparticles_dead, cs_scatter_table, cs_absorb_table,
-          scalar_flux_tally, energy_deposition_tally);
+          scalar_flux_tally, energy_deposition_tally, &nfacets, &ncollisions);
       STOP_PROFILING(&compute_profile, "handle collisions");
+
+      if(!ncollisions && !nfacets) {
+        break;
+      }
 
       START_PROFILING(&compute_profile);
       update_tallies(
           nx, particles, x_off, y_off, block_size, particles_offset, 0, 
           scalar_flux_tally, energy_deposition_tally);
       STOP_PROFILING(&compute_profile, "update tallies");
+
+      *facets += nfacets;
+      *collisions += ncollisions;
     }
 
     START_PROFILING(&compute_profile);
@@ -374,10 +385,13 @@ void handle_facets(
     Particles* particles, const double* edgex, const double* edgey, 
     const double* density, int* nparticles_out, double* scalar_flux_tally, 
     double* energy_deposition_tally, CrossSection* cs_scatter_table, 
-    CrossSection* cs_absorb_table)
+    CrossSection* cs_absorb_table, uint64_t* nfacets, uint64_t* ncollisions)
 {
+  uint64_t nnew_collisions = 0;
+  uint64_t nnew_facets = 0;
+
   /* HANDLE FACET ENCOUNTERS */
-#pragma omp parallel for simd
+#pragma omp parallel for simd reduction(+:nnew_collisions, nnew_facets)
 #pragma vector aligned
   for(int ii = 0; ii < nparticles; ++ii) {
     const int pindex = particles_offset+ii;
@@ -385,6 +399,7 @@ void handle_facets(
     if(particles->next_event[pindex] != FACET) {
       continue;
     }
+
     int cellx = particles->cellx[pindex]-x_off+PAD;
     int celly = particles->celly[pindex]-y_off+PAD;
     double number_density = (particles->local_density[pindex]*AVOGADROS/MOLAR_MASS);
@@ -402,7 +417,7 @@ void handle_facets(
     particles->dt_to_census[pindex] -=
       (particles->distance_to_facet[pindex]/particles->particle_velocity[pindex]);
 
-    particles->energy_deposition[pindex] = calculate_energy_deposition(
+    particles->energy_deposition[pindex] += calculate_energy_deposition(
         pindex, particles, particles->distance_to_facet[pindex], number_density, 
         microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb);
 
@@ -463,29 +478,79 @@ void handle_facets(
     macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
     macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
     particles->cell_mfp[pindex] = 1.0/(macroscopic_cs_scatter+macroscopic_cs_absorb);
+
+    // Check the timestep required to move the particles along a single axis
+    // If the velocity is positive then the top or right boundary will be hit
+    cellx = particles->cellx[pindex]-x_off+PAD;
+    celly = particles->celly[pindex]-y_off+PAD;
+    double u_x_inv = 1.0/(particles->omega_x[pindex]*particles->particle_velocity[pindex]);
+    double u_y_inv = 1.0/(particles->omega_y[pindex]*particles->particle_velocity[pindex]);
+
+    double x0 = edgex[cellx];
+    double x1 = edgex[cellx+1];
+    double y0 = edgey[celly];
+    double y1 = edgey[celly+1];
+
+    // The bound is open on the left and bottom so we have to correct for this and
+    // required the movement to the facet to go slightly further than the edge
+    // in the calculated values, using OPEN_BOUND_CORRECTION, which is the smallest
+    // possible distance we can be from the closed bound e.g. 1.0e-14.
+    double dt_x = (particles->omega_x[pindex] >= 0.0)
+      ? (x1-particles->x[pindex])*u_x_inv
+      : ((x0-OPEN_BOUND_CORRECTION)-particles->x[pindex])*u_x_inv;
+    double dt_y = (particles->omega_y[pindex] >= 0.0)
+      ? (y1-particles->y[pindex])*u_y_inv
+      : ((y0-OPEN_BOUND_CORRECTION)-particles->y[pindex])*u_y_inv;
+
+    // Calculated the projection to be
+    // a = vector on first edge to be hit
+    // u = velocity vector
+
+    double mag_u0 = particles->particle_velocity[pindex];
+
+    particles->x_facet[pindex] = (dt_x < dt_y) ? 1 : 0;
+    if(particles->x_facet[pindex]) {
+      // cos(theta) = ||(x, 0)||/||(u_x', u_y')|| - u' is u at boundary
+      // cos(theta) = (x.u)/(||x||.||u||)
+      // x_x/||u'|| = (x_x, 0)*(u_x, u_y) / (x_x.||u||)
+      // x_x/||u'|| = (x_x.u_x / x_x.||u||)
+      // x_x/||u'|| = u_x/||u||
+      // ||u'|| = (x_x.||u||)/u_x
+      // We are centered on the origin, so the y component is 0 after travelling
+      // aint the x axis to the edge (ax, 0).(x, y)
+      particles->distance_to_facet[pindex] = (particles->omega_x[pindex] >= 0.0)
+        ? (x1-particles->x[pindex])*mag_u0*u_x_inv
+        : ((x0-OPEN_BOUND_CORRECTION)-particles->x[pindex])*mag_u0*u_x_inv;
+    }
+    else {
+      // We are centered on the origin, so the x component is 0 after travelling
+      // along the y axis to the edge (0, ay).(x, y)
+      particles->distance_to_facet[pindex] = (particles->omega_y[pindex] >= 0.0)
+        ? (y1-particles->y[pindex])*mag_u0*u_y_inv
+        : ((y0-OPEN_BOUND_CORRECTION)-particles->y[pindex])*mag_u0*u_y_inv;
+    }
+
+    const double distance_to_collision = 
+      particles->mfp_to_collision[pindex]*particles->cell_mfp[pindex];
+    const double distance_to_census = 
+      particles->particle_velocity[pindex]*particles->dt_to_census[pindex];
+
+    if(distance_to_collision < distance_to_census && 
+        distance_to_collision < particles->distance_to_facet[pindex]) {
+      particles->next_event[pindex] = COLLISION;
+      nnew_collisions++;
+    }
+    else if(particles->distance_to_facet[pindex] < distance_to_census) {
+      particles->next_event[pindex] = FACET;
+      nnew_facets++;
+    }
+    else {
+      particles->next_event[pindex] = CENSUS;
+    }
   }
-}
 
-void gen_random_numbers(
-    const uint64_t master_key, const uint64_t secondary_key, 
-    const uint64_t gid, double* rn0, double* rn1)
-{
-  threefry2x64_ctr_t counter;
-  threefry2x64_ctr_t key;
-  counter.v[0] = gid;
-  counter.v[1] = 0;
-  key.v[0] = master_key;
-  key.v[1] = secondary_key;
-
-  // Generate the random numbers
-  threefry2x64_ctr_t rand = threefry2x64(counter, key);
-
-  // Turn our random numbers from integrals to double precision
-  uint64_t max_uint64 = UINT64_C(0xFFFFFFFFFFFFFFFF);  
-  const double factor = 1.0/(max_uint64 + 1.0);
-  const double half_factor = 0.5*factor;
-  *rn0 = (double)rand.v[0]*factor+half_factor;
-  *rn1 = (double)rand.v[1]*factor+half_factor;
+  *nfacets += nnew_facets;
+  *ncollisions += nnew_collisions;
 }
 
 // Handle all of the collision events
@@ -494,13 +559,16 @@ void handle_collisions(
     const int x_off, const int y_off, Particles* particles, const double* edgex, 
     const double* edgey, RNPool* rn_pools, int* nparticles_dead, 
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
-    double* scalar_flux_tally, double* energy_deposition_tally)
+    double* scalar_flux_tally, double* energy_deposition_tally, uint64_t* nfacets,
+    uint64_t* ncollisions)
 {
   uint64_t ndead = 0;
+  uint64_t nnew_collisions = 0;
+  uint64_t nnew_facets = 0;
   uint64_t master_key = rn_pools[0].key.v[0];
 
   /* HANDLE COLLISIONS */
-#pragma omp parallel for simd reduction(+:ndead)
+#pragma omp parallel for simd reduction(+:ndead, nnew_collisions, nnew_facets)
 #pragma vector aligned
   for(int ii = 0; ii < nparticles; ++ii) {
     const int pindex = particles_offset+ii;
@@ -518,7 +586,7 @@ void handle_collisions(
         cs_absorb_table, particles->e[pindex], &particles->absorb_cs_index[pindex]);
     double macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
     double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
-    const double distance_to_collision = 
+    double distance_to_collision = 
       particles->mfp_to_collision[pindex]*particles->cell_mfp[pindex];
 
     particles->energy_deposition[pindex] += calculate_energy_deposition(
@@ -578,9 +646,102 @@ void handle_collisions(
     gen_random_numbers(master_key, 1001, ii, &rn[0], &rn[1]);
     particles->mfp_to_collision[pindex] = -log(rn[0])/macroscopic_cs_scatter;
     particles->dt_to_census[pindex] -= distance_to_collision/particles->particle_velocity[pindex];
+
+    // Check the timestep required to move the particles along a single axis
+    // If the velocity is positive then the top or right boundary will be hit
+    const int cellx = particles->cellx[pindex]-x_off+PAD;
+    const int celly = particles->celly[pindex]-y_off+PAD;
+    double u_x_inv = 1.0/(particles->omega_x[pindex]*particles->particle_velocity[pindex]);
+    double u_y_inv = 1.0/(particles->omega_y[pindex]*particles->particle_velocity[pindex]);
+
+    double x0 = edgex[cellx];
+    double x1 = edgex[cellx+1];
+    double y0 = edgey[celly];
+    double y1 = edgey[celly+1];
+
+    // The bound is open on the left and bottom so we have to correct for this and
+    // required the movement to the facet to go slightly further than the edge
+    // in the calculated values, using OPEN_BOUND_CORRECTION, which is the smallest
+    // possible distance we can be from the closed bound e.g. 1.0e-14.
+    double dt_x = (particles->omega_x[pindex] >= 0.0)
+      ? (x1-particles->x[pindex])*u_x_inv
+      : ((x0-OPEN_BOUND_CORRECTION)-particles->x[pindex])*u_x_inv;
+    double dt_y = (particles->omega_y[pindex] >= 0.0)
+      ? (y1-particles->y[pindex])*u_y_inv
+      : ((y0-OPEN_BOUND_CORRECTION)-particles->y[pindex])*u_y_inv;
+
+    // Calculated the projection to be
+    // a = vector on first edge to be hit
+    // u = velocity vector
+
+    double mag_u0 = particles->particle_velocity[pindex];
+
+    particles->x_facet[pindex] = (dt_x < dt_y) ? 1 : 0;
+    if(particles->x_facet[pindex]) {
+      // cos(theta) = ||(x, 0)||/||(u_x', u_y')|| - u' is u at boundary
+      // cos(theta) = (x.u)/(||x||.||u||)
+      // x_x/||u'|| = (x_x, 0)*(u_x, u_y) / (x_x.||u||)
+      // x_x/||u'|| = (x_x.u_x / x_x.||u||)
+      // x_x/||u'|| = u_x/||u||
+      // ||u'|| = (x_x.||u||)/u_x
+      // We are centered on the origin, so the y component is 0 after travelling
+      // aint the x axis to the edge (ax, 0).(x, y)
+      particles->distance_to_facet[pindex] = (particles->omega_x[pindex] >= 0.0)
+        ? (x1-particles->x[pindex])*mag_u0*u_x_inv
+        : ((x0-OPEN_BOUND_CORRECTION)-particles->x[pindex])*mag_u0*u_x_inv;
+    }
+    else {
+      // We are centered on the origin, so the x component is 0 after travelling
+      // along the y axis to the edge (0, ay).(x, y)
+      particles->distance_to_facet[pindex] = (particles->omega_y[pindex] >= 0.0)
+        ? (y1-particles->y[pindex])*mag_u0*u_y_inv
+        : ((y0-OPEN_BOUND_CORRECTION)-particles->y[pindex])*mag_u0*u_y_inv;
+    }
+
+    distance_to_collision = 
+      particles->mfp_to_collision[pindex]*particles->cell_mfp[pindex];
+    const double distance_to_census = 
+      particles->particle_velocity[pindex]*particles->dt_to_census[pindex];
+
+    if(distance_to_collision < distance_to_census && 
+        distance_to_collision < particles->distance_to_facet[pindex]) {
+      particles->next_event[pindex] = COLLISION;
+      nnew_collisions++;
+    }
+    else if(particles->distance_to_facet[pindex] < distance_to_census) {
+      particles->next_event[pindex] = FACET;
+      nnew_facets++;
+    }
+    else {
+      particles->next_event[pindex] = CENSUS;
+    }
   }
 
   *nparticles_dead += ndead;
+  *nfacets += nnew_facets;
+  *ncollisions += nnew_collisions;
+}
+
+void gen_random_numbers(
+    const uint64_t master_key, const uint64_t secondary_key, 
+    const uint64_t gid, double* rn0, double* rn1)
+{
+  threefry2x64_ctr_t counter;
+  threefry2x64_ctr_t key;
+  counter.v[0] = gid;
+  counter.v[1] = 0;
+  key.v[0] = master_key;
+  key.v[1] = secondary_key;
+
+  // Generate the random numbers
+  threefry2x64_ctr_t rand = threefry2x64(counter, key);
+
+  // Turn our random numbers from integrals to double precision
+  uint64_t max_uint64 = UINT64_C(0xFFFFFFFFFFFFFFFF);  
+  const double factor = 1.0/(max_uint64 + 1.0);
+  const double half_factor = 0.5*factor;
+  *rn0 = (double)rand.v[0]*factor+half_factor;
+  *rn1 = (double)rand.v[1]*factor+half_factor;
 }
 
 // Handles all of the census events

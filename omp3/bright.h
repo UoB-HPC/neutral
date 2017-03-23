@@ -32,7 +32,7 @@ void handle_facets(
     Particles* particles, const double* edgex, const double* edgey, 
     const double* density, int* nparticles_out, double* scalar_flux_tally, 
     double* energy_deposition_tally, CrossSection* cs_scatter_table, 
-    CrossSection* cs_absorb_table);
+    CrossSection* cs_absorb_table, uint64_t* nfacets, uint64_t* ncollisions);
 
 // Handle all of the collision events
 void handle_collisions(
@@ -40,7 +40,8 @@ void handle_collisions(
     const int x_off, const int y_off, Particles* particles, const double* edgex, 
     const double* edgey, RNPool* rn_pools, int* nparticles_dead, 
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
-    double* scalar_flux_tally, double* energy_deposition_tally);
+    double* scalar_flux_tally, double* energy_deposition_tally, 
+    uint64_t* nfacets, uint64_t* ncollisions);
 
 // Handles all of the census events
 void handle_census(
@@ -81,4 +82,8 @@ double microscopic_cs_for_energy(
 void validate(
     const int nx, const int ny, const char* params_filename, 
     const int rank, double* energy_deposition_tally);
+
+void gen_random_numbers(
+    const uint64_t master_key, const uint64_t secondary_key, 
+    const uint64_t gid, double* rn0, double* rn1);
 
