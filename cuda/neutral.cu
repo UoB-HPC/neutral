@@ -146,9 +146,6 @@ void event_initialisation(
   RNPool* master_pool = &rn_pools[0];
 
   // Initialise all of the particles with their starting state
-#if 0
-  const int nblocks = ceil(nparticles/((double)NTHREADS*NRANDOM_NUMBERS)); 
-#endif // if 0
   const int nblocks = ceil(nparticles/((double)NTHREADS)); 
   event_initialisation_kernel<<<nblocks, NTHREADS>>>(
       nparticles, particles_offset, dt, nx, x_off, y_off, cs_scatter_table->nentries, 
@@ -161,9 +158,6 @@ void event_initialisation(
       particles->absorb_cs_index, particles->particle_velocity, 
       particles->local_density, particles->cell_mfp, particles->mfp_to_collision,
       master_pool->key.v[0], particles->energy_deposition);  
-
-  // TODO: BE CAREFUL PASSING MASTER KEY HERE, MAKE SURE IT IS INITIALISED
-  // PROPERLY ETC..
 }
 
 // Calculates the next event for each particle

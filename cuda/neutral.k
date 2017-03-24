@@ -317,8 +317,6 @@ __global__ void handle_facets_kernel(
         (energy_deposition[pindex]+ed)/nparticles);
     energy_deposition[pindex] = 0.0;
 
-    // TODO: Make sure that the roundoff is handled here, perhaps actually set it
-    // fully to one of the edges here
     x[pindex] += distance_to_facet[pindex]*omega_x[pindex];
     y[pindex] += distance_to_facet[pindex]*omega_y[pindex];
 
@@ -605,8 +603,6 @@ __global__ void inject_particles_kernel(
   // Generating theta has uniform density, however 0.0 and 1.0 produce the same 
   // value which introduces very very very small bias...
 
-
-  // TODO: THIS CAN BE OPTIMISED, WE COULD BATCH UP AS WITH THE EVENT INITIALISATION
   generate_random_numbers(master_key, 4, gid, &rn[0], &rn[1]);
   const double theta = 2.0*M_PI*rn[0];
   omega_x[gid] = cos(theta);
