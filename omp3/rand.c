@@ -56,10 +56,8 @@ double getrand(RNPool* rn_pool)
   // If we have run out of space, just generate the minimum required number 
   // of random numbers
   if(!rn_pool->available) {
-    // TODO: WOULD BE NICE TO COUNT THE NUMBER OF TIMES THAT THIS ACTUALLY HAPPENS
     fill_rn_buffer(rn_pool, rn_pool->buf_len);
 
-    // TODO: CHECK FOR OVERFLOW CAUSED BY THE INCREMENT
     if(rn_pool->counter.v[0]+rn_pool->buf_len >= UINT64_MAX) {
       TERMINATE("Overran the allowed space for the counter, our logic doesn't \
           permit carry yet.\n");
