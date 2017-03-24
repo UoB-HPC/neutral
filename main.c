@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <omp.h>
-#include "bright_interface.h"
+#include "neutral_interface.h"
 #include "../mesh.h"
 #include "../shared_data.h"
 #include "../comms.h"
@@ -15,28 +15,28 @@
 #endif
 
 void plot_particle_density(
-    BrightData* bright_data, Mesh* mesh, const int tt, 
+    NeutralData* neutral_data, Mesh* mesh, const int tt, 
     const int nparticles, const double elapsed_sim_time);
 
 int main(int argc, char** argv)
 {
   if(argc != 2) {
-    TERMINATE("usage: ./bright.exe <param_file>\n");
+    TERMINATE("usage: ./neutral.exe <param_file>\n");
   }
 
   // Store the dimensions of the mesh
   Mesh mesh = {0};
-  BrightData bright_data = {0};
-  bright_data.neutral_params_filename = argv[1];
-  mesh.global_nx = get_int_parameter("nx", bright_data.neutral_params_filename);
-  mesh.global_ny = get_int_parameter("ny", bright_data.neutral_params_filename);
+  NeutralData neutral_data = {0};
+  neutral_data.neutral_params_filename = argv[1];
+  mesh.global_nx = get_int_parameter("nx", neutral_data.neutral_params_filename);
+  mesh.global_ny = get_int_parameter("ny", neutral_data.neutral_params_filename);
   mesh.local_nx = mesh.global_nx + 2*PAD;
   mesh.local_ny = mesh.global_ny + 2*PAD;
   mesh.width = get_double_parameter("width", ARCH_ROOT_PARAMS);
   mesh.height = get_double_parameter("height", ARCH_ROOT_PARAMS);
-  mesh.dt = get_double_parameter("dt", bright_data.neutral_params_filename);
+  mesh.dt = get_double_parameter("dt", neutral_data.neutral_params_filename);
   mesh.sim_end = get_double_parameter("sim_end", ARCH_ROOT_PARAMS);
-  mesh.niters = get_int_parameter("iterations", bright_data.neutral_params_filename);
+  mesh.niters = get_int_parameter("iterations", neutral_data.neutral_params_filename);
   mesh.rank = MASTER;
   mesh.nranks = 1;
   mesh.ndims = 2;
@@ -44,11 +44,11 @@ int main(int argc, char** argv)
   // Get the number of threads and initialise the random number pool
 #pragma omp parallel
   {
-    bright_data.nthreads = omp_get_num_threads();
+    neutral_data.nthreads = omp_get_num_threads();
   }
 
-  printf("Starting up with %d OpenMP threads.\n", bright_data.nthreads);
-  printf("Loading problem from %s.\n", bright_data.neutral_params_filename);
+  printf("Starting up with %d OpenMP threads.\n", neutral_data.nthreads);
+  printf("Loading problem from %s.\n", neutral_data.neutral_params_filename);
 #ifdef ENABLE_PROFILING
   /* The timing code has to be called so many times that the API calls 
    * actually begin to influence the performance dramatically. */
@@ -57,10 +57,10 @@ int main(int argc, char** argv)
 #endif
 
   // Initialise enough pools for every thread and a master pool
-  RNPool* rn_pools = (RNPool*)malloc(sizeof(RNPool)*(bright_data.nthreads+1));
+  RNPool* rn_pools = (RNPool*)malloc(sizeof(RNPool)*(neutral_data.nthreads+1));
 
   // Initialise the master rn pool
-  init_rn_pool(&rn_pools[bright_data.nthreads], 0xfffff);
+  init_rn_pool(&rn_pools[neutral_data.nthreads], 0xfffff);
 
   // Perform the general initialisation steps for the mesh etc
   initialise_mpi(argc, argv, &mesh.rank, &mesh.nranks);
@@ -71,14 +71,14 @@ int main(int argc, char** argv)
   initialise_shared_data_2d(
       mesh.global_nx, mesh.global_ny, mesh.local_nx, mesh.local_ny, 
       mesh.x_off, mesh.y_off, mesh.width, mesh.height, 
-      bright_data.neutral_params_filename, mesh.edgex, mesh.edgey, &shared_data);
-  initialise_bright_data(
-      &bright_data, &mesh, &rn_pools[bright_data.nthreads]);
+      neutral_data.neutral_params_filename, mesh.edgex, mesh.edgey, &shared_data);
+  initialise_neutral_data(
+      &neutral_data, &mesh, &rn_pools[neutral_data.nthreads]);
 
   // Make sure initialisation phase is complete
   barrier();
 
-  const int nparticles = bright_data.nparticles;
+  const int nparticles = neutral_data.nparticles;
 
   // Main timestep loop where we will track each particle through time
   int tt;
@@ -91,37 +91,37 @@ int main(int argc, char** argv)
       printf("\nIteration %d\n", tt);
     }
 
-#if 0
+#ifdef VISIT_DUMP
     plot_particle_density(
-        &bright_data, &mesh, tt, nparticles, elapsed_sim_time);
-#endif // if 0
+        &neutral_data, &mesh, tt, nparticles, elapsed_sim_time);
+#endif
 
     double w0 = omp_get_wtime();
 
     // Begin the main solve step
     solve_transport_2d(
         mesh.local_nx-2*PAD, mesh.local_ny-2*PAD, mesh.global_nx, mesh.global_ny, 
-        mesh.x_off, mesh.y_off, mesh.dt, bright_data.nparticles, 
-        &bright_data.nlocal_particles, &master_key, mesh.neighbours, 
-        bright_data.local_particles, shared_data.rho, mesh.edgex, mesh.edgey, 
-        mesh.edgedx, mesh.edgedy, bright_data.cs_scatter_table, 
-        bright_data.cs_absorb_table, bright_data.scalar_flux_tally, 
-        bright_data.energy_deposition_tally, rn_pools);
+        mesh.x_off, mesh.y_off, mesh.dt, neutral_data.nparticles, 
+        &neutral_data.nlocal_particles, &master_key, mesh.neighbours, 
+        neutral_data.local_particles, shared_data.rho, mesh.edgex, mesh.edgey, 
+        mesh.edgedx, mesh.edgedy, neutral_data.cs_scatter_table, 
+        neutral_data.cs_absorb_table, neutral_data.scalar_flux_tally, 
+        neutral_data.energy_deposition_tally, rn_pools);
 
     barrier();
 
     wallclock += omp_get_wtime()-w0;
     elapsed_sim_time += mesh.dt;
 
-#if 0
+#ifdef VISIT_DUMP
     char tally_name[100];
     sprintf(tally_name, "energy%d", tt);
     int dneighbours[NNEIGHBOURS] = { EDGE, EDGE,  EDGE,  EDGE,  EDGE,  EDGE }; 
     write_all_ranks_to_visit(
         mesh.global_nx, mesh.global_ny, mesh.local_nx-2*PAD, mesh.local_ny-2*PAD,
         mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, dneighbours, 
-        bright_data.energy_deposition_tally, tally_name, 0, elapsed_sim_time);
-#endif // if 0
+        neutral_data.energy_deposition_tally, tally_name, 0, elapsed_sim_time);
+#endif
 
     // Leave the simulation if we have reached the simulation end time
     if(elapsed_sim_time >= mesh.sim_end) {
@@ -131,16 +131,15 @@ int main(int argc, char** argv)
     }
   }
 
-#if 0
+#ifdef VISIT_DUMP
   plot_particle_density(
-      &bright_data, &mesh, tt, nparticles, elapsed_sim_time);
-#endif // if 0
+      &neutral_data, &mesh, tt, nparticles, elapsed_sim_time);
+#endif
 
-  // TODO: WHAT SHOULD THE VALUE OF NINITIALPARTICLES BE IF FISSION ETC.
   validate(
       mesh.local_nx-2*PAD, mesh.local_ny-2*PAD, 
-      bright_data.neutral_params_filename, mesh.rank, 
-      bright_data.energy_deposition_tally);
+      neutral_data.neutral_params_filename, mesh.rank, 
+      neutral_data.energy_deposition_tally);
 
   if(mesh.rank == MASTER) {
     PRINT_PROFILING_RESULTS(&p);
@@ -160,7 +159,7 @@ int main(int argc, char** argv)
 
 // This is a bit hacky and temporary for now
 void plot_particle_density(
-    BrightData* bright_data, Mesh* mesh, const int tt, 
+    NeutralData* neutral_data, Mesh* mesh, const int tt, 
     const int nparticles, const double elapsed_sim_time)
 {
   double* temp = (double*)malloc(sizeof(double)*mesh->local_nx*mesh->local_ny);
@@ -169,7 +168,7 @@ void plot_particle_density(
   }
 
   for(int ii = 0; ii < nparticles; ++ii) {
-    Particle* particle = &bright_data->local_particles[ii];
+    Particle* particle = &neutral_data->local_particles[ii];
     const int cellx = particle->cellx-mesh->x_off;
     const int celly = particle->celly-mesh->y_off;
     temp[celly*(mesh->local_nx-2*PAD)+cellx] += 1.0;

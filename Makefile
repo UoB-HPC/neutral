@@ -1,6 +1,6 @@
 # User defined parameters
 KERNELS          = omp3
-COMPILER         = INTEL_KNL
+COMPILER         = INTEL
 MPI              = yes
 MAC_RPATH				 = -Wl,-rpath,${COMPILER_ROOT}/lib 
 CFLAGS_INTEL     = -O3 -no-prec-div -std=gnu99 -qopenmp -DINTEL \
@@ -9,7 +9,7 @@ CFLAGS_INTEL_KNL = -O3 -qopenmp -no-prec-div -std=gnu99 -DINTEL \
 									 -xMIC-AVX512 -Wall -restrict -g #-qopt-report=5 
 CFLAGS_GCC       = -O3 -g -std=gnu99 -fopenmp -march=native -Wall #-std=gnu99
 CFLAGS_CRAY      = -lrt -hlist=a
-OPTIONS         += -DTILES #-DENABLE_PROFILING 
+OPTIONS         += -DTILES #-DENABLE_PROFILING #-DVISIT_DUMP
 
 ifeq ($(DEBUG), yes)
   OPTIONS += -O0 -DDEBUG 
@@ -20,8 +20,8 @@ ifeq ($(MPI), yes)
 endif
 
 # Default compiler
-MULTI_COMPILER_CC   = mpiicc
-MULTI_COMPILER_CPP  = mpiicpc
+MULTI_COMPILER_CC   = cc
+MULTI_COMPILER_CPP  = CC
 MULTI_LINKER    		= $(MULTI_COMPILER_CC)
 MULTI_FLAGS     		= $(CFLAGS_$(COMPILER))
 MULTI_LDFLAGS   		= $(MULTI_FLAGS) #-lm
@@ -40,8 +40,8 @@ SRC 			+= $(subst main.c,, $(wildcard $(MULTI_DIR)/*.c))
 SRC_CLEAN  = $(subst $(MULTI_DIR)/,,$(SRC))
 OBJS 			+= $(patsubst %.c, $(MULTI_BUILD_DIR)/%.o, $(SRC_CLEAN))
 
-bright: make_build_dir $(OBJS) Makefile
-	$(MULTI_LINKER) $(OBJS) $(OPTIONS) $(MULTI_LDFLAGS) -o bright.$(KERNELS)
+neutral: make_build_dir $(OBJS) Makefile
+	$(MULTI_LINKER) $(OBJS) $(OPTIONS) $(MULTI_LDFLAGS) -o neutral.$(KERNELS)
 
 # Rule to make controlling code
 $(MULTI_BUILD_DIR)/%.o: %.c Makefile 
@@ -55,5 +55,5 @@ make_build_dir:
 	@mkdir -p $(MULTI_BUILD_DIR)/$(KERNELS)
 
 clean:
-	rm -rf $(MULTI_BUILD_DIR)/* bright.$(KERNELS) *.vtk *.bov *.dat *.optrpt *.cub *.ptx *.ap2 *.xf
+	rm -rf $(MULTI_BUILD_DIR)/* neutral.$(KERNELS) *.vtk *.bov *.dat *.optrpt *.cub *.ptx *.ap2 *.xf
 

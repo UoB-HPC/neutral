@@ -1,6 +1,6 @@
 #include <stdint.h>
 #include <stdio.h>
-#include "bright_data.h"
+#include "neutral_data.h"
 #include "rand.h"
 
 // Initialises the random number pool
