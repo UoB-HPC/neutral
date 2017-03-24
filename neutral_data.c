@@ -2,42 +2,42 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <omp.h>
-#include "bright_data.h"
-#include "bright_interface.h"
+#include "neutral_data.h"
+#include "neutral_interface.h"
 #include "../profiler.h"
 #include "../shared.h"
 #include "../params.h"
 
 // Initialises the set of cross sections
 void initialise_cross_sections(
-    BrightData* bright_data, Mesh* mesh);
+    NeutralData* neutral_data, Mesh* mesh);
 
-// Initialises all of the Bright-specific data structures.
-void initialise_bright_data(
-    BrightData* bright_data, Mesh* mesh)
+// Initialises all of the Neutral-specific data structures.
+void initialise_neutral_data(
+    NeutralData* neutral_data, Mesh* mesh)
 {
   const int local_nx = mesh->local_nx-2*PAD;
   const int local_ny = mesh->local_ny-2*PAD;
 
-  bright_data->nparticles = 
-    get_int_parameter("nparticles", bright_data->neutral_params_filename);
-  bright_data->initial_energy = 
-    get_double_parameter("initial_energy", bright_data->neutral_params_filename);
+  neutral_data->nparticles = 
+    get_int_parameter("nparticles", neutral_data->neutral_params_filename);
+  neutral_data->initial_energy = 
+    get_double_parameter("initial_energy", neutral_data->neutral_params_filename);
 
   // Initialise enough pools for every thread and a master pool
-  bright_data->nrn_pools = bright_data->nthreads+1;
-  bright_data->rn_pool_master_index = bright_data->nrn_pools-1;
-  bright_data->rn_pools = (RNPool*)malloc(sizeof(RNPool)*(bright_data->nrn_pools));
-  init_rn_pools(bright_data->rn_pools, bright_data->nrn_pools, bright_data->nparticles);
+  neutral_data->nrn_pools = neutral_data->nthreads+1;
+  neutral_data->rn_pool_master_index = neutral_data->nrn_pools-1;
+  neutral_data->rn_pools = (RNPool*)malloc(sizeof(RNPool)*(neutral_data->nrn_pools));
+  init_rn_pools(neutral_data->rn_pools, neutral_data->nrn_pools, neutral_data->nparticles);
 
   int nkeys = 0;
   char* keys = (char*)malloc(sizeof(char)*MAX_KEYS*MAX_STR_LEN);
   double* values = (double*)malloc(sizeof(double)*MAX_KEYS);
 
   if(!get_key_value_parameter(
-        "source", bright_data->neutral_params_filename, keys, values, &nkeys)) {
+        "source", neutral_data->neutral_params_filename, keys, values, &nkeys)) {
     TERMINATE("Parameter file %s did not contain a source entry.\n", 
-        bright_data->neutral_params_filename);
+        neutral_data->neutral_params_filename);
   }
 
   // The last four keys are the bound specification
@@ -87,67 +87,65 @@ void initialise_bright_data(
   // Calculate the number of particles we need based on the shaded area that
   // is covered by our source
   const double nlocal_particles_real = 
-    bright_data->nparticles*
+    neutral_data->nparticles*
     (local_particle_width*local_particle_height)/(source_width*source_height);
 
   // Rounding hack to make sure correct number of particles is selected
-  bright_data->nlocal_particles = nlocal_particles_real + 0.5;
+  neutral_data->nlocal_particles = nlocal_particles_real + 0.5;
 
   // TODO: SHOULD PROBABLY PERFORM A REDUCTION OVER THE NUMBER OF LOCAL PARTICLES
   // TO MAKE SURE THAT THEY ALL SUM UP TO THE CORRECT VALUE!
 
-
-  // THIS IS A LOT OF DATA...
-  bright_data->local_particles = 
+  neutral_data->local_particles = 
     (Particles*)_mm_malloc(sizeof(Particles), VEC_ALIGN);
 
-  Particles* particle = bright_data->local_particles;
+  Particles* particle = neutral_data->local_particles;
 
+  // TODO: Likely need to fix the size of the data allocations here
   size_t allocation = 0;
-  allocation += allocate_data(&particle->x,bright_data->nparticles*1.5);
-  allocation += allocate_data(&particle->y,bright_data->nparticles*1.5);
-  allocation += allocate_data(&particle->omega_x,bright_data->nparticles*1.5);
-  allocation += allocate_data(&particle->omega_y,bright_data->nparticles*1.5);
-  allocation += allocate_data(&particle->e,bright_data->nparticles*1.5);
-  allocation += allocate_data(&particle->weight,bright_data->nparticles*1.5);
-  allocation += allocate_data(&particle->dt_to_census,bright_data->nparticles*1.5);
-  allocation += allocate_data(&particle->mfp_to_collision,bright_data->nparticles*1.5);
-  allocation += allocate_data(&particle->distance_to_facet,bright_data->nparticles*1.5);
-  allocation += allocate_data(&particle->local_density,bright_data->nparticles*1.5);
-  allocation += allocate_data(&particle->cell_mfp,bright_data->nparticles*1.5);
-  allocation += allocate_data(&particle->particle_velocity,bright_data->nparticles*1.5);
-  allocation += allocate_data(&particle->energy_deposition,bright_data->nparticles*1.5);
-  allocation += allocate_int_data(&particle->x_facet,bright_data->nparticles*1.5);
-  allocation += allocate_int_data(&particle->cellx,bright_data->nparticles*1.5);
-  allocation += allocate_int_data(&particle->celly,bright_data->nparticles*1.5);
-  allocation += allocate_int_data(&particle->scatter_cs_index,bright_data->nparticles*1.5);
-  allocation += allocate_int_data(&particle->absorb_cs_index,bright_data->nparticles*1.5);
-  allocation += allocate_int_data(&particle->next_event,bright_data->nparticles*1.5);
-  // TODO: COULD SAVE SOME CAPACITY WITH THE REDUCE ARRAYS
-  allocation += allocate_int_data(&bright_data->reduce_array0, bright_data->nparticles*1.5);
-  allocation += allocate_int_data(&bright_data->reduce_array1, bright_data->nparticles*1.5);
+  allocation += allocate_data(&particle->x,neutral_data->nparticles*1.5);
+  allocation += allocate_data(&particle->y,neutral_data->nparticles*1.5);
+  allocation += allocate_data(&particle->omega_x,neutral_data->nparticles*1.5);
+  allocation += allocate_data(&particle->omega_y,neutral_data->nparticles*1.5);
+  allocation += allocate_data(&particle->e,neutral_data->nparticles*1.5);
+  allocation += allocate_data(&particle->weight,neutral_data->nparticles*1.5);
+  allocation += allocate_data(&particle->dt_to_census,neutral_data->nparticles*1.5);
+  allocation += allocate_data(&particle->mfp_to_collision,neutral_data->nparticles*1.5);
+  allocation += allocate_data(&particle->distance_to_facet,neutral_data->nparticles*1.5);
+  allocation += allocate_data(&particle->local_density,neutral_data->nparticles*1.5);
+  allocation += allocate_data(&particle->cell_mfp,neutral_data->nparticles*1.5);
+  allocation += allocate_data(&particle->particle_velocity,neutral_data->nparticles*1.5);
+  allocation += allocate_data(&particle->energy_deposition,neutral_data->nparticles*1.5);
+  allocation += allocate_int_data(&particle->x_facet,neutral_data->nparticles*1.5);
+  allocation += allocate_int_data(&particle->cellx,neutral_data->nparticles*1.5);
+  allocation += allocate_int_data(&particle->celly,neutral_data->nparticles*1.5);
+  allocation += allocate_int_data(&particle->scatter_cs_index,neutral_data->nparticles*1.5);
+  allocation += allocate_int_data(&particle->absorb_cs_index,neutral_data->nparticles*1.5);
+  allocation += allocate_int_data(&particle->next_event,neutral_data->nparticles*1.5);
+  allocation += allocate_int_data(&neutral_data->reduce_array0, neutral_data->nparticles*1.5);
+  allocation += allocate_int_data(&neutral_data->reduce_array1, neutral_data->nparticles*1.5);
   allocation += 
-    allocate_data(&bright_data->scalar_flux_tally, (mesh->local_nx)*(mesh->local_ny));
+    allocate_data(&neutral_data->scalar_flux_tally, (mesh->local_nx)*(mesh->local_ny));
   allocation += 
-    allocate_data(&bright_data->energy_deposition_tally, (mesh->local_nx)*(mesh->local_ny));
+    allocate_data(&neutral_data->energy_deposition_tally, (mesh->local_nx)*(mesh->local_ny));
 
   printf("Allocating %zu bytes of data.\n", allocation);
 
-  if(!bright_data->local_particles) {
+  if(!neutral_data->local_particles) {
     TERMINATE("Could not allocate particle array.\n");
   }
 
   // Inject some particles into the mesh if we need to
-  if(bright_data->nlocal_particles) {
+  if(neutral_data->nlocal_particles) {
     inject_particles(
         mesh, local_nx, local_ny, local_particle_left_off, 
         local_particle_bottom_off, local_particle_width, local_particle_height, 
-        bright_data->nlocal_particles, bright_data->initial_energy, 
-        bright_data->rn_pools, bright_data->local_particles);
+        neutral_data->nlocal_particles, neutral_data->initial_energy, 
+        neutral_data->rn_pools, neutral_data->local_particles);
   }
 
   initialise_cross_sections(
-      bright_data, mesh);
+      neutral_data, mesh);
 
 #if 0
 #ifdef MPI
@@ -222,11 +220,11 @@ void read_cs_file(
 
 // Initialises the state 
 void initialise_cross_sections(
-    BrightData* bright_data, Mesh* mesh)
+    NeutralData* neutral_data, Mesh* mesh)
 {
-  bright_data->cs_scatter_table = (CrossSection*)malloc(sizeof(CrossSection));
-  bright_data->cs_absorb_table = (CrossSection*)malloc(sizeof(CrossSection));
-  read_cs_file(CS_SCATTER_FILENAME, bright_data->cs_scatter_table, mesh);
-  read_cs_file(CS_CAPTURE_FILENAME, bright_data->cs_absorb_table, mesh);
+  neutral_data->cs_scatter_table = (CrossSection*)malloc(sizeof(CrossSection));
+  neutral_data->cs_absorb_table = (CrossSection*)malloc(sizeof(CrossSection));
+  read_cs_file(CS_SCATTER_FILENAME, neutral_data->cs_scatter_table, mesh);
+  read_cs_file(CS_CAPTURE_FILENAME, neutral_data->cs_absorb_table, mesh);
 }
 

@@ -60,8 +60,6 @@ __device__ double microscopic_cs_for_energy(
 
   *cs_index = ind;
 
-  // TODO: perform some interesting interpolation here
-  // Center weighted is poor accuracy but might even out over enough particles
   return 0.5*(value[ind+1] + value[ind]);
 }
 

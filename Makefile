@@ -1,6 +1,6 @@
 # User defined parameters
-KERNELS          = cuda
-COMPILER         = GCC
+KERNELS          = omp3
+COMPILER         = INTEL
 MPI              = yes
 MAC_RPATH				 = -Wl,-rpath,${COMPILER_ROOT}/lib 
 CFLAGS_INTEL     = -O3 -no-prec-div -std=gnu99 -qopenmp -DINTEL \
@@ -13,7 +13,8 @@ CFLAGS_CLANG     = -O3 -fopenmp=libomp -fopenmp-targets=nvptx64-nvidia-cuda \
 									--cuda-path=/nfs/modules/cuda/8.0.44/ \
 									#-ffp-contract=fast -fopenmp-nonaliased-maps
 
-OPTIONS         += -DTILES -D__STDC_CONSTANT_MACROS #-DENABLE_PROFILING 
+OPTIONS         += -DTILES -D__STDC_CONSTANT_MACROS \
+									 #-DENABLE_PROFILING #-DVISIT_DUMP
 
 ifeq ($(DEBUG), yes)
   OPTIONS += -O0 -DDEBUG -g
@@ -44,8 +45,8 @@ SRC 			+= $(subst main.c,, $(wildcard $(MULTI_DIR)/*.c))
 SRC_CLEAN  = $(subst $(MULTI_DIR)/,,$(SRC))
 OBJS 			+= $(patsubst %.c, $(MULTI_BUILD_DIR)/%.o, $(SRC_CLEAN))
 
-bright: make_build_dir $(OBJS) Makefile
-	$(MULTI_LINKER) $(OBJS) $(MULTI_FLAGS) $(MULTI_LDFLAGS) $(OPTIONS) -o bright.$(KERNELS)
+neutral: make_build_dir $(OBJS) Makefile
+	$(MULTI_LINKER) $(OBJS) $(MULTI_FLAGS) $(MULTI_LDFLAGS) $(OPTIONS) -o neutral.$(KERNELS)
 
 # Rule to make controlling code
 $(MULTI_BUILD_DIR)/%.o: %.c Makefile 
@@ -59,5 +60,5 @@ make_build_dir:
 	@mkdir -p $(MULTI_BUILD_DIR)/$(KERNELS)
 
 clean:
-	rm -rf $(MULTI_BUILD_DIR)/* bright.$(KERNELS) *.vtk *.bov *.dat *.optrpt *.cub *.ptx *.ap2 *.xf
+	rm -rf $(MULTI_BUILD_DIR)/* neutral.$(KERNELS) *.vtk *.bov *.dat *.optrpt *.cub *.ptx *.ap2 *.xf
 

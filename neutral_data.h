@@ -30,6 +30,8 @@
 #define ARCH_ROOT_PARAMS "../arch.params"
 #define NEUTRAL_TESTS    "neutral.tests"
 
+enum { PARTICLE_SENT, PARTICLE_DEAD, PARTICLE_CENSUS };
+
 // Represents a cross sectional table for resonance data
 typedef struct {
   double* keys;
@@ -88,7 +90,7 @@ typedef struct {
 
   const char* neutral_params_filename;
 
-} BrightData;
+} NeutralData;
 
 #if 0
 #ifdef MPI
@@ -97,7 +99,7 @@ MPI_Datatype particle_type;
 #endif
 #endif // if 0
 
-// Initialises all of the Bright-specific data structures.
-void initialise_bright_data(
-    BrightData* bright_data, Mesh* mesh);
+// Initialises all of the Neutral-specific data structures.
+void initialise_neutral_data(
+    NeutralData* neutral_data, Mesh* mesh);
 

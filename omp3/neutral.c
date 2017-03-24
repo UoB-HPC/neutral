@@ -4,8 +4,8 @@
 #include <assert.h>
 #include <float.h>
 #include <omp.h>
-#include "bright.h"
-#include "../bright_interface.h"
+#include "neutral.h"
+#include "../neutral_interface.h"
 #include "../../comms.h"
 #include "../../shared.h"
 #include "../../shared_data.h"

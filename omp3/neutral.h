@@ -1,4 +1,4 @@
-#include "../bright_interface.h"
+#include "../neutral_interface.h"
 
 // Handles the current active batch of particles
 void handle_particles(

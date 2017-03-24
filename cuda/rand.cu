@@ -1,7 +1,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "../bright_data.h"
+#include "../neutral_data.h"
 #include "../rand.h"
 
 // Generates NRANDOM_NUMBERS and places them in the buffer

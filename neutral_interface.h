@@ -1,6 +1,6 @@
 #pragma once
 
-#include "bright_data.h"
+#include "neutral_data.h"
 #include "../mesh.h"
 #include "../shared_data.h"
 

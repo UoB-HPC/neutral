@@ -3,9 +3,9 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <float.h>
-#include "bright.h"
-#include "bright.k"
-#include "../bright_interface.h"
+#include "neutral.h"
+#include "neutral.k"
+#include "../neutral_interface.h"
 #include "../../comms.h"
 #include "../../shared.h"
 #include "../../shared_data.h"
