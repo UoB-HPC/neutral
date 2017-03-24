@@ -208,8 +208,8 @@ void handle_facets(
     double* energy_deposition_tally, CrossSection* cs_scatter_table, 
     CrossSection* cs_absorb_table)
 {
-  const int nthreads = 1024;
-  const int nblocks = 15;//ceil(nparticles/(double)NTHREADS); 
+  const int nthreads = NTHREADS;
+  const int nblocks = ceil(nparticles/(double)NTHREADS); 
   handle_facets_kernel<<<nblocks, nthreads>>>(
       nparticles, particles_offset, global_nx, global_ny, nx, x_off, y_off, 
       cs_scatter_table->nentries, cs_absorb_table->nentries, particles->e, 

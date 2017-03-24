@@ -284,10 +284,10 @@ __global__ void handle_facets_kernel(
 {
   const int gid = blockIdx.x*blockDim.x+threadIdx.x;
 
-  for(int ii = gid; ii < nparticles; ii += gridDim.x*blockDim.x) {
-    const int pindex = particles_offset+ii;
+  //for(int ii = gid; ii < nparticles; ii += gridDim.x*blockDim.x) {
+    const int pindex = particles_offset+gid;
     if(particle_event[pindex] != FACET) {
-      continue;
+      return;
     }
 
     const int cellx = particle_cellx[pindex]-x_off+PAD;
@@ -374,7 +374,7 @@ __global__ void handle_facets_kernel(
     macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
     macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
     cell_mfp[pindex] = 1.0/(macroscopic_cs_scatter+macroscopic_cs_absorb);
-  }
+  //}
 }
 
 __global__ void handle_collisions_kernel(
