@@ -125,8 +125,6 @@ void initialise_neutral_data(
   allocation += allocate_int_data(&neutral_data->reduce_array0, neutral_data->nparticles*1.5);
   allocation += allocate_int_data(&neutral_data->reduce_array1, neutral_data->nparticles*1.5);
   allocation += 
-    allocate_data(&neutral_data->scalar_flux_tally, (mesh->local_nx)*(mesh->local_ny));
-  allocation += 
     allocate_data(&neutral_data->energy_deposition_tally, (mesh->local_nx)*(mesh->local_ny));
 
   printf("Allocating %zu bytes of data.\n", allocation);
