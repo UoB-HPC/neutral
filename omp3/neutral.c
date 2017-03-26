@@ -618,8 +618,8 @@ double microscopic_cs_for_energy(
    * approximation in this particular case */
 
   int ind = 0; 
-  double* key = cs->key;
-  double* value = cs->value;
+  double* key = cs->keys;
+  double* value = cs->values;
 
   if(*cs_index > -1) {
     // Determine the correct search direction required to move towards the

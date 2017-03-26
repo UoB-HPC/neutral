@@ -46,35 +46,49 @@ void initialise_neutral_data(
         neutral_data->neutral_params_filename);
   }
 
-  // Fetch the width and height of the mesh
-  const double mesh_width = mesh->edgex[mesh->global_nx+PAD];
-  const double mesh_height = mesh->edgey[mesh->global_ny+PAD];
-
   // The last four keys are the bound specification
-  const double source_xpos = values[nkeys-4]*mesh_width;
-  const double source_ypos = values[nkeys-3]*mesh_height;
-  const double source_width = values[nkeys-2]*mesh_width;
-  const double source_height = values[nkeys-1]*mesh_height;
-  const double rank_xpos_0 = mesh->edgex[mesh->x_off+PAD];
-  const double rank_ypos_0 = mesh->edgey[mesh->y_off+PAD];
-  const double rank_xpos_1 = mesh->edgex[local_nx+mesh->x_off+PAD];
-  const double rank_ypos_1 = mesh->edgey[local_ny+mesh->y_off+PAD];
+  const double source_xpos = values[nkeys-4]*mesh->width;
+  const double source_ypos = values[nkeys-3]*mesh->height;
+  const double source_width = values[nkeys-2]*mesh->width;
+  const double source_height = values[nkeys-1]*mesh->height;
+
+  double* mesh_edgex_0 = &mesh->edgex[mesh->x_off+PAD];
+  double* mesh_edgey_0 = &mesh->edgey[mesh->y_off+PAD];
+  double* mesh_edgex_1 = &mesh->edgex[local_nx+mesh->x_off+PAD];
+  double* mesh_edgey_1 = &mesh->edgey[local_ny+mesh->y_off+PAD];
+  double* rank_xpos_0;
+  double* rank_ypos_0;
+  double* rank_xpos_1;
+  double* rank_ypos_1;
+  allocate_host_data(&rank_xpos_0, 1);
+  allocate_host_data(&rank_ypos_0, 1);
+  allocate_host_data(&rank_xpos_1, 1);
+  allocate_host_data(&rank_ypos_1, 1);
+  copy_buffer(1, &mesh_edgex_0, &rank_xpos_0, RECV);
+  copy_buffer(1, &mesh_edgey_0, &rank_ypos_0, RECV);
+  copy_buffer(1, &mesh_edgex_1, &rank_xpos_1, RECV);
+  copy_buffer(1, &mesh_edgey_1, &rank_ypos_1, RECV);
 
   // Calculate the shaded bounds
   const double local_particle_left_off =
-    max(0.0, source_xpos-rank_xpos_0);
+    max(0.0, source_xpos-*rank_xpos_0);
   const double local_particle_bottom_off =
-    max(0.0, source_ypos-rank_ypos_0);
+    max(0.0, source_ypos-*rank_ypos_0);
   const double local_particle_right_off =
-    max(0.0, rank_xpos_1-(source_xpos+source_width));
+    max(0.0, *rank_xpos_1-(source_xpos+source_width));
   const double local_particle_top_off =
-    max(0.0, rank_ypos_1-(source_ypos+source_height));
+    max(0.0, *rank_ypos_1-(source_ypos+source_height));
   const double local_particle_width = 
-    max(0.0, (rank_xpos_1-rank_xpos_0)-
+    max(0.0, (*rank_xpos_1-*rank_xpos_0)-
         (local_particle_right_off+local_particle_left_off));
   const double local_particle_height = 
-    max(0.0, (rank_ypos_1-rank_ypos_0)-
+    max(0.0, (*rank_ypos_1-*rank_ypos_0)-
         (local_particle_top_off+local_particle_bottom_off));
+
+  deallocate_host_data(rank_xpos_0);
+  deallocate_host_data(rank_ypos_0);
+  deallocate_host_data(rank_xpos_1);
+  deallocate_host_data(rank_ypos_1);
 
   // Calculate the number of particles we need based on the shaded area that
   // is covered by our source
@@ -89,16 +103,7 @@ void initialise_neutral_data(
   // TO MAKE SURE THAT THEY ALL SUM UP TO THE CORRECT VALUE
 
   size_t allocation = 
-    allocate_data(&neutral_data->scalar_flux_tally, local_nx*local_ny);
-  allocation += 
     allocate_data(&neutral_data->energy_deposition_tally, local_nx*local_ny);
-
-#pragma omp parallel for
-  for(int ii = 0; ii < local_nx*local_ny; ++ii) {
-    neutral_data->scalar_flux_tally[ii] = 0.0;
-    neutral_data->energy_deposition_tally[ii] = 0.0;
-  }
-
   allocation += 
     allocate_int_data(&neutral_data->reduce_array0, neutral_data->nparticles);
   allocation += 
@@ -157,8 +162,10 @@ void read_cs_file(
 
   rewind(fp);
 
-  cs->key = (double*)malloc(sizeof(double)*cs->nentries);
-  cs->value = (double*)malloc(sizeof(double)*cs->nentries);
+  double* h_keys;
+  double* h_values;
+  allocate_host_data(&h_keys, cs->nentries);
+  allocate_host_data(&h_values, cs->nentries);
 
   for(int ii = 0; ii < cs->nentries; ++ii) {
     // Skip whitespace tokens
@@ -171,11 +178,19 @@ void read_cs_file(
     }
 
     ungetc(ch, fp);
-    fscanf(fp, "%lf", &cs->key[ii]);
+    fscanf(fp, "%lf", &h_keys[ii]);
     while((ch = fgetc(fp)) == ' '){};
     ungetc(ch, fp);
-    fscanf(fp, "%lf", &cs->value[ii]);
+    fscanf(fp, "%lf", &h_values[ii]);
   }
+
+  // Copy the cross sectional table into device memory if appropriate
+  allocate_data(&cs->keys, cs->nentries);
+  allocate_data(&cs->values, cs->nentries);
+  copy_buffer(cs->nentries, &h_keys, &cs->keys, SEND);
+  copy_buffer(cs->nentries, &h_values, &cs->values, SEND);
+  deallocate_host_data(h_keys);
+  deallocate_host_data(h_values);
 }
 
 // Initialises the state 

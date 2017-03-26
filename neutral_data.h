@@ -33,8 +33,8 @@ enum { PARTICLE_SENT, PARTICLE_DEAD, PARTICLE_CENSUS };
 
 // Represents a cross sectional table for resonance data
 typedef struct {
-  double* key;
-  double* value;
+  double* keys;
+  double* values;
   int nentries;
 
 } CrossSection;
