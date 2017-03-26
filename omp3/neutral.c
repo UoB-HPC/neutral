@@ -515,6 +515,7 @@ int handle_facet_encounter(
 void send_and_mark_particle(
     const int destination, Particle* particle)
 {
+#if 0
 #ifdef MPI
   if(destination == EDGE) {
     return;
@@ -528,6 +529,7 @@ void send_and_mark_particle(
 #else
   TERMINATE("Unreachable - shouldn't send particles unless MPI enabled.\n");
 #endif
+#endif // if 0
 }
 
 // Calculate the distance to the next facet
@@ -695,7 +697,7 @@ void validate(
 }
 
 // Initialises a new particle ready for tracking
-void inject_particles(
+size_t inject_particles(
     const int nparticles, const int global_nx, const int local_nx, const int local_ny, 
     const double local_particle_left_off, const double local_particle_bottom_off, 
     const double local_particle_width, const double local_particle_height, 
@@ -755,6 +757,8 @@ void inject_particles(
   }
 
   STOP_PROFILING(&compute_profile, "initialising particles");
+
+  return (sizeof(Particle)*nparticles*2);
 }
 
 

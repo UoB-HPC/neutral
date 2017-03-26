@@ -4,9 +4,11 @@
 #include "../mesh.h"
 #include "../comms.h"
 
+#if 0
 #ifdef MPI
 #include "mpi.h"
 #endif
+#endif // if 0
 
 /* Problem-Independent Constants */
 #define eV_TO_J                1.60217646e-19       // 1 eV to Joules
@@ -99,21 +101,14 @@ typedef struct {
 
 } NeutralData;
 
+#if 0
 #ifdef MPI
 // Global MPI particle type
 MPI_Datatype particle_type;
 #endif
+#endif // if 0
 
 // Initialises all of the Neutral-specific data structures.
 void initialise_neutral_data(
     NeutralData* bright_data, Mesh* mesh, RNPool* rn_pool);
-
-// Initialises a new particle ready for tracking
-void inject_particles(
-    const int nparticles, const int global_nx, const int local_nx, const int local_ny, 
-    const double local_particle_left_off, const double local_particle_bottom_off, 
-    const double local_particle_width, const double local_particle_height, 
-    const int x_off, const int y_off, const double dt, const double* edgex, 
-    const double* edgey, const double initial_energy, RNPool* rn_pool, 
-    Particle** particles);
 

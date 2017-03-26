@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "neutral_data.h"
+#include "neutral_interface.h"
 #include "../profiler.h"
 #include "../shared.h"
 #include "../params.h"
@@ -87,8 +88,10 @@ void initialise_neutral_data(
   // TODO: SHOULD PROBABLY PERFORM A REDUCTION OVER THE NUMBER OF LOCAL PARTICLES
   // TO MAKE SURE THAT THEY ALL SUM UP TO THE CORRECT VALUE
 
-  allocate_data(&neutral_data->scalar_flux_tally, local_nx*local_ny);
-  allocate_data(&neutral_data->energy_deposition_tally, local_nx*local_ny);
+  size_t allocation = 
+    allocate_data(&neutral_data->scalar_flux_tally, local_nx*local_ny);
+  allocation += 
+    allocate_data(&neutral_data->energy_deposition_tally, local_nx*local_ny);
 
 #pragma omp parallel for
   for(int ii = 0; ii < local_nx*local_ny; ++ii) {
@@ -96,12 +99,14 @@ void initialise_neutral_data(
     neutral_data->energy_deposition_tally[ii] = 0.0;
   }
 
-  allocate_int_data(&neutral_data->reduce_array0, local_nx*local_ny);
-  allocate_int_data(&neutral_data->reduce_array1, local_nx*local_ny);
+  allocation += 
+    allocate_int_data(&neutral_data->reduce_array0, neutral_data->nparticles);
+  allocation += 
+    allocate_int_data(&neutral_data->reduce_array1, neutral_data->nparticles);
 
   // Inject some particles into the mesh if we need to
   if(neutral_data->nlocal_particles) {
-    inject_particles(
+    allocation += inject_particles(
         neutral_data->nparticles, mesh->global_nx, mesh->local_nx, mesh->local_ny, 
         local_particle_left_off, local_particle_bottom_off, local_particle_width, 
         local_particle_height, mesh->x_off, mesh->y_off, mesh->dt, mesh->edgex, 
@@ -109,9 +114,12 @@ void initialise_neutral_data(
         &neutral_data->local_particles);
   }
 
+  printf("Allocated %.4fGB of data.\n", allocation/(1024.0*1024.0*1024.0));
+
   initialise_cross_sections(
       neutral_data, mesh);
 
+#if 0
 #ifdef MPI
   // Had to initialise this in the package directly as the data structure is not
   // general enough to place in the multi-package 
@@ -122,6 +130,7 @@ void initialise_neutral_data(
       2, blocks, disp, types, &particle_type);
   MPI_Type_commit(&particle_type);
 #endif
+#endif // if 0
 }
 
 // Reads in a cross-sectional data file

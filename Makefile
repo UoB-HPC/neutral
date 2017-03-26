@@ -9,7 +9,7 @@ CFLAGS_INTEL_KNL = -O3 -qopenmp -no-prec-div -std=gnu99 -DINTEL \
 									 -xMIC-AVX512 -Wall -restrict -g #-qopt-report=5 
 CFLAGS_GCC       = -O3 -g -std=gnu99 -fopenmp -march=native -Wall #-std=gnu99
 CFLAGS_CRAY      = -lrt -hlist=a
-OPTIONS         += -DTILES #-DENABLE_PROFILING #-DVISIT_DUMP
+OPTIONS         += -DTILES -D__STDC_CONSTANT_MACROS #-DENABLE_PROFILING #-DVISIT_DUMP
 
 ifeq ($(DEBUG), yes)
   OPTIONS += -O0 -DDEBUG 
@@ -20,8 +20,8 @@ ifeq ($(MPI), yes)
 endif
 
 # Default compiler
-MULTI_COMPILER_CC   = cc
-MULTI_COMPILER_CPP  = CC
+MULTI_COMPILER_CC   = mpiicc
+MULTI_COMPILER_CPP  = mpiicpc
 MULTI_LINKER    		= $(MULTI_COMPILER_CC)
 MULTI_FLAGS     		= $(CFLAGS_$(COMPILER))
 MULTI_LDFLAGS   		= $(MULTI_FLAGS) #-lm

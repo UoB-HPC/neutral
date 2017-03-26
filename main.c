@@ -78,13 +78,11 @@ int main(int argc, char** argv)
   // Make sure initialisation phase is complete
   barrier();
 
-  const int nparticles = neutral_data.nparticles;
-
   // Main timestep loop where we will track each particle through time
   int tt;
   double wallclock = 0.0;
   double elapsed_sim_time = 0.0;
-  uint64_t master_key = 0;
+  uint64_t master_key = 1;
   for(tt = 1; tt <= mesh.niters; ++tt) {
 
     if(mesh.rank == MASTER) {
@@ -170,8 +168,13 @@ void plot_particle_density(
 
   for(int ii = 0; ii < nparticles; ++ii) {
     Particle* particle = &neutral_data->local_particles[ii];
+#ifdef SoA
+    const int cellx = particle->cellx[ii]-mesh->x_off;
+    const int celly = particle->celly[ii]-mesh->y_off;
+#else 
     const int cellx = particle->cellx-mesh->x_off;
     const int celly = particle->celly-mesh->y_off;
+#endif
     temp[celly*(mesh->local_nx-2*PAD)+cellx] += 1.0;
   }
 
