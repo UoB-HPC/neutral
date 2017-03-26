@@ -701,11 +701,16 @@ void inject_particles(
     const double local_particle_width, const double local_particle_height, 
     const int x_off, const int y_off, const double dt, const double* edgex, 
     const double* edgey, const double initial_energy, RNPool* rn_pool, 
-    Particle* particles)
+    Particle** particles)
 {
+  *particles = (Particle*)malloc(sizeof(Particle)*nparticles*2);
+  if(!*particles) {
+    TERMINATE("Could not allocate particle array.\n");
+  }
+
   START_PROFILING(&compute_profile);
   for(int ii = 0; ii < nparticles; ++ii) {
-    Particle* particle = &particles[ii];
+    Particle* particle = &(*particles)[ii];
 
     // Set the initial nandom location of the particle inside the source region
     particle->x = local_particle_left_off + genrand(rn_pool)*local_particle_width;

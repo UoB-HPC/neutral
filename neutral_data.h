@@ -115,5 +115,5 @@ void inject_particles(
     const double local_particle_width, const double local_particle_height, 
     const int x_off, const int y_off, const double dt, const double* edgex, 
     const double* edgey, const double initial_energy, RNPool* rn_pool, 
-    Particle* particles);
+    Particle** particles);
 

@@ -87,17 +87,6 @@ void initialise_neutral_data(
   // TODO: SHOULD PROBABLY PERFORM A REDUCTION OVER THE NUMBER OF LOCAL PARTICLES
   // TO MAKE SURE THAT THEY ALL SUM UP TO THE CORRECT VALUE
 
-#ifdef SoA
-  neutral_data->local_particles = (Particle*)malloc(sizeof(Particle));
-#else
-  neutral_data->local_particles = 
-    (Particle*)malloc(sizeof(Particle)*neutral_data->nparticles*2);
-#endif
-
-  if(!neutral_data->local_particles) {
-    TERMINATE("Could not allocate particle array.\n");
-  }
-
   allocate_data(&neutral_data->scalar_flux_tally, local_nx*local_ny);
   allocate_data(&neutral_data->energy_deposition_tally, local_nx*local_ny);
 
@@ -117,7 +106,7 @@ void initialise_neutral_data(
         local_particle_left_off, local_particle_bottom_off, local_particle_width, 
         local_particle_height, mesh->x_off, mesh->y_off, mesh->dt, mesh->edgex, 
         mesh->edgey, neutral_data->initial_energy, rn_pool, 
-        neutral_data->local_particles);
+        &neutral_data->local_particles);
   }
 
   initialise_cross_sections(
