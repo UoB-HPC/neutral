@@ -30,6 +30,7 @@ MULTI_DIR       		= ..
 
 ifeq ($(KERNELS), cuda)
 include Makefile.cuda
+OPTIONS += -DSoA
 endif
 
 # Get specialised kernels

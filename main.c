@@ -106,7 +106,8 @@ int main(int argc, char** argv)
         neutral_data.local_particles, shared_data.rho, mesh.edgex, mesh.edgey, 
         mesh.edgedx, mesh.edgedy, neutral_data.cs_scatter_table, 
         neutral_data.cs_absorb_table, neutral_data.scalar_flux_tally, 
-        neutral_data.energy_deposition_tally, rn_pools);
+        neutral_data.energy_deposition_tally, rn_pools, neutral_data.reduce_array0,
+        neutral_data.reduce_array1);
 
     barrier();
 

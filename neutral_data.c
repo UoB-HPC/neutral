@@ -87,9 +87,13 @@ void initialise_neutral_data(
   // TODO: SHOULD PROBABLY PERFORM A REDUCTION OVER THE NUMBER OF LOCAL PARTICLES
   // TO MAKE SURE THAT THEY ALL SUM UP TO THE CORRECT VALUE
 
-  // TODO: THIS ESTIMATE OF THE PARTICLE IS NOT SUITABLE FOR MULTI-NODE
+#ifdef SoA
+  neutral_data->local_particles = (Particle*)malloc(sizeof(Particle));
+#else
   neutral_data->local_particles = 
     (Particle*)malloc(sizeof(Particle)*neutral_data->nparticles*2);
+#endif
+
   if(!neutral_data->local_particles) {
     TERMINATE("Could not allocate particle array.\n");
   }
@@ -103,13 +107,17 @@ void initialise_neutral_data(
     neutral_data->energy_deposition_tally[ii] = 0.0;
   }
 
+  allocate_int_data(&neutral_data->reduce_array0, local_nx*local_ny);
+  allocate_int_data(&neutral_data->reduce_array1, local_nx*local_ny);
+
   // Inject some particles into the mesh if we need to
   if(neutral_data->nlocal_particles) {
     inject_particles(
-        mesh, local_nx, local_ny, local_particle_left_off, 
-        local_particle_bottom_off, local_particle_width, local_particle_height, 
-        neutral_data->nlocal_particles, neutral_data->initial_energy, 
-        rn_pool, neutral_data->local_particles);
+        neutral_data->nparticles, mesh->global_nx, mesh->local_nx, mesh->local_ny, 
+        local_particle_left_off, local_particle_bottom_off, local_particle_width, 
+        local_particle_height, mesh->x_off, mesh->y_off, mesh->dt, mesh->edgex, 
+        mesh->edgey, neutral_data->initial_energy, rn_pool, 
+        neutral_data->local_particles);
   }
 
   initialise_cross_sections(
@@ -125,77 +133,6 @@ void initialise_neutral_data(
       2, blocks, disp, types, &particle_type);
   MPI_Type_commit(&particle_type);
 #endif
-}
-
-// Acts as a particle source
-void inject_particles(
-    Mesh* mesh, const int local_nx, const int local_ny, 
-    const double local_particle_left_off, const double local_particle_bottom_off,
-    const double local_particle_width, const double local_particle_height, 
-    const int nparticles, const double initial_energy, RNPool* rn_pool,
-    Particle* particles)
-{
-  START_PROFILING(&compute_profile);
-  for(int ii = 0; ii < nparticles; ++ii) {
-    initialise_particle(
-        mesh->global_nx, local_nx, local_ny, local_particle_left_off, 
-        local_particle_bottom_off, local_particle_width, local_particle_height, 
-        mesh->x_off, mesh->y_off, mesh->dt, mesh->edgex, mesh->edgey, 
-        initial_energy, rn_pool, &particles[ii]);
-    particles[ii].key = ii;
-  }
-  STOP_PROFILING(&compute_profile, "initialising particles");
-}
-
-// Initialises a new particle ready for tracking
-void initialise_particle(
-    const int global_nx, const int local_nx, const int local_ny, 
-    const double local_particle_left_off, const double local_particle_bottom_off, 
-    const double local_particle_width, const double local_particle_height, 
-    const int x_off, const int y_off, const double dt, const double* edgex, 
-    const double* edgey, const double initial_energy, RNPool* rn_pool, 
-    Particle* particle)
-{
-  // Set the initial nandom location of the particle inside the source region
-  particle->x = local_particle_left_off + 
-    genrand(rn_pool)*local_particle_width;
-  particle->y = local_particle_bottom_off + 
-    genrand(rn_pool)*local_particle_height;
-
-  // Check the location of the specific cell that the particle sits within.
-  // We have to check this explicitly because the mesh might be non-uniform.
-  int cellx = 0;
-  int celly = 0;
-  for(int ii = 0; ii < local_nx; ++ii) {
-    if(particle->x >= edgex[ii+PAD] && particle->x < edgex[ii+PAD+1]) {
-      cellx = x_off+ii;
-      break;
-    }
-  }
-  for(int ii = 0; ii < local_ny; ++ii) {
-    if(particle->y >= edgey[ii+PAD] && particle->y < edgey[ii+PAD+1]) {
-      celly = y_off+ii;
-      break;
-    }
-  }
-
-  particle->cellx = cellx;
-  particle->celly = celly;
-
-  // Generating theta has uniform density, however 0.0 and 1.0 produce the same 
-  // value which introduces very very very small bias...
-  const double theta = 2.0*M_PI*genrand(rn_pool);
-  particle->omega_x = cos(theta);
-  particle->omega_y = sin(theta);
-
-  // This approximation sets mono-energetic initial state for source particles  
-  particle->e = initial_energy;
-
-  // Set a weight for the particle to track absorption
-  particle->weight = 1.0;
-  particle->dt_to_census = dt;
-  particle->mfp_to_collision = 0.0;
-  particle->dead = 0;
 }
 
 // Reads in a cross-sectional data file

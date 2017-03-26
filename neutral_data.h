@@ -37,6 +37,27 @@ typedef struct {
 
 } CrossSection;
 
+#ifdef SoA
+
+// Represents an individual particle
+typedef struct {
+  double* x;                  // x position in space
+  double* y;                  // y position in space
+  double* omega_x;            // x direction
+  double* omega_y;            // y direction
+  double* e;                  // energy
+  double* weight;             // weight of the particle
+  double* dt_to_census;       // the time until census is reached
+  double* mfp_to_collision;   // the mean free paths until a collision
+  uint64_t* key;              // key for random number generation
+  int* cellx;                 // x position in mesh
+  int* celly;                 // y position in mesh
+  int* dead;                  // particle is dead
+
+} Particle;
+
+#else
+
 // Represents an individual particle
 typedef struct {
   double x;                  // x position in space
@@ -53,6 +74,8 @@ typedef struct {
   int dead;                  // particle is dead
 
 } Particle;
+
+#endif
 
 // Contains the configuration and state data for the application
 typedef struct {
@@ -71,6 +94,9 @@ typedef struct {
 
   const char* neutral_params_filename;
 
+  int* reduce_array0;
+  int* reduce_array1;
+
 } NeutralData;
 
 #ifdef MPI
@@ -82,11 +108,12 @@ MPI_Datatype particle_type;
 void initialise_neutral_data(
     NeutralData* bright_data, Mesh* mesh, RNPool* rn_pool);
 
-// Acts as a particle source
+// Initialises a new particle ready for tracking
 void inject_particles(
-    Mesh* mesh, const int local_nx, const int local_ny, 
-    const double local_particle_left_off, const double local_particle_bottom_off,
+    const int nparticles, const int global_nx, const int local_nx, const int local_ny, 
+    const double local_particle_left_off, const double local_particle_bottom_off, 
     const double local_particle_width, const double local_particle_height, 
-    const int nparticles, const double initial_energy, RNPool* rn_pool,
+    const int x_off, const int y_off, const double dt, const double* edgex, 
+    const double* edgey, const double initial_energy, RNPool* rn_pool, 
     Particle* particles);
 
