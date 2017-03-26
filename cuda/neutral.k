@@ -190,8 +190,10 @@ __global__ void handle_particles_kernel(
   int ncollisions = 0;
 
   const int gid = blockIdx.x*blockDim.x+threadIdx.x;
-  if(gid < nparticles) { 
-    const int pindex = gid;
+  const int pindex = gid;
+  double e = particle_e[pindex];
+
+  if(gid < nparticles && e >= MIN_ENERGY_OF_INTEREST) { 
 
     int x_facet = 0;
     int absorb_cs_index = -1;
@@ -201,7 +203,7 @@ __global__ void handle_particles_kernel(
     // Update the cross sections, referencing into the padded mesh
     int cellx = particle_cellx[pindex]-x_off+PAD;
     int celly = particle_celly[pindex]-y_off+PAD;
-    double e = particle_e[pindex];
+
     double x = particle_x[pindex];
     double y = particle_y[pindex];
     double weight = particle_weight[pindex];
@@ -237,9 +239,6 @@ __global__ void handle_particles_kernel(
     while(dt_to_census > 0.0) {
       cell_mfp = 1.0/(macroscopic_cs_scatter+macroscopic_cs_absorb);
 
-      // Work out the distance until the particle hits a facet
-      double distance_to_facet = 0.0;
-
       // Check the timestep required to move the particles along a single axis
       // If the velocity is positive then the top or right boundary will be hit
       double velocity = sqrt((2.0*e*eV_TO_J)/PARTICLE_MASS);
@@ -267,6 +266,9 @@ __global__ void handle_particles_kernel(
       // u = velocity vector
 
       double mag_u0 = velocity;
+
+      // Work out the distance until the particle hits a facet
+      double distance_to_facet = 0.0;
 
       x_facet = (dt_x < dt_y) ? 1 : 0;
       if(x_facet) {
@@ -312,19 +314,19 @@ __global__ void handle_particles_kernel(
 
         double rn[NRANDOM_NUMBERS];
         generate_random_numbers(master_key, 1, gid, &rn[0], &rn[1]);
+
         if(rn[0] < p_absorb) {
           /* Model particle absorption */
 
           // Find the new particle weight after absorption, saving the energy change
-          const double new_weight = weight*(1.0 - p_absorb);
-          weight = new_weight;
+          weight *= (1.0 - p_absorb);
 
           if(e < MIN_ENERGY_OF_INTEREST) {
             // Energy is too low, so mark the particle for deletion
             // Need to store tally information as finished with particle
             atomicAdd(&energy_deposition_tally[celly*nx+cellx],
                 energy_deposition*inv_ntotal_particles);
-            return;
+            break;
           }
         }
         else {
@@ -336,17 +338,16 @@ __global__ void handle_particles_kernel(
           const double mu_cm = 1.0 - 2.0*rn[0];
 
           // Calculate the new energy based on the relation to angle of incidence
-          const double e_new = e*
-            (MASS_NO*MASS_NO + 2.0*MASS_NO*mu_cm + 1.0)/
+          const double e_new = 
+            e*(MASS_NO*MASS_NO + 2.0*MASS_NO*mu_cm + 1.0)/
             ((MASS_NO + 1.0)*(MASS_NO + 1.0));
 
           // Convert the angle into the laboratory frame of reference
           double cos_theta =
-            0.5*((MASS_NO+1.0)*sqrt(e_new/e) - 
-                (MASS_NO-1.0)*sqrt(e/e_new));
+            0.5*((MASS_NO+1.0)*sqrt(e_new/e) - (MASS_NO-1.0)*sqrt(e/e_new));
 
           // Alter the direction of the velocities
-          const double sin_theta = sin(acos(cos_theta));
+          const double sin_theta = sqrt(1.0-cos_theta*cos_theta);
           const double omega_x_new = (omega_x*cos_theta - omega_y*sin_theta);
           const double omega_y_new = (omega_x*sin_theta + omega_y*cos_theta);
           omega_x = omega_x_new;
