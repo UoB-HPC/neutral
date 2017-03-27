@@ -469,6 +469,8 @@ __global__ void handle_particles_kernel(
     particle_omega_y[pindex] = omega_y;
     particle_dt_to_census[pindex] = dt_to_census;
     particle_mfp_to_collision[pindex] = mfp_to_collision;
+    particle_cellx[pindex] = cellx;
+    particle_celly[pindex] = celly;
   }
 
   __shared__ int nfacets_shared[NTHREADS];
