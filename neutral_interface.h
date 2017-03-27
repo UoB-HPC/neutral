@@ -16,8 +16,8 @@ extern "C" {
       Particles* particles, const double* density, const double* edgex, 
       const double* edgey, const double* edgedx, const double* edgedy, 
       CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
-      double* scalar_flux_tally, double* energy_deposition_tally, RNPool* rn_pools,
-      int* reduce_array0, int* reduce_array1);
+      double* energy_deposition_tally, RNPool* rn_pools, int* reduce_array0, 
+      int* reduce_array1);
 
   // Acts as a particle source
   void inject_particles(

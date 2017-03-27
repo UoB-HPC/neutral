@@ -23,7 +23,7 @@ void solve_transport_2d(
     Particles* particles, const double* density, const double* edgex, 
     const double* edgey, const double* edgedx, const double* edgedy, 
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
-    double* scalar_flux_tally, double* energy_deposition_tally, RNPool* rn_pools,
+    double* energy_deposition_tally, RNPool* rn_pools,
     int* reduce_array0, int* reduce_array1)
 {
   // Initial idea is to use a kind of queue for handling the particles. Presumably
@@ -49,7 +49,7 @@ void solve_transport_2d(
       global_nx, global_ny, nx, ny, x_off, y_off, dt, neighbours, density, edgex, 
       edgey, &facets, &collisions, nparticles_sent, master_key, nparticles_total, 
       nparticles, &nparticles, particles, cs_scatter_table, 
-      cs_absorb_table, scalar_flux_tally, energy_deposition_tally, rn_pools);
+      cs_absorb_table, energy_deposition_tally, rn_pools);
 
 #if 0
 #ifdef MPI
@@ -108,7 +108,7 @@ void solve_transport_2d(
           density, edgex, edgey, edgedx, edgedy, &facets, &collisions, 
           nparticles_sent, nparticles_total, nunprocessed_particles, &nparticles, 
           &particles[unprocessed_start], particles_out, cs_scatter_table, 
-          cs_absorb_table, scalar_flux_tally, energy_deposition_tally, rn_pools);
+          cs_absorb_table, energy_deposition_tally, rn_pools);
     }
 
     // Check if any of the ranks had unprocessed particles
@@ -141,7 +141,7 @@ void handle_particles(
     uint64_t* master_key, const int nparticles_total, 
     const int nparticles_to_process, int* nparticles, Particles* particles, 
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
-    double* scalar_flux_tally, double* energy_deposition_tally, RNPool* rn_pools)
+    double* energy_deposition_tally, RNPool* rn_pools)
 {
   int nthreads;
 #pragma omp parallel
@@ -193,7 +193,7 @@ void handle_particles(
       handle_facets(
           block_size, particles_offset, global_nx, global_ny, nx, ny, x_off, 
           y_off, neighbours, nparticles_sent, particles, edgex, edgey, density, 
-          &nparticles_out, scalar_flux_tally, energy_deposition_tally,
+          &nparticles_out, energy_deposition_tally,
           cs_scatter_table, cs_absorb_table, &nfacets, &ncollisions);
       STOP_PROFILING(&compute_profile, "handle facets");
 
@@ -201,7 +201,7 @@ void handle_particles(
       handle_collisions( 
           block_size, particles_offset, nx, x_off, y_off, particles, edgex, edgey, 
           rn_pools, &nparticles_dead, cs_scatter_table, cs_absorb_table,
-          scalar_flux_tally, energy_deposition_tally, &nfacets, &ncollisions);
+          energy_deposition_tally, &nfacets, &ncollisions);
       STOP_PROFILING(&compute_profile, "handle collisions");
 
       if(!ncollisions && !nfacets) {
@@ -211,7 +211,7 @@ void handle_particles(
       START_PROFILING(&compute_profile);
       update_tallies(
           nx, particles, x_off, y_off, block_size, particles_offset, 0, 
-          scalar_flux_tally, energy_deposition_tally);
+          energy_deposition_tally);
       STOP_PROFILING(&compute_profile, "update tallies");
 
       *facets += nfacets;
@@ -221,14 +221,13 @@ void handle_particles(
     START_PROFILING(&compute_profile);
     handle_census(
         block_size, particles_offset, nx, x_off, y_off, particles, density, edgex, 
-        edgey, cs_scatter_table, cs_absorb_table, scalar_flux_tally, 
-        energy_deposition_tally);
+        edgey, cs_scatter_table, cs_absorb_table, energy_deposition_tally);
     STOP_PROFILING(&compute_profile, "handle census");
 
     START_PROFILING(&compute_profile);
     update_tallies(
         nx, particles, x_off, y_off, block_size, particles_offset, 1, 
-        scalar_flux_tally, energy_deposition_tally);
+        energy_deposition_tally);
     STOP_PROFILING(&compute_profile, "update tallies");
   }
 
@@ -383,7 +382,7 @@ void handle_facets(
     const int global_ny, const int nx, const int ny, const int x_off, 
     const int y_off, const int* neighbours, int* nparticles_sent, 
     Particles* particles, const double* edgex, const double* edgey, 
-    const double* density, uint64_t* nparticles_out, double* scalar_flux_tally, 
+    const double* density, uint64_t* nparticles_out, 
     double* energy_deposition_tally, CrossSection* cs_scatter_table, 
     CrossSection* cs_absorb_table, uint64_t* nfacets, uint64_t* ncollisions)
 {
@@ -559,7 +558,7 @@ void handle_collisions(
     const int x_off, const int y_off, Particles* particles, const double* edgex, 
     const double* edgey, RNPool* rn_pools, uint64_t* nparticles_dead, 
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
-    double* scalar_flux_tally, double* energy_deposition_tally, uint64_t* nfacets,
+    double* energy_deposition_tally, uint64_t* nfacets,
     uint64_t* ncollisions)
 {
   uint64_t ndead = 0;
@@ -750,8 +749,7 @@ void handle_census(
     const int nparticles, const int particles_offset, const int nx, 
     const int x_off, const int y_off, Particles* particles, const double* density, 
     const double* edgex, const double* edgey, CrossSection* cs_scatter_table, 
-    CrossSection* cs_absorb_table, double* scalar_flux_tally, 
-    double* energy_deposition_tally)
+    CrossSection* cs_absorb_table, double* energy_deposition_tally)
 {
   /* HANDLE THE CENSUS EVENTS */
 #pragma omp parallel for simd
@@ -790,11 +788,11 @@ void handle_census(
   }
 }
 
-// Tallies both the scalar flux and energy deposition in the cell
+// Tallies the energy deposition in the cell
 void update_tallies(
     const int nx, Particles* particles, const int x_off, const int y_off, 
     const int nparticles, const int particles_offset, const int tally_census, 
-    double* scalar_flux_tally, double* energy_deposition_tally)
+    double* energy_deposition_tally)
 {
   const double inv_nparticles_total = 1.0/nparticles;
 

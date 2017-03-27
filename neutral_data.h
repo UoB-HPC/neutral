@@ -82,7 +82,6 @@ typedef struct {
   int nrn_pools;
   int rn_pool_master_index;
 
-  double* scalar_flux_tally;
   double* energy_deposition_tally;
 
   int* reduce_array0;
