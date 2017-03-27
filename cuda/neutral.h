@@ -8,9 +8,8 @@ void handle_particles(
     uint64_t* collisions, int* nparticles_sent, uint64_t* master_key, 
     const int nparticles_total, const int nparticles_to_process, 
     int* nparticles, Particles* particles, CrossSection* cs_scatter_table, 
-    CrossSection* cs_absorb_table, double* scalar_flux_tally, 
-    double* energy_deposition_tally, RNPool* rn_pools, int* reduce_array0,
-    int* reduce_array1);
+    CrossSection* cs_absorb_table, double* energy_deposition_tally, 
+    RNPool* rn_pools, int* reduce_array0, int* reduce_array1);
 
 // Initialises ready for the event cycles
 void event_initialisation(
@@ -31,9 +30,8 @@ void handle_facets(
     const int global_ny, const int nx, const int ny, const int x_off, 
     const int y_off, const int* neighbours, int* nparticles_sent, 
     Particles* particles, const double* edgex, const double* edgey, 
-    const double* density, int* nparticles_out, double* scalar_flux_tally, 
-    double* energy_deposition_tally, CrossSection* cs_scatter_table, 
-    CrossSection* cs_absorb_table);
+    const double* density, int* nparticles_out, double* energy_deposition_tally, 
+    CrossSection* cs_scatter_table, CrossSection* cs_absorb_table);
 
 // Handle all of the collision events
 void handle_collisions(
@@ -41,15 +39,14 @@ void handle_collisions(
     const int x_off, const int y_off, Particles* particles, const double* edgex, 
     const double* edgey, RNPool* rn_pools, int* nparticles_dead, 
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
-    double* scalar_flux_tally, double* energy_deposition_tally, int* reduce_array);
+    double* energy_deposition_tally, int* reduce_array);
 
 // Handles all of the census events
 void handle_census(
     const int nparticles, const int particles_offset, const int nx, 
     const int x_off, const int y_off, Particles* particles, const double* density, 
     const double* edgex, const double* edgey, CrossSection* cs_scatter_table, 
-    CrossSection* cs_absorb_table, double* scalar_flux_tally, 
-    double* energy_deposition_tally);
+    CrossSection* cs_absorb_table, double* energy_deposition_tally);
 
 // Calculates the distance to the facet for all cells
 void calc_distance_to_facet(
@@ -57,11 +54,11 @@ void calc_distance_to_facet(
     const int y_off, Particles* particles, 
     const double* edgex, const double* edgey);
 
-// Tallies both the scalar flux and energy deposition in the cell
+// Tallies the energy deposition in the cell
 void update_tallies(
     const int nx, Particles* particles, const int x_off, const int y_off, 
     const int nparticles, const int particles_offset, const int exclude_census, 
-    double* scalar_flux_tally, double* energy_deposition_tally);
+    double* energy_deposition_tally);
 
 // Sends a particles to a neighbour and replaces in the particles list
 void send_and_mark_particle(

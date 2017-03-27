@@ -114,7 +114,7 @@ void initialise_neutral_data(
   allocation += allocate_data(&particle->distance_to_facet,neutral_data->nparticles*1.5);
   allocation += allocate_data(&particle->local_density,neutral_data->nparticles*1.5);
   allocation += allocate_data(&particle->cell_mfp,neutral_data->nparticles*1.5);
-  allocation += allocate_data(&particle->particle_velocity,neutral_data->nparticles*1.5);
+  allocation += allocate_data(&particle->speed,neutral_data->nparticles*1.5);
   allocation += allocate_data(&particle->energy_deposition,neutral_data->nparticles*1.5);
   allocation += allocate_int_data(&particle->x_facet,neutral_data->nparticles*1.5);
   allocation += allocate_int_data(&particle->cellx,neutral_data->nparticles*1.5);
@@ -127,7 +127,7 @@ void initialise_neutral_data(
   allocation += 
     allocate_data(&neutral_data->energy_deposition_tally, (mesh->local_nx)*(mesh->local_ny));
 
-  printf("Allocating %zu bytes of data.\n", allocation);
+  printf("Allocating %.4fGB of data.\n", allocation/(1024.0*1024.0*1024.0));
 
   if(!neutral_data->local_particles) {
     TERMINATE("Could not allocate particle array.\n");

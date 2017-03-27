@@ -14,7 +14,7 @@
 #define eV_TO_J                1.60217646e-19       // 1 eV to Joules
 #define AVOGADROS              6.02214085774e23     // Avogadro's constant
 #define BARNS                  1.0e-28              // The barns unit in m^2
-#define INV_PARTICLE_MASS      5.9704077769754e26   // Mass taken from wiki
+#define PARTICLE_MASS          1.674927471213e-27   // Mass taken from wiki
 #define MASS_NO                1.0e2                // Mass num of the particle
 #define MOLAR_MASS             1.0e-2               // Dummy kg per mole
 #define MIN_ENERGY_OF_INTEREST 1.0e0                // Energy to kill particles
@@ -26,7 +26,6 @@
 /* Data tables */
 #define CS_SCATTER_FILENAME    "elastic_scatter.cs" // Elastic scattering cs file
 #define CS_CAPTURE_FILENAME    "capture.cs"         // Capture cs file
-
 #define ARCH_ROOT_PARAMS "../arch.params"
 #define NEUTRAL_TESTS    "neutral.tests"
 
@@ -54,7 +53,7 @@ typedef struct {
   double* distance_to_facet;  // the distance until a facet is encountered
   double* local_density;
   double* cell_mfp;
-  double* particle_velocity;
+  double* speed;
   double* energy_deposition;
   int* x_facet;
   int* cellx;
@@ -82,7 +81,6 @@ typedef struct {
   int nrn_pools;
   int rn_pool_master_index;
 
-  double* scalar_flux_tally;
   double* energy_deposition_tally;
 
   int* reduce_array0;

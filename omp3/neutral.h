@@ -9,7 +9,7 @@ void handle_particles(
     uint64_t* master_key, const int nparticles_total, 
     const int nparticles_to_process, int* nparticles, Particles* particles, 
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
-    double* scalar_flux_tally, double* energy_deposition_tally, RNPool* rn_pools);
+    double* energy_deposition_tally, RNPool* rn_pools);
 
 // Initialises ready for the event cycles
 void event_initialisation(
@@ -30,7 +30,7 @@ void handle_facets(
     const int global_ny, const int nx, const int ny, const int x_off, 
     const int y_off, const int* neighbours, int* nparticles_sent, 
     Particles* particles, const double* edgex, const double* edgey, 
-    const double* density, uint64_t* nparticles_out, double* scalar_flux_tally, 
+    const double* density, uint64_t* nparticles_out, 
     double* energy_deposition_tally, CrossSection* cs_scatter_table, 
     CrossSection* cs_absorb_table, uint64_t* nfacets, uint64_t* ncollisions);
 
@@ -40,16 +40,14 @@ void handle_collisions(
     const int x_off, const int y_off, Particles* particles, const double* edgex, 
     const double* edgey, RNPool* rn_pools, uint64_t* nparticles_dead, 
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
-    double* scalar_flux_tally, double* energy_deposition_tally, 
-    uint64_t* nfacets, uint64_t* ncollisions);
+    double* energy_deposition_tally, uint64_t* nfacets, uint64_t* ncollisions);
 
 // Handles all of the census events
 void handle_census(
     const int nparticles, const int particles_offset, const int nx, 
     const int x_off, const int y_off, Particles* particles, const double* density, 
     const double* edgex, const double* edgey, CrossSection* cs_scatter_table, 
-    CrossSection* cs_absorb_table, double* scalar_flux_tally, 
-    double* energy_deposition_tally);
+    CrossSection* cs_absorb_table, double* energy_deposition_tally);
 
 // Calculates the distance to the facet for all cells
 void calc_distance_to_facet(
@@ -57,11 +55,11 @@ void calc_distance_to_facet(
     const int y_off, Particles* particles, 
     const double* edgex, const double* edgey);
 
-// Tallies both the scalar flux and energy deposition in the cell
+// Tallies the energy deposition in the cell
 void update_tallies(
     const int nx, Particles* particles, const int x_off, const int y_off, 
     const int nparticles, const int particles_offset, const int exclude_census, 
-    double* scalar_flux_tally, double* energy_deposition_tally);
+    double* energy_deposition_tally);
 
 // Sends a particles to a neighbour and replaces in the particles list
 void send_and_mark_particle(

@@ -23,7 +23,7 @@ void solve_transport_2d(
     Particles* particles, const double* density, const double* edgex, 
     const double* edgey, const double* edgedx, const double* edgedy, 
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
-    double* scalar_flux_tally, double* energy_deposition_tally, RNPool* rn_pools,
+    double* energy_deposition_tally, RNPool* rn_pools,
     int* reduce_array0, int* reduce_array1)
 {
   // Initial idea is to use a kind of queue for handling the particles. Presumably
@@ -49,7 +49,7 @@ void solve_transport_2d(
       global_nx, global_ny, nx, ny, x_off, y_off, dt, neighbours, density, edgex, 
       edgey, &facets, &collisions, nparticles_sent, master_key, nparticles_total, 
       nparticles, &nparticles, particles, cs_scatter_table, 
-      cs_absorb_table, scalar_flux_tally, energy_deposition_tally, rn_pools);
+      cs_absorb_table, energy_deposition_tally, rn_pools);
 
 #if 0
 #ifdef MPI
@@ -108,7 +108,7 @@ void solve_transport_2d(
           density, edgex, edgey, edgedx, edgedy, &facets, &collisions, 
           nparticles_sent, nparticles_total, nunprocessed_particles, &nparticles, 
           &particles[unprocessed_start], particles_out, cs_scatter_table, 
-          cs_absorb_table, scalar_flux_tally, energy_deposition_tally, rn_pools);
+          cs_absorb_table, energy_deposition_tally, rn_pools);
     }
 
     // Check if any of the ranks had unprocessed particles
@@ -141,7 +141,7 @@ void handle_particles(
     uint64_t* master_key, const int nparticles_total, 
     const int nparticles_to_process, int* nparticles, Particles* particles, 
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
-    double* scalar_flux_tally, double* energy_deposition_tally, RNPool* rn_pools)
+    double* energy_deposition_tally, RNPool* rn_pools)
 {
   int nthreads;
 #pragma omp parallel
@@ -192,7 +192,7 @@ void handle_particles(
       handle_facets(
           block_size, particles_offset, global_nx, global_ny, nx, ny, x_off, 
           y_off, neighbours, nparticles_sent, particles, edgex, edgey, density, 
-          &nparticles_out, scalar_flux_tally, energy_deposition_tally,
+          &nparticles_out, energy_deposition_tally,
           cs_scatter_table, cs_absorb_table, &nfacets, &ncollisions);
       STOP_PROFILING(&compute_profile, "handle facets");
 
@@ -200,7 +200,7 @@ void handle_particles(
       handle_collisions( 
           block_size, particles_offset, nx, x_off, y_off, particles, edgex, edgey, 
           rn_pools, &nparticles_dead, cs_scatter_table, cs_absorb_table,
-          scalar_flux_tally, energy_deposition_tally, &nfacets, &ncollisions);
+          energy_deposition_tally, &nfacets, &ncollisions);
       STOP_PROFILING(&compute_profile, "handle collisions");
 
 #if 0
@@ -212,7 +212,7 @@ void handle_particles(
       START_PROFILING(&compute_profile);
       update_tallies(
           nx, particles, x_off, y_off, block_size, particles_offset, 0, 
-          scalar_flux_tally, energy_deposition_tally);
+          energy_deposition_tally);
       STOP_PROFILING(&compute_profile, "update tallies");
 
       *facets += nfacets;
@@ -222,14 +222,13 @@ void handle_particles(
     START_PROFILING(&compute_profile);
     handle_census(
         block_size, particles_offset, nx, x_off, y_off, particles, density, edgex, 
-        edgey, cs_scatter_table, cs_absorb_table, scalar_flux_tally, 
-        energy_deposition_tally);
+        edgey, cs_scatter_table, cs_absorb_table, energy_deposition_tally);
     STOP_PROFILING(&compute_profile, "handle census");
 
     START_PROFILING(&compute_profile);
     update_tallies(
         nx, particles, x_off, y_off, block_size, particles_offset, 1, 
-        scalar_flux_tally, energy_deposition_tally);
+        energy_deposition_tally);
     STOP_PROFILING(&compute_profile, "update tallies");
   }
 
@@ -264,8 +263,8 @@ void event_initialisation(
         cs_scatter_table, particles->e[pindex], &particles->scatter_cs_index[pindex]);
     double microscopic_cs_absorb = microscopic_cs_for_energy(
         cs_absorb_table, particles->e[pindex], &particles->absorb_cs_index[pindex]);
-    particles->particle_velocity[pindex] =
-      sqrt((2.0*particles->e[pindex]*eV_TO_J)*INV_PARTICLE_MASS);
+    particles->speed[pindex] =
+      sqrt(2.0*particles->e[pindex]*eV_TO_J/PARTICLE_MASS);
 
     int cellx = particles->cellx[pindex]-x_off+PAD;
     int celly = particles->celly[pindex]-y_off+PAD;
@@ -301,8 +300,8 @@ int calc_next_event(
     // If the velocity is positive then the top or right boundary will be hit
     const int cellx = particles->cellx[pindex]-x_off+PAD;
     const int celly = particles->celly[pindex]-y_off+PAD;
-    double u_x_inv = 1.0/(particles->omega_x[pindex]*particles->particle_velocity[pindex]);
-    double u_y_inv = 1.0/(particles->omega_y[pindex]*particles->particle_velocity[pindex]);
+    double u_x_inv = 1.0/(particles->omega_x[pindex]*particles->speed[pindex]);
+    double u_y_inv = 1.0/(particles->omega_y[pindex]*particles->speed[pindex]);
 
     double x0 = edgex[cellx];
     double x1 = edgex[cellx+1];
@@ -324,7 +323,7 @@ int calc_next_event(
     // a = vector on first edge to be hit
     // u = velocity vector
 
-    double mag_u0 = particles->particle_velocity[pindex];
+    double mag_u0 = particles->speed[pindex];
 
     particles->x_facet[pindex] = (dt_x < dt_y) ? 1 : 0;
     if(particles->x_facet[pindex]) {
@@ -351,7 +350,7 @@ int calc_next_event(
     const double distance_to_collision = 
       particles->mfp_to_collision[pindex]*particles->cell_mfp[pindex];
     const double distance_to_census = 
-      particles->particle_velocity[pindex]*particles->dt_to_census[pindex];
+      particles->speed[pindex]*particles->dt_to_census[pindex];
 
     if(distance_to_collision < distance_to_census && 
         distance_to_collision < particles->distance_to_facet[pindex]) {
@@ -384,7 +383,7 @@ void handle_facets(
     const int global_ny, const int nx, const int ny, const int x_off, 
     const int y_off, const int* neighbours, int* nparticles_sent, 
     Particles* particles, const double* edgex, const double* edgey, 
-    const double* density, uint64_t* nparticles_out, double* scalar_flux_tally, 
+    const double* density, uint64_t* nparticles_out, 
     double* energy_deposition_tally, CrossSection* cs_scatter_table, 
     CrossSection* cs_absorb_table, uint64_t* nfacets, uint64_t* ncollisions)
 {
@@ -416,7 +415,7 @@ void handle_facets(
     particles->mfp_to_collision[pindex] -=
       (particles->distance_to_facet[pindex]*(macroscopic_cs_scatter+macroscopic_cs_absorb));
     particles->dt_to_census[pindex] -=
-      (particles->distance_to_facet[pindex]/particles->particle_velocity[pindex]);
+      (particles->distance_to_facet[pindex]/particles->speed[pindex]);
 
     particles->energy_deposition[pindex] += calculate_energy_deposition(
         pindex, particles, particles->distance_to_facet[pindex], number_density, 
@@ -485,8 +484,8 @@ void handle_facets(
     // If the velocity is positive then the top or right boundary will be hit
     cellx = particles->cellx[pindex]-x_off+PAD;
     celly = particles->celly[pindex]-y_off+PAD;
-    double u_x_inv = 1.0/(particles->omega_x[pindex]*particles->particle_velocity[pindex]);
-    double u_y_inv = 1.0/(particles->omega_y[pindex]*particles->particle_velocity[pindex]);
+    double u_x_inv = 1.0/(particles->omega_x[pindex]*particles->speed[pindex]);
+    double u_y_inv = 1.0/(particles->omega_y[pindex]*particles->speed[pindex]);
 
     double x0 = edgex[cellx];
     double x1 = edgex[cellx+1];
@@ -508,7 +507,7 @@ void handle_facets(
     // a = vector on first edge to be hit
     // u = velocity vector
 
-    double mag_u0 = particles->particle_velocity[pindex];
+    double mag_u0 = particles->speed[pindex];
 
     particles->x_facet[pindex] = (dt_x < dt_y) ? 1 : 0;
     if(particles->x_facet[pindex]) {
@@ -535,7 +534,7 @@ void handle_facets(
     const double distance_to_collision = 
       particles->mfp_to_collision[pindex]*particles->cell_mfp[pindex];
     const double distance_to_census = 
-      particles->particle_velocity[pindex]*particles->dt_to_census[pindex];
+      particles->speed[pindex]*particles->dt_to_census[pindex];
 
     if(distance_to_collision < distance_to_census && 
         distance_to_collision < particles->distance_to_facet[pindex]) {
@@ -562,7 +561,7 @@ void handle_collisions(
     const int x_off, const int y_off, Particles* particles, const double* edgex, 
     const double* edgey, RNPool* rn_pools, uint64_t* nparticles_dead, 
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
-    double* scalar_flux_tally, double* energy_deposition_tally, uint64_t* nfacets,
+    double* energy_deposition_tally, uint64_t* nfacets,
     uint64_t* ncollisions)
 {
   uint64_t ndead = 0;
@@ -621,8 +620,6 @@ void handle_collisions(
     else {
       /* Model elastic particles scattering */
       // Choose a random scattering angle between -1 and 1
-      // TODO: THIS RANDOM NUMBER SELECTION DOESN'T WORK
-      // ...GOOD COMMENT BRO
       const double mu_cm = 1.0 - 2.0*rn[1];
 
       // Calculate the new energy based on the relation to angle of incidence
@@ -644,20 +641,20 @@ void handle_collisions(
       particles->omega_x[pindex] = omega_x_new;
       particles->omega_y[pindex] = omega_y_new;
       particles->e[pindex] = e_new;
-      particles->particle_velocity[pindex] = sqrt((2.0*e_new*eV_TO_J)*INV_PARTICLE_MASS);
+      particles->speed[pindex] = sqrt(2.0*e_new*eV_TO_J/PARTICLE_MASS);
     }
 
     gen_random_numbers(master_key, 1001, ii, &rn[0], &rn[1]);
     particles->mfp_to_collision[pindex] = -log(rn[0])/macroscopic_cs_scatter;
-    particles->dt_to_census[pindex] -= distance_to_collision/particles->particle_velocity[pindex];
+    particles->dt_to_census[pindex] -= distance_to_collision/particles->speed[pindex];
 
 #if 0
     // Check the timestep required to move the particles along a single axis
     // If the velocity is positive then the top or right boundary will be hit
     const int cellx = particles->cellx[pindex]-x_off+PAD;
     const int celly = particles->celly[pindex]-y_off+PAD;
-    double u_x_inv = 1.0/(particles->omega_x[pindex]*particles->particle_velocity[pindex]);
-    double u_y_inv = 1.0/(particles->omega_y[pindex]*particles->particle_velocity[pindex]);
+    double u_x_inv = 1.0/(particles->omega_x[pindex]*particles->speed[pindex]);
+    double u_y_inv = 1.0/(particles->omega_y[pindex]*particles->speed[pindex]);
 
     double x0 = edgex[cellx];
     double x1 = edgex[cellx+1];
@@ -679,7 +676,7 @@ void handle_collisions(
     // a = vector on first edge to be hit
     // u = velocity vector
 
-    double mag_u0 = particles->particle_velocity[pindex];
+    double mag_u0 = particles->speed[pindex];
 
     particles->x_facet[pindex] = (dt_x < dt_y) ? 1 : 0;
     if(particles->x_facet[pindex]) {
@@ -706,7 +703,7 @@ void handle_collisions(
     distance_to_collision = 
       particles->mfp_to_collision[pindex]*particles->cell_mfp[pindex];
     const double distance_to_census = 
-      particles->particle_velocity[pindex]*particles->dt_to_census[pindex];
+      particles->speed[pindex]*particles->dt_to_census[pindex];
 
     if(distance_to_collision < distance_to_census && 
         distance_to_collision < particles->distance_to_facet[pindex]) {
@@ -755,8 +752,7 @@ void handle_census(
     const int nparticles, const int particles_offset, const int nx, 
     const int x_off, const int y_off, Particles* particles, const double* density, 
     const double* edgex, const double* edgey, CrossSection* cs_scatter_table, 
-    CrossSection* cs_absorb_table, double* scalar_flux_tally, 
-    double* energy_deposition_tally)
+    CrossSection* cs_absorb_table, double* energy_deposition_tally)
 {
   /* HANDLE THE CENSUS EVENTS */
 #pragma omp parallel for simd
@@ -769,7 +765,7 @@ void handle_census(
     }
 
     const double distance_to_census = 
-      particles->particle_velocity[pindex]*particles->dt_to_census[pindex];
+      particles->speed[pindex]*particles->dt_to_census[pindex];
     int cellx = particles->cellx[pindex]-x_off+PAD;
     int celly = particles->celly[pindex]-y_off+PAD;
     particles->local_density[pindex] = density[celly*(nx+2*PAD)+cellx];
@@ -795,11 +791,11 @@ void handle_census(
   }
 }
 
-// Tallies both the scalar flux and energy deposition in the cell
+// Tallies the energy deposition in the cell
 void update_tallies(
     const int nx, Particles* particles, const int x_off, const int y_off, 
     const int nparticles, const int particles_offset, const int tally_census, 
-    double* scalar_flux_tally, double* energy_deposition_tally)
+    double* energy_deposition_tally)
 {
   const double inv_nparticles_total = 1.0/nparticles;
 
