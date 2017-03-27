@@ -103,9 +103,8 @@ int main(int argc, char** argv)
         &neutral_data.nlocal_particles, &master_key, mesh.neighbours, 
         neutral_data.local_particles, shared_data.rho, mesh.edgex, mesh.edgey, 
         mesh.edgedx, mesh.edgedy, neutral_data.cs_scatter_table, 
-        neutral_data.cs_absorb_table, neutral_data.scalar_flux_tally, 
-        neutral_data.energy_deposition_tally, rn_pools, neutral_data.reduce_array0,
-        neutral_data.reduce_array1);
+        neutral_data.cs_absorb_table, neutral_data.energy_deposition_tally, 
+        rn_pools, neutral_data.reduce_array0, neutral_data.reduce_array1);
 
     barrier();
 
@@ -146,12 +145,6 @@ int main(int argc, char** argv)
     printf("Wallclock %.9fs, Elapsed Simulation Time %.6fs\n", 
         wallclock, elapsed_sim_time);
   }
-
-#if 0
-  char visit_name[256];
-  sprintf(visit_name, "density_%d", mesh.rank);
-  write_to_visit(mesh.local_nx, mesh.local_ny, state.rho, "wet_density", tt, elapsed_sim_time);
-#endif // if 0
 
   return 0;
 }

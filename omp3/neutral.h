@@ -13,7 +13,7 @@ void handle_particles(
     uint64_t* collisions, int* nparticles_sent, uint64_t* master_key, 
     const int ntotal_particles, const int nparticles_to_process, 
     int* nparticles, Particle* particles_start, CrossSection* cs_scatter_table, 
-    CrossSection* cs_absorb_table, double* scalar_flux_tally, 
+    CrossSection* cs_absorb_table, 
     double* energy_deposition_tally, RNPool* rn_pools);
 
 // Handles an individual particle.
@@ -25,7 +25,7 @@ int handle_particle(
     const double* edgedy, const CrossSection* cs_scatter_table, 
     const CrossSection* cs_absorb_table, int* nparticles_sent, uint64_t* facets, 
     uint64_t* collisions, Particle* particle, 
-    double* scalar_flux_tally, double* energy_deposition_tally, RNPool* rn_pool);
+    double* energy_deposition_tally, RNPool* rn_pool);
 
 // Calculate the distance to the next facet
 void calc_distance_to_facet(
@@ -57,11 +57,10 @@ int handle_collision(
 void send_and_mark_particle(
     const int destination, Particle* particle_to_replace);
 
-// Tallies both the scalar flux and energy deposition in the cell
+// Tallies the energy deposition in the cell
 void update_tallies(
     const int nx, const int x_off, const int y_off, Particle* particle, 
     const double inv_ntotal_particles, const double energy_deposition,
-    const double scalar_flux, double* scalar_flux_tally, 
     double* energy_deposition_tally);
 
 void compress_particle_list(

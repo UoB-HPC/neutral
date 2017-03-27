@@ -23,7 +23,7 @@ void solve_transport_2d(
     Particle* particles, const double* density, const double* edgex, 
     const double* edgey, const double* edgedx, const double* edgedy, 
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
-    double* scalar_flux_tally, double* energy_deposition_tally, RNPool* rn_pools,
+    double* energy_deposition_tally, RNPool* rn_pools,
     int* reduce_array0, int* reduce_array1)
 {
   // Initial idea is to use a kind of queue for handling the particles. Presumably
@@ -49,8 +49,7 @@ void solve_transport_2d(
       global_nx, global_ny, nx, ny, x_off, y_off, 1, dt, neighbours, density, 
       edgex, edgey, edgedx, edgedy, &facets, &collisions, nparticles_sent, 
       master_key, ntotal_particles, nparticles, &nparticles, particles, 
-      cs_scatter_table, cs_absorb_table, scalar_flux_tally, 
-      energy_deposition_tally, rn_pools);
+      cs_scatter_table, cs_absorb_table, energy_deposition_tally, rn_pools);
 
 #if 0
 #ifdef MPI
@@ -109,7 +108,7 @@ void solve_transport_2d(
           density, edgex, edgey, edgedx, edgedy, &facets, &collisions, 
           nparticles_sent, ntotal_particles, nunprocessed_particles, &nparticles, 
           &particles[unprocessed_start], particles_out, cs_scatter_table, 
-          cs_absorb_table, scalar_flux_tally, energy_deposition_tally, rn_pools);
+          cs_absorb_table, energy_deposition_tally, rn_pools);
     }
 
     // Check if any of the ranks had unprocessed particles
@@ -142,8 +141,7 @@ void handle_particles(
     uint64_t* collisions, int* nparticles_sent, uint64_t* master_key, 
     const int ntotal_particles, const int nparticles_to_process, 
     int* nparticles, Particle* particles_start, CrossSection* cs_scatter_table, 
-    CrossSection* cs_absorb_table, double* scalar_flux_tally, 
-    double* energy_deposition_tally, RNPool* rn_pools)
+    CrossSection* cs_absorb_table, double* energy_deposition_tally, RNPool* rn_pools)
 {
   // Have to maintain a master key, so that particles don't keep seeing
   // the same random number streams. 
@@ -175,8 +173,7 @@ void handle_particles(
         global_nx, global_ny, nx, ny, x_off, y_off, neighbours, dt, initial,
         ntotal_particles, density, edgex, edgey, edgedx, edgedy, cs_scatter_table, 
         cs_absorb_table, nparticles_sent, &nfacets, &ncollisions, particle, 
-        scalar_flux_tally, energy_deposition_tally, 
-        &rn_pools[omp_get_thread_num()]);
+        energy_deposition_tally, &rn_pools[omp_get_thread_num()]);
 
     nparticles_deleted += (result == PARTICLE_SENT || result == PARTICLE_DEAD);
   }
@@ -196,7 +193,7 @@ int handle_particle(
     const double* edgex, const double* edgey, const double* edgedx, 
     const double* edgedy, const CrossSection* cs_scatter_table, 
     const CrossSection* cs_absorb_table, int* nparticles_sent, uint64_t* facets, 
-    uint64_t* collisions, Particle* particle, double* scalar_flux_tally, 
+    uint64_t* collisions, Particle* particle, 
     double* energy_deposition_tally, RNPool* rn_pool)
 {
   // (1) particle can stream and reach census
@@ -225,7 +222,6 @@ int handle_particle(
   double macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
   double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
   double particle_velocity = sqrt((2.0*particle->e*eV_TO_J)/PARTICLE_MASS);
-  double scalar_flux = 0.0;
   double energy_deposition = 0.0;
   const double inv_ntotal_particles = 1.0/(double)ntotal_particles;
 
@@ -270,7 +266,7 @@ int handle_particle(
         // Need to store tally information as finished with particle
         update_tallies(
             nx, x_off, y_off, particle, inv_ntotal_particles, energy_deposition,
-            scalar_flux, scalar_flux_tally, energy_deposition_tally);
+            energy_deposition_tally);
 
         return PARTICLE_DEAD;
       }
@@ -306,7 +302,7 @@ int handle_particle(
       // Update tallies as we leave a cell
       update_tallies(
           nx, x_off, y_off, particle, inv_ntotal_particles, energy_deposition,
-          scalar_flux, scalar_flux_tally, energy_deposition_tally);
+          energy_deposition_tally);
       energy_deposition = 0.0;
 
       // Encounter facet, and jump out if particle left this rank's domain
@@ -317,7 +313,6 @@ int handle_particle(
       }
 
       // Update the data based on new cell
-      scalar_flux = 0.0;
       cellx = particle->cellx-x_off+PAD;
       celly = particle->celly-y_off+PAD;
       local_density = density[celly*(nx+2*PAD)+cellx];
@@ -339,7 +334,7 @@ int handle_particle(
       // Need to store tally information as finished with particle
       update_tallies(
           nx, x_off, y_off, particle, inv_ntotal_particles, energy_deposition,
-          scalar_flux, scalar_flux_tally, energy_deposition_tally);
+          energy_deposition_tally);
 
       particle->dt_to_census = 0.0;
       break;
@@ -349,14 +344,12 @@ int handle_particle(
   return PARTICLE_CENSUS;
 }
 
-// Tallies both the scalar flux and energy deposition in the cell
+// Tallies the energy deposition in the cell
 void update_tallies(
     const int nx, const int x_off, const int y_off, Particle* particle, 
     const double inv_ntotal_particles, const double energy_deposition,
-    const double scalar_flux, double* scalar_flux_tally, 
     double* energy_deposition_tally)
 {
-  // Store the scalar flux
   const int cellx = particle->cellx-x_off;
   const int celly = particle->celly-y_off;
 
@@ -381,8 +374,7 @@ int handle_collision(
     /* Model particle absorption */
 
     // Find the new particle weight after absorption, saving the energy change
-    const double new_weight = particle->weight*(1.0 - p_absorb);
-    particle->weight = new_weight;
+    particle->weight *= (1.0 - p_absorb);
 
     if(particle->e < MIN_ENERGY_OF_INTEREST) {
       // Energy is too low, so mark the particle for deletion
@@ -407,7 +399,7 @@ int handle_collision(
           (MASS_NO-1.0)*sqrt(particle->e/e_new));
 
     // Alter the direction of the velocities
-    const double sin_theta = sin(acos(cos_theta));
+    const double sin_theta = sqrt(1.0-cos_theta*cos_theta);
     const double omega_x_new =
       (particle->omega_x*cos_theta - particle->omega_y*sin_theta);
     const double omega_y_new =
