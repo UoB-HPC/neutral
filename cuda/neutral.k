@@ -148,7 +148,7 @@ __global__ void inject_particles_kernel(
   // Generating theta has uniform density, however 0.0 and 1.0 produce the same 
   // value which introduces very very very small bias...
 
-  generate_random_numbers(master_key, 4, gid, &rn[0], &rn[1]);
+  generate_random_numbers(master_key, 5, gid, &rn[0], &rn[1]);
   const double theta = 2.0*M_PI*rn[0];
   omega_x[gid] = cos(theta);
   omega_y[gid] = sin(theta);
@@ -220,7 +220,7 @@ __global__ void handle_particles_kernel(
     double number_density = (local_density*AVOGADROS/MOLAR_MASS);
     double macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
     double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
-    double speed = sqrt((2.0*e*eV_TO_J)/PARTICLE_MASS);
+    double speed = sqrt(2.0*e*eV_TO_J/PARTICLE_MASS);
     double energy_deposition = 0.0;
     const double inv_ntotal_particles = 1.0/(double)ntotal_particles;
 
@@ -239,7 +239,7 @@ __global__ void handle_particles_kernel(
 
       // Check the timestep required to move the particles along a single axis
       // If the speed is positive then the top or right boundary will be hit
-      double speed = sqrt((2.0*e*eV_TO_J)/PARTICLE_MASS);
+      double speed = sqrt(2.0*e*eV_TO_J/PARTICLE_MASS);
       double u_x_inv = 1.0/(omega_x*speed);
       double u_y_inv = 1.0/(omega_y*speed);
 
@@ -325,7 +325,6 @@ __global__ void handle_particles_kernel(
           }
         }
         else {
-
           /* Model elastic particle scattering */
 
           // Choose a random scattering angle between -1 and 1
@@ -348,7 +347,7 @@ __global__ void handle_particles_kernel(
           omega_x = omega_x_new;
           omega_y = omega_y_new;
           e = e_new;
-          speed = sqrt((2.0*e*eV_TO_J)/PARTICLE_MASS);
+          speed = sqrt(2.0*e*eV_TO_J/PARTICLE_MASS);
         }
 
         // Energy has changed so update the cross-sections
