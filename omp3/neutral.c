@@ -175,7 +175,6 @@ void handle_particles(
         STOP_PROFILING(&compute_profile, "initialisation");
       }
 
-#if 0
       START_PROFILING(&compute_profile);
       const int all_census = calc_next_event(
           block_size, particles_offset, particles, facets, collisions,
@@ -185,7 +184,7 @@ void handle_particles(
       if(all_census) {
         break;
       }
-#endif // if 0
+
       uint64_t ncollisions = 0;
       uint64_t nfacets = 0;
 
@@ -204,9 +203,11 @@ void handle_particles(
           scalar_flux_tally, energy_deposition_tally, &nfacets, &ncollisions);
       STOP_PROFILING(&compute_profile, "handle collisions");
 
+#if 0
       if(!ncollisions && !nfacets) {
         break;
       }
+#endif // if 0
 
       START_PROFILING(&compute_profile);
       update_tallies(
@@ -479,6 +480,7 @@ void handle_facets(
     macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
     particles->cell_mfp[pindex] = 1.0/(macroscopic_cs_scatter+macroscopic_cs_absorb);
 
+#if 0
     // Check the timestep required to move the particles along a single axis
     // If the velocity is positive then the top or right boundary will be hit
     cellx = particles->cellx[pindex]-x_off+PAD;
@@ -547,6 +549,7 @@ void handle_facets(
     else {
       particles->next_event[pindex] = CENSUS;
     }
+#endif // if 0
   }
 
   *nfacets += nnew_facets;
@@ -648,6 +651,7 @@ void handle_collisions(
     particles->mfp_to_collision[pindex] = -log(rn[0])/macroscopic_cs_scatter;
     particles->dt_to_census[pindex] -= distance_to_collision/particles->particle_velocity[pindex];
 
+#if 0
     // Check the timestep required to move the particles along a single axis
     // If the velocity is positive then the top or right boundary will be hit
     const int cellx = particles->cellx[pindex]-x_off+PAD;
@@ -716,6 +720,7 @@ void handle_collisions(
     else {
       particles->next_event[pindex] = CENSUS;
     }
+#endif // if 0
   }
 
   *nparticles_dead += ndead;
