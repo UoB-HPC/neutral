@@ -290,10 +290,11 @@ __global__ void handle_particles_kernel(
 
       const double distance_to_collision = mfp_to_collision*cell_mfp;
       const double distance_to_census = speed*dt_to_census;
+      const double pabsorb = macroscopic_cs_absorb*cell_mfp;
 
       // Check if our next event is a collision
       if(distance_to_collision < distance_to_facet &&
-         distance_to_collision < distance_to_census) {
+          distance_to_collision < distance_to_census) {
         ncollisions++;
 
         // Moves the particle to the collision site
@@ -309,7 +310,6 @@ __global__ void handle_particles_kernel(
 
         generate_random_numbers(master_key, local_key++, gid, &rn[0], &rn[1]);
 
-      const double pabsorb = macroscopic_cs_absorb*cell_mfp;
         if(rn[0] < pabsorb) {
           /* Model particle absorption */
 
@@ -380,7 +380,7 @@ __global__ void handle_particles_kernel(
         // Don't need to tally into mesh on collision
         energy_deposition += calculate_energy_deposition(
             distance_to_facet, e, weight, number_density, microscopic_cs_absorb, 
-            microscopic_cs_scatter+microscopic_cs_absorb, macroscopic_cs_absorb*cell_mfp);
+            microscopic_cs_scatter+microscopic_cs_absorb, pabsorb);
 
         // Update tallies as we leave a cell
         atomicAdd(&energy_deposition_tally[(celly-PAD)*nx+(cellx-PAD)],
@@ -451,7 +451,7 @@ __global__ void handle_particles_kernel(
 
         energy_deposition += calculate_energy_deposition(
             distance_to_census, e, weight, number_density, microscopic_cs_absorb, 
-            microscopic_cs_scatter+microscopic_cs_absorb, macroscopic_cs_absorb*cell_mfp);
+            microscopic_cs_scatter+microscopic_cs_absorb, pabsorb);
 
         // Need to store tally information as finished with particle
         atomicAdd(&energy_deposition_tally[(celly-PAD)*nx+(cellx-PAD)],
