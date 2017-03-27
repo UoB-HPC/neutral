@@ -312,17 +312,8 @@ __global__ void handle_particles_kernel(
         if(rn[0] < pabsorb) {
           /* Model particle absorption */
 
-          // Find the new particle weight after absorption, saving the energy change
+          // Find the new particle weight after absorption
           weight *= (1.0 - pabsorb);
-
-          if(e < MIN_ENERGY_OF_INTEREST) {
-            // Energy is too low, so mark the particle for deletion
-            // Need to store tally information as finished with particle
-            atomicAdd(&energy_deposition_tally[(celly-PAD)*nx+(cellx-PAD)],
-                energy_deposition*inv_ntotal_particles);
-            energy_deposition = 0.0;
-            break;
-          }
         }
         else {
           /* Model elastic particle scattering */
@@ -348,6 +339,15 @@ __global__ void handle_particles_kernel(
           omega_y = omega_y_new;
           e = e_new;
           speed = sqrt(2.0*e*eV_TO_J/PARTICLE_MASS);
+        }
+
+        if(e < MIN_ENERGY_OF_INTEREST) {
+          // Energy is too low, so mark the particle for deletion
+          // Need to store tally information as finished with particle
+          atomicAdd(&energy_deposition_tally[(celly-PAD)*nx+(cellx-PAD)],
+              energy_deposition*inv_ntotal_particles);
+          energy_deposition = 0.0;
+          break;
         }
 
         // Energy has changed so update the cross-sections
@@ -456,6 +456,8 @@ __global__ void handle_particles_kernel(
         energy_deposition = 0.0;
         break;
       }
+
+      master_key++;
     }
 
     particle_e[pindex] = e;
