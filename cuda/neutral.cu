@@ -152,7 +152,7 @@ void event_initialisation(
       cs_scatter_table->log_width, cs_absorb_table->log_width,
       density, particles->dt_to_census, 
       particles->next_event, particles->scatter_cs_index, 
-      particles->absorb_cs_index, particles->particle_velocity, 
+      particles->absorb_cs_index, particles->speed, 
       particles->local_density, particles->cell_mfp, particles->mfp_to_collision,
       master_pool->key.v[0], particles->energy_deposition);  
 }
@@ -167,7 +167,7 @@ int calc_next_event(
   const int nblocks = ceil(nparticles/(double)NTHREADS); 
   calc_next_event_kernel<<<nblocks, NTHREADS>>>(
       nparticles, particles_offset, particles->mfp_to_collision, 
-      particles->cell_mfp, particles->particle_velocity, particles->dt_to_census, 
+      particles->cell_mfp, particles->speed, particles->dt_to_census, 
       particles->distance_to_facet, particles->next_event, reduce_array0,
       reduce_array1, particles->e, x_off, y_off, particles->x, particles->y, 
       particles->omega_x, particles->omega_y, particles->x_facet, 
@@ -209,7 +209,7 @@ void handle_facets(
       particles->energy_deposition, particles->x, particles->y, particles->omega_x, 
       particles->omega_y, particles->x_facet, particles->cellx, particles->celly,
       particles->dt_to_census, particles->next_event, particles->scatter_cs_index,
-      particles->absorb_cs_index, particles->particle_velocity, particles->local_density,
+      particles->absorb_cs_index, particles->speed, particles->local_density,
       particles->cell_mfp, particles->mfp_to_collision, energy_deposition_tally);
 
   *nparticles_out = 0;
@@ -238,7 +238,7 @@ void handle_collisions(
       particles->omega_x, particles->omega_y, particles->x_facet, particles->cellx, 
       particles->celly, particles->dt_to_census, particles->next_event, 
       particles->scatter_cs_index, particles->absorb_cs_index, 
-      particles->particle_velocity, particles->local_density, particles->cell_mfp, 
+      particles->speed, particles->local_density, particles->cell_mfp, 
       particles->mfp_to_collision, reduce_array, master_pool->key.v[0],
       energy_deposition_tally);
 
@@ -257,7 +257,7 @@ void handle_census(
   const int nblocks = ceil(nparticles/(double)NTHREADS); 
   handle_census_kernel<<<nblocks, NTHREADS>>>(
       nparticles, nx, x_off, y_off, particles_offset, particles->next_event, 
-      particles->particle_velocity, particles->dt_to_census, particles->cellx, 
+      particles->speed, particles->dt_to_census, particles->cellx, 
       particles->celly, particles->local_density, particles->e, 
       particles->scatter_cs_index, particles->absorb_cs_index, particles->x, 
       particles->y, particles->omega_x, particles->omega_y, particles->mfp_to_collision, 
