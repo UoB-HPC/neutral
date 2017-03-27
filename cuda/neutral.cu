@@ -27,7 +27,7 @@ void solve_transport_2d(
     Particle* particles, const double* density, const double* edgex, 
     const double* edgey, const double* edgedx, const double* edgedy, 
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
-    double* scalar_flux_tally, double* energy_deposition_tally, RNPool* rn_pools,
+    double* energy_deposition_tally, RNPool* rn_pools,
     int* reduce_array0, int* reduce_array1)
 {
   // Initial idea is to use a kind of queue for handling the particles. Presumably
@@ -53,8 +53,8 @@ void solve_transport_2d(
       global_nx, global_ny, nx, ny, x_off, y_off, 1, dt, neighbours, density, 
       edgex, edgey, edgedx, edgedy, &facets, &collisions, nparticles_sent, 
       master_key, nparticles_total, nparticles, &nparticles, particles, 
-      cs_scatter_table, cs_absorb_table, scalar_flux_tally, 
-      energy_deposition_tally, rn_pools, reduce_array0, reduce_array1);
+      cs_scatter_table, cs_absorb_table, energy_deposition_tally, rn_pools, 
+      reduce_array0, reduce_array1);
 
 #if 0
 #ifdef MPI
@@ -113,7 +113,7 @@ void solve_transport_2d(
           density, edgex, edgey, edgedx, edgedy, &facets, &collisions, 
           nparticles_sent, nparticles_total, nunprocessed_particles, &nparticles, 
           &particles[unprocessed_start], particles_out, cs_scatter_table, 
-          cs_absorb_table, scalar_flux_tally, energy_deposition_tally, rn_pools);
+          cs_absorb_table, energy_deposition_tally, rn_pools);
     }
 
     // Check if any of the ranks had unprocessed particles
@@ -146,7 +146,7 @@ void handle_particles(
     uint64_t* collisions, int* nparticles_sent, uint64_t* master_key, 
     const int nparticles_total, const int nparticles_to_process, 
     int* nparticles, Particle* particles, CrossSection* cs_scatter_table, 
-    CrossSection* cs_absorb_table, double* scalar_flux_tally, 
+    CrossSection* cs_absorb_table, 
     double* energy_deposition_tally, RNPool* rn_pools, int* reduce_array0,
     int* reduce_array1)
 {

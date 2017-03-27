@@ -16,7 +16,7 @@ extern "C" {
       Particle* particles, const double* density, const double* edgex, 
       const double* edgey, const double* edgedx, const double* edgedy, 
       CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
-      double* scalar_flux_tally, double* energy_deposition_tally, RNPool* rn_pool,
+      double* energy_deposition_tally, RNPool* rn_pool,
       int* reduce_array0, int* reduce_array1);
 
   // Initialises a new particle ready for tracking

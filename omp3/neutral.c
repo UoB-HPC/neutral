@@ -221,7 +221,7 @@ int handle_particle(
   double number_density = (local_density*AVOGADROS/MOLAR_MASS);
   double macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
   double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
-  double particle_velocity = sqrt((2.0*particle->e*eV_TO_J)/PARTICLE_MASS);
+  double speed = sqrt((2.0*particle->e*eV_TO_J)/PARTICLE_MASS);
   double energy_deposition = 0.0;
   const double inv_ntotal_particles = 1.0/(double)ntotal_particles;
 
@@ -239,11 +239,11 @@ int handle_particle(
     double distance_to_facet = 0.0;
     calc_distance_to_facet(
         global_nx, particle->x, particle->y, x_off, y_off, particle->omega_x,
-        particle->omega_y, particle_velocity, particle->cellx, particle->celly,
+        particle->omega_y, speed, particle->cellx, particle->celly,
         &distance_to_facet, &x_facet, edgex, edgey);
 
     const double distance_to_collision = particle->mfp_to_collision*cell_mfp;
-    const double distance_to_census = particle_velocity*particle->dt_to_census;
+    const double distance_to_census = speed*particle->dt_to_census;
 
     // Check if our next event is a collision
     if(distance_to_collision < distance_to_facet &&
@@ -282,8 +282,8 @@ int handle_particle(
 
       // Re-sample number of mean free paths to collision
       particle->mfp_to_collision = -log(genrand(rn_pool))/macroscopic_cs_scatter;
-      particle->dt_to_census -= distance_to_collision/particle_velocity;
-      particle_velocity = sqrt((2.0*particle->e*eV_TO_J)/PARTICLE_MASS);
+      particle->dt_to_census -= distance_to_collision/speed;
+      speed = sqrt((2.0*particle->e*eV_TO_J)/PARTICLE_MASS);
     }
     // Check if we have reached facet
     else if(distance_to_facet < distance_to_census) {
@@ -291,7 +291,7 @@ int handle_particle(
 
       // Update the mean free paths until collision
       particle->mfp_to_collision -= (distance_to_facet/cell_mfp);
-      particle->dt_to_census -= (distance_to_facet/particle_velocity);
+      particle->dt_to_census -= (distance_to_facet/speed);
 
       // Don't need to tally into mesh on collision
       energy_deposition += calculate_energy_deposition(
@@ -528,7 +528,7 @@ void send_and_mark_particle(
 void calc_distance_to_facet(
     const int global_nx, const double x, const double y, const int x_off,
     const int y_off, const double omega_x, const double omega_y,
-    const double particle_velocity, const int particle_cellx, 
+    const double speed, const int particle_cellx, 
     const int particle_celly, double* distance_to_facet,
     int* x_facet, const double* edgex, const double* edgey)
 {
@@ -536,8 +536,8 @@ void calc_distance_to_facet(
   // If the velocity is positive then the top or right boundary will be hit
   const int cellx = particle_cellx-x_off+PAD;
   const int celly = particle_celly-y_off+PAD;
-  double u_x_inv = 1.0/(omega_x*particle_velocity);
-  double u_y_inv = 1.0/(omega_y*particle_velocity);
+  double u_x_inv = 1.0/(omega_x*speed);
+  double u_y_inv = 1.0/(omega_y*speed);
 
   // The bound is open on the left and bottom so we have to correct for this and
   // required the movement to the facet to go slightly further than the edge
@@ -555,7 +555,7 @@ void calc_distance_to_facet(
   // a = vector on first edge to be hit
   // u = velocity vector
 
-  double mag_u0 = particle_velocity;
+  double mag_u0 = speed;
 
   if(*x_facet) {
     // cos(theta) = ||(x, 0)||/||(u_x', u_y')|| - u' is u at boundary

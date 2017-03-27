@@ -67,17 +67,15 @@ __device__ double microscopic_cs_for_energy(
 __device__ double calculate_energy_deposition(
     const double path_length, const double e, const double weight, 
     const double number_density, const double microscopic_cs_absorb, 
-    const double microscopic_cs_total)
+    const double microscopic_cs_total, const double pabsorb)
 {
   // Calculate the energy deposition based on the path length
   const double average_exit_energy_absorb = 0.0;
-  const double pabsorb = (microscopic_cs_absorb/microscopic_cs_total);
   const double absorption_heating = pabsorb*average_exit_energy_absorb;
   const double average_exit_energy_scatter = 
     e*((MASS_NO*MASS_NO+MASS_NO+1)/((MASS_NO+1)*(MASS_NO+1)));
   const double scattering_heating = (1.0-pabsorb)*average_exit_energy_scatter;
-  const double heating_response =
-    (e-scattering_heating-absorption_heating);
+  const double heating_response = (e-scattering_heating-absorption_heating);
 
   return weight*path_length*(microscopic_cs_total*BARNS)*
     heating_response*number_density;
@@ -222,15 +220,15 @@ __global__ void handle_particles_kernel(
     double number_density = (local_density*AVOGADROS/MOLAR_MASS);
     double macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
     double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
-    double velocity = sqrt((2.0*e*eV_TO_J)/PARTICLE_MASS);
+    double speed = sqrt((2.0*e*eV_TO_J)/PARTICLE_MASS);
     double energy_deposition = 0.0;
     const double inv_ntotal_particles = 1.0/(double)ntotal_particles;
+
+    double rn[NRANDOM_NUMBERS];
 
     // Set time to census and MFPs until collision, unless travelled particle
     if(initial) {
       dt_to_census = dt;
-
-      double rn[NRANDOM_NUMBERS];
       generate_random_numbers(master_key, 0, gid, &rn[0], &rn[1]);
       mfp_to_collision = -log(rn[0])/macroscopic_cs_scatter;
     }
@@ -240,10 +238,10 @@ __global__ void handle_particles_kernel(
       cell_mfp = 1.0/(macroscopic_cs_scatter+macroscopic_cs_absorb);
 
       // Check the timestep required to move the particles along a single axis
-      // If the velocity is positive then the top or right boundary will be hit
-      double velocity = sqrt((2.0*e*eV_TO_J)/PARTICLE_MASS);
-      double u_x_inv = 1.0/(omega_x*velocity);
-      double u_y_inv = 1.0/(omega_y*velocity);
+      // If the speed is positive then the top or right boundary will be hit
+      double speed = sqrt((2.0*e*eV_TO_J)/PARTICLE_MASS);
+      double u_x_inv = 1.0/(omega_x*speed);
+      double u_y_inv = 1.0/(omega_y*speed);
 
       double x0 = edgex[cellx];
       double x1 = edgex[cellx+1];
@@ -261,8 +259,8 @@ __global__ void handle_particles_kernel(
 
       // Calculated the projection to be
       // a = vector on first edge to be hit
-      // u = velocity vector
-      double mag_u0 = velocity;
+      // u = speed vector
+      double mag_u0 = speed;
 
       // Work out the distance until the particle hits a facet
       double distance_to_facet = 0.0;
@@ -290,33 +288,32 @@ __global__ void handle_particles_kernel(
       }
 
       const double distance_to_collision = mfp_to_collision*cell_mfp;
-      const double distance_to_census = velocity*dt_to_census;
+      const double distance_to_census = speed*dt_to_census;
 
       // Check if our next event is a collision
       if(distance_to_collision < distance_to_facet &&
-          distance_to_collision < distance_to_census) {
+         distance_to_collision < distance_to_census) {
         ncollisions++;
-
-        double microscopic_cs_total = microscopic_cs_scatter+microscopic_cs_absorb;
-        // Don't need to tally into mesh on collision
-        energy_deposition += calculate_energy_deposition(
-            distance_to_collision, e, weight, number_density, 
-            microscopic_cs_absorb, microscopic_cs_total);
 
         // Moves the particle to the collision site
         x += distance_to_collision*omega_x;
         y += distance_to_collision*omega_y;
+        dt_to_census -= distance_to_collision/speed;
 
-        const double p_absorb = macroscopic_cs_absorb*cell_mfp;
+        const double pabsorb = macroscopic_cs_absorb*cell_mfp;
 
-        double rn[NRANDOM_NUMBERS];
+        // Don't need to tally into mesh on collision
+        energy_deposition += calculate_energy_deposition(
+            distance_to_collision, e, weight, number_density, microscopic_cs_absorb, 
+            microscopic_cs_scatter+microscopic_cs_absorb, pabsorb);
+
         generate_random_numbers(master_key, 1, gid, &rn[0], &rn[1]);
 
-        if(rn[0] < p_absorb) {
+        if(rn[0] < pabsorb) {
           /* Model particle absorption */
 
           // Find the new particle weight after absorption, saving the energy change
-          weight *= (1.0 - p_absorb);
+          weight *= (1.0 - pabsorb);
 
           if(e < MIN_ENERGY_OF_INTEREST) {
             // Energy is too low, so mark the particle for deletion
@@ -351,7 +348,7 @@ __global__ void handle_particles_kernel(
           omega_x = omega_x_new;
           omega_y = omega_y_new;
           e = e_new;
-          velocity = sqrt((2.0*e*eV_TO_J)/PARTICLE_MASS);
+          speed = sqrt((2.0*e*eV_TO_J)/PARTICLE_MASS);
         }
 
         // Energy has changed so update the cross-sections
@@ -366,30 +363,28 @@ __global__ void handle_particles_kernel(
 
         // Re-sample number of mean free paths to collision
         mfp_to_collision = -log(rn[1])/macroscopic_cs_scatter;
-        dt_to_census -= distance_to_collision/velocity;
       }
       // Check if we have reached facet
       else if(distance_to_facet < distance_to_census) {
         nfacets++;
 
+        // Moves the particle to the facet
+        x += distance_to_facet*omega_x;
+        y += distance_to_facet*omega_y;
+
         // Update the mean free paths until collision
-        mfp_to_collision -= (distance_to_facet/cell_mfp);
-        dt_to_census -= (distance_to_facet/velocity);
+        mfp_to_collision -= (distance_to_facet*(macroscopic_cs_scatter+macroscopic_cs_absorb));
+        dt_to_census -= (distance_to_facet/speed);
 
         // Don't need to tally into mesh on collision
         energy_deposition += calculate_energy_deposition(
-            distance_to_facet, e, weight, number_density, 
-            microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb);
+            distance_to_facet, e, weight, number_density, microscopic_cs_absorb, 
+            microscopic_cs_scatter+microscopic_cs_absorb, macroscopic_cs_absorb*cell_mfp);
 
         // Update tallies as we leave a cell
         atomicAdd(&energy_deposition_tally[(celly-PAD)*nx+(cellx-PAD)],
             energy_deposition*inv_ntotal_particles);
         energy_deposition = 0.0;
-
-        // TODO: Make sure that the roundoff is handled here, perhaps actually set it
-        // fully to one of the edges here
-        x += distance_to_facet*omega_x;
-        y += distance_to_facet*omega_y;
 
         // This use of x_facet is a slight misnoma, as it is really a facet
         // along the y dimensions
@@ -449,16 +444,17 @@ __global__ void handle_particles_kernel(
         // We have not changed cell or energy level at this stage
         x += distance_to_census*omega_x;
         y += distance_to_census*omega_y;
-        mfp_to_collision -= (distance_to_census/cell_mfp);
+        dt_to_census = 0.0;
+        mfp_to_collision -= (distance_to_facet*(macroscopic_cs_scatter+macroscopic_cs_absorb));
+
         energy_deposition += calculate_energy_deposition(
-            distance_to_census, e, weight, number_density, 
-            microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb);
+            distance_to_census, e, weight, number_density, microscopic_cs_absorb, 
+            microscopic_cs_scatter+microscopic_cs_absorb, macroscopic_cs_absorb*cell_mfp);
 
         // Need to store tally information as finished with particle
         atomicAdd(&energy_deposition_tally[(celly-PAD)*nx+(cellx-PAD)],
             energy_deposition*inv_ntotal_particles);
         energy_deposition = 0.0;
-        dt_to_census = 0.0;
         break;
       }
     }
