@@ -109,6 +109,33 @@ void initialise_neutral_data(
   allocation += 
     allocate_int_data(&neutral_data->reduce_array1, neutral_data->nparticles);
 
+#ifdef SoA
+  neutral_data->local_particles = (Particle*)malloc(sizeof(Particle));
+  if(!neutral_data->local_particles) {
+    TERMINATE("Could not allocate particle array.\n");
+  }
+
+  Particle* particle = neutral_data->local_particles;
+  const int nparticles = neutral_data->nparticles;
+  allocation += allocate_data(&particle->x,nparticles*1.5);
+  allocation += allocate_data(&particle->y,nparticles*1.5);
+  allocation += allocate_data(&particle->omega_x,nparticles*1.5);
+  allocation += allocate_data(&particle->omega_y,nparticles*1.5);
+  allocation += allocate_data(&particle->e,nparticles*1.5);
+  allocation += allocate_data(&particle->weight,nparticles*1.5);
+  allocation += allocate_data(&particle->dt_to_census,nparticles*1.5);
+  allocation += allocate_data(&particle->mfp_to_collision,nparticles*1.5);
+  allocation += allocate_int_data(&particle->cellx,nparticles*1.5);
+  allocation += allocate_int_data(&particle->celly,nparticles*1.5);
+  allocation += allocate_int_data(&particle->dead,nparticles*1.5);
+  particle->key = (uint64_t*)_mm_malloc(sizeof(uint64_t)*nparticles*1.5, VEC_ALIGN);
+#else
+  neutral_data->local_particles = (Particle*)malloc(sizeof(Particle)*nparticles*2);
+  if(!neutral_data->local_particles) {
+    TERMINATE("Could not allocate particle array.\n");
+  }
+#endif
+
   // Inject some particles into the mesh if we need to
   if(neutral_data->nlocal_particles) {
     allocation += inject_particles(

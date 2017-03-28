@@ -185,24 +185,6 @@ size_t inject_particles(
     const double* edgey, const double initial_energy, RNPool* rn_pool, 
     Particle** particles)
 {
-  *particles = (Particle*)malloc(sizeof(Particle));
-  if(!*particles) {
-    TERMINATE("Could not allocate particle array.\n");
-  }
-
-  Particle* particle = *particles;
-  size_t allocation = 0;
-  allocation += allocate_data(&particle->x,nparticles*1.5);
-  allocation += allocate_data(&particle->y,nparticles*1.5);
-  allocation += allocate_data(&particle->omega_x,nparticles*1.5);
-  allocation += allocate_data(&particle->omega_y,nparticles*1.5);
-  allocation += allocate_data(&particle->e,nparticles*1.5);
-  allocation += allocate_data(&particle->weight,nparticles*1.5);
-  allocation += allocate_data(&particle->dt_to_census,nparticles*1.5);
-  allocation += allocate_data(&particle->mfp_to_collision,nparticles*1.5);
-  allocation += allocate_int_data(&particle->cellx,nparticles*1.5);
-  allocation += allocate_int_data(&particle->celly,nparticles*1.5);
-
   const int nthreads = NTHREADS;
   const int nblocks = ceil(nparticles/(double)NTHREADS); 
   inject_particles_kernel<<<nblocks, nthreads>>>(

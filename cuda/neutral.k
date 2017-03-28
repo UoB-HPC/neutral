@@ -164,8 +164,8 @@ __global__ void inject_particles_kernel(
 
 // Handles an individual particle.
 __global__ void handle_particles_kernel(
-    const int nparticles, const int global_nx, const int global_ny, const int nx, const int ny, 
-    const int x_off, const int y_off, const double dt,
+    const int nparticles, const int global_nx, const int global_ny, const int nx, 
+    const int ny, const int x_off, const int y_off, const double dt, 
     const int initial, const int ntotal_particles, const double* density, 
     const double* edgex, const double* edgey, const double* edgedx, 
     const double* edgedy, double* energy_deposition_tally, int* particle_cellx, 
@@ -175,8 +175,8 @@ __global__ void handle_particles_kernel(
     const double* cs_absorb_values, double* particle_e, 
     double* particle_dt_to_census, double* particle_mfp_to_collision, 
     double* particle_weight, double* particle_omega_x, double* particle_omega_y,
-    double* particle_x, double* particle_y,
-    uint64_t master_key, int* reduce_array0, int* reduce_array1)
+    double* particle_x, double* particle_y, uint64_t master_key, 
+    int* reduce_array0, int* reduce_array1)
 {
   // (1) particle can stream and reach census
   // (2) particle can collide and either
@@ -220,7 +220,7 @@ __global__ void handle_particles_kernel(
     double number_density = (local_density*AVOGADROS/MOLAR_MASS);
     double macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
     double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
-    double speed = sqrt((2.0*e*eV_TO_J)/PARTICLE_MASS);
+    double speed = sqrt(2.0*e*eV_TO_J/PARTICLE_MASS);
     double energy_deposition = 0.0;
     const double inv_ntotal_particles = 1.0/(double)ntotal_particles;
 
@@ -239,7 +239,6 @@ __global__ void handle_particles_kernel(
 
       // Check the timestep required to move the particles along a single axis
       // If the speed is positive then the top or right boundary will be hit
-      double speed = sqrt((2.0*e*eV_TO_J)/PARTICLE_MASS);
       double u_x_inv = 1.0/(omega_x*speed);
       double u_y_inv = 1.0/(omega_y*speed);
 
@@ -276,15 +275,13 @@ __global__ void handle_particles_kernel(
         // We are centered on the origin, so the y component is 0 after travelling
         // aint the x axis to the edge (ax, 0).(x, y)
         distance_to_facet = (omega_x >= 0.0)
-          ? (x1-x)*mag_u0*u_x_inv
-          : ((x0-OPEN_BOUND_CORRECTION)-x)*mag_u0*u_x_inv;
+          ? (x1-x)*mag_u0*u_x_inv : ((x0-OPEN_BOUND_CORRECTION)-x)*mag_u0*u_x_inv;
       }
       else {
         // We are centered on the origin, so the x component is 0 after travelling
         // along the y axis to the edge (0, ay).(x, y)
         distance_to_facet = (omega_y >= 0.0)
-          ? (y1-y)*mag_u0*u_y_inv
-          : ((y0-OPEN_BOUND_CORRECTION)-y)*mag_u0*u_y_inv;
+          ? (y1-y)*mag_u0*u_y_inv : ((y0-OPEN_BOUND_CORRECTION)-y)*mag_u0*u_y_inv;
       }
 
       const double distance_to_collision = mfp_to_collision*cell_mfp;
@@ -325,7 +322,6 @@ __global__ void handle_particles_kernel(
           }
         }
         else {
-
           /* Model elastic particle scattering */
 
           // Choose a random scattering angle between -1 and 1
@@ -371,10 +367,10 @@ __global__ void handle_particles_kernel(
         // Moves the particle to the facet
         x += distance_to_facet*omega_x;
         y += distance_to_facet*omega_y;
+        dt_to_census -= distance_to_facet/speed;
 
         // Update the mean free paths until collision
         mfp_to_collision -= (distance_to_facet*(macroscopic_cs_scatter+macroscopic_cs_absorb));
-        dt_to_census -= (distance_to_facet/speed);
 
         // Don't need to tally into mesh on collision
         energy_deposition += calculate_energy_deposition(

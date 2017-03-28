@@ -18,7 +18,7 @@ void handle_particles(
 
 // Handles an individual particle.
 int handle_particle(
-    const int global_nx, const int global_ny, const int nx, const int ny, 
+    const int pindex, const int global_nx, const int global_ny, const int nx, const int ny, 
     const int x_off, const int y_off, const int* neighbours, const double dt,
     const int initial, const int ntotal_particles, const double* density, 
     const double* edgex, const double* edgey, const double* edgedx, 
@@ -29,7 +29,7 @@ int handle_particle(
 
 // Calculate the distance to the next facet
 void calc_distance_to_facet(
-    const int global_nx, const double x, const double y, const int x_off,
+    const int pindex, const int global_nx, const double x, const double y, const int x_off,
     const int y_off, const double omega_x, const double omega_y,
     const double particle_velocity, const int particle_cellx, 
     const int particle_celly, double* distance_to_facet,
@@ -38,7 +38,7 @@ void calc_distance_to_facet(
 // Makes the necessary updates to the particle given that
 // the facet was encountered
 int handle_facet_encounter(
-    const int global_nx, const int global_ny, const int nx, const int ny, 
+    const int pindex, const int global_nx, const int global_ny, const int nx, const int ny, 
     const int x_off, const int y_off, const int* neighbours, 
     const double distance_to_facet, int x_facet, int* nparticles_sent, 
     Particle* particle);
@@ -49,27 +49,23 @@ int binary_search(
 
 // Handle the collision event, including absorption and scattering
 int handle_collision(
-    Particle* particle, const double macroscopic_cs_absorb, 
+    const int pindex, Particle* particle, const double macroscopic_cs_absorb, 
     const double macroscopic_cs_total, const double distance_to_collision, 
     RNPool* rn_pool);
 
 // Sends a particle to a neighbour and replaces in the particle list
 void send_and_mark_particle(
-    const int destination, Particle* particle_to_replace);
+    const int pindex, const int destination, Particle* particle_to_replace);
 
 // Tallies the energy deposition in the cell
 void update_tallies(
-    const int nx, const int x_off, const int y_off, Particle* particle, 
+    const int pindex, const int nx, const int x_off, const int y_off, Particle* particle, 
     const double inv_ntotal_particles, const double energy_deposition,
     double* energy_deposition_tally);
 
-void compress_particle_list(
-    const int nparticles_to_process, Particle* particles_start,
-    int nparticles_deleted);
-
 // Calculate the energy deposition in the cell
 double calculate_energy_deposition(
-    const int global_nx, const int nx, const int x_off, const int y_off, 
+    const int pindex, const int global_nx, const int nx, const int x_off, const int y_off, 
     Particle* particle, const double inv_ntotal_particles, const double path_length, 
     const double number_density, const double microscopic_cs_absorb, 
     const double microscopic_cs_total);
