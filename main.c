@@ -72,6 +72,9 @@ int main(int argc, char** argv)
       mesh.global_nx, mesh.global_ny, mesh.local_nx, mesh.local_ny, 
       mesh.x_off, mesh.y_off, mesh.width, mesh.height, 
       neutral_data.neutral_params_filename, mesh.edgex, mesh.edgey, &shared_data);
+
+  handle_boundary_2d(
+      mesh.local_nx, mesh.local_ny, &mesh, shared_data.rho, NO_INVERT, PACK);
   initialise_neutral_data(
       &neutral_data, &mesh, &rn_pools[neutral_data.nthreads]);
 
