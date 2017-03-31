@@ -374,7 +374,7 @@ void handle_facets(
   const double inv_nparticles_total = 1.0/nparticles;
 
   /* HANDLE FACET ENCOUNTERS */
-#pragma omp parallel for simd reduction(+:nnew_collisions, nnew_facets) 
+#pragma omp parallel for reduction(+:nnew_collisions, nnew_facets) 
 #pragma vector aligned
   for(int ii = 0; ii < nparticles; ++ii) {
     const int pindex = particles_offset+ii;
@@ -389,6 +389,7 @@ void handle_facets(
     double distance_to_facet = particles->distance_to_facet[pindex];
     double distance_to_census = 
       particles->speed[pindex]*particles->dt_to_census[pindex];
+    double mfp_to_collision = particles->mfp_to_collision[pindex];
     double cell_mfp = particles->cell_mfp[pindex];
     double ed = particles->energy_deposition[pindex];
     double x = particles->x[pindex];
@@ -405,7 +406,7 @@ void handle_facets(
       int celly = global_celly-y_off+PAD;
 
       // Update the mean free paths until collision
-      particles->mfp_to_collision[pindex] -=
+      mfp_to_collision -=
         (distance_to_facet*(macroscopic_cs_scatter+macroscopic_cs_absorb));
       distance_to_census -= distance_to_facet;
 
@@ -437,7 +438,7 @@ void handle_facets(
           }
         }
         else if(omega_x < 0.0) {
-          if(cellx <= 0) {
+          if(global_cellx <= 0) {
             // Reflect at the boundary
             omega_x = -(omega_x);
           }
@@ -450,7 +451,7 @@ void handle_facets(
       else {
         if(omega_y > 0.0) {
           // Reflect at the boundary
-          if(celly >= (global_ny-1)) {
+          if(global_celly >= (global_ny-1)) {
             omega_y = -(omega_y);
           }
           else {
@@ -460,7 +461,7 @@ void handle_facets(
         }
         else if(omega_y < 0.0) {
           // Reflect at the boundary
-          if(celly <= 0) {
+          if(global_celly <= 0) {
             omega_y = -(omega_y);
           }
           else {
@@ -523,8 +524,7 @@ void handle_facets(
           : ((y0-OPEN_BOUND_CORRECTION)-y)*mag_u0*u_y_inv;
       }
 
-      const double distance_to_collision = 
-        particles->mfp_to_collision[pindex]*cell_mfp;
+      const double distance_to_collision = mfp_to_collision*cell_mfp;
 
       if(distance_to_collision < distance_to_census && 
           distance_to_collision < distance_to_facet) {
@@ -551,6 +551,7 @@ void handle_facets(
     particles->celly[pindex] = global_celly;
     particles->cell_mfp[pindex] = 1.0/(macroscopic_cs_scatter+macroscopic_cs_absorb);
     particles->energy_deposition[pindex] = 0.0;
+    particles->mfp_to_collision[pindex] = mfp_to_collision;
   }
 
   *nfacets += nnew_facets;
