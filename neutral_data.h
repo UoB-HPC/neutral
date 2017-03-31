@@ -29,7 +29,7 @@
 #define ARCH_ROOT_PARAMS "../arch.params"
 #define NEUTRAL_TESTS    "neutral.tests"
 
-enum { PARTICLE_SENT, PARTICLE_DEAD, PARTICLE_CENSUS };
+enum { PARTICLE_ACTIVE, PARTICLE_SENT, PARTICLE_DEAD, PARTICLE_CENSUS, PARTICLE_CONTINUE };
 
 // Represents a cross sectional table for resonance data
 typedef struct {
@@ -54,7 +54,7 @@ typedef struct {
   uint64_t* key;              // key for random number generation
   int* cellx;                 // x position in mesh
   int* celly;                 // y position in mesh
-  int* dead;                  // particle is dead
+  int* state;                  // particle is dead
 
 } Particle;
 
@@ -73,7 +73,7 @@ typedef struct {
   uint64_t key;              // key for random number generation
   int cellx;                 // x position in mesh
   int celly;                 // y position in mesh
-  int dead;                  // particle is dead
+  int state;                  // particle is dead
 
 } Particle;
 
