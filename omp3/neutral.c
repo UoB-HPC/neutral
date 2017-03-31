@@ -374,7 +374,7 @@ void handle_facets(
   const double inv_nparticles_total = 1.0/nparticles;
 
   /* HANDLE FACET ENCOUNTERS */
-#pragma omp parallel for reduction(+:nnew_collisions, nnew_facets)
+#pragma omp parallel for simd reduction(+:nnew_collisions, nnew_facets)
 #pragma vector aligned
   for(int ii = 0; ii < nparticles; ++ii) {
     const int pindex = particles_offset+ii;
@@ -399,12 +399,14 @@ void handle_facets(
     double y = particles->y[pindex];
     double omega_x = particles->omega_x[pindex];
     double omega_y = particles->omega_y[pindex];
+    double local_density = particles->local_density[pindex];
     int x_facet = particles->x_facet[pindex];
+    int next_event = particles->next_event[pindex];
 
     int global_cellx = particles->cellx[pindex];
     int global_celly = particles->celly[pindex];
 
-    while(particles->next_event[pindex] == FACET) {
+    while(next_event == FACET) {
       int cellx = global_cellx-x_off+PAD;
       int celly = global_celly-y_off+PAD;
 
@@ -476,8 +478,8 @@ void handle_facets(
 
       cellx = global_cellx-x_off+PAD;
       celly = global_celly-y_off+PAD;
-      particles->local_density[pindex] = density[celly*(nx+2*PAD)+cellx];
-      number_density = (particles->local_density[pindex]*AVOGADROS/MOLAR_MASS);
+      local_density = density[celly*(nx+2*PAD)+cellx];
+      number_density = (local_density*AVOGADROS/MOLAR_MASS);
       macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
       macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
       cell_mfp = 1.0/(macroscopic_cs_scatter+macroscopic_cs_absorb);
@@ -531,21 +533,24 @@ void handle_facets(
 
       if(distance_to_collision < distance_to_census && 
           distance_to_collision < distance_to_facet) {
-        particles->next_event[pindex] = COLLISION;
+        next_event = COLLISION;
         nnew_collisions++;
       }
       else if(distance_to_facet < distance_to_census) {
-        particles->next_event[pindex] = FACET;
+        next_event = FACET;
         nnew_facets++;
       }
       else {
-        particles->next_event[pindex] = CENSUS;
+        next_event = CENSUS;
       }
     }
 
+    particles->next_event[pindex] = next_event;
+    particles->local_density[pindex] = local_density;
     particles->x_facet[pindex] = x_facet;
     particles->distance_to_facet[pindex] = distance_to_facet;
     particles->dt_to_census[pindex] = distance_to_census/speed;
+    particles->mfp_to_collision[pindex] = mfp_to_collision;
     particles->x[pindex] = x;
     particles->y[pindex] = y;
     particles->omega_x[pindex] = omega_x;
@@ -554,9 +559,7 @@ void handle_facets(
     particles->celly[pindex] = global_celly;
     particles->cell_mfp[pindex] = 1.0/(macroscopic_cs_scatter+macroscopic_cs_absorb);
     particles->energy_deposition[pindex] = 0.0;
-    particles->mfp_to_collision[pindex] = mfp_to_collision;
   }
-
   *nfacets += nnew_facets;
   *ncollisions += nnew_collisions;
 }
@@ -584,7 +587,6 @@ void handle_collisions(
       continue;
     }
 
-    // Don't need to tally into mesh on collision
     double number_density = 
       (particles->local_density[pindex]*AVOGADROS/MOLAR_MASS);
     double microscopic_cs_scatter = microscopic_cs_for_energy(

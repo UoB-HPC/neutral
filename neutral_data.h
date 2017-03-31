@@ -55,12 +55,13 @@ typedef struct {
   double* cell_mfp;
   double* speed;
   double* energy_deposition;
-  int* x_facet;
   int* cellx;
   int* celly;
   int* scatter_cs_index;
   int* absorb_cs_index;
+
   int* next_event;
+  int* x_facet;
 
 } Particles;
 
