@@ -390,9 +390,8 @@ void handle_facets(
     double macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
     double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
     double distance_to_facet = particles->distance_to_facet[pindex];
-    double speed = 
-    double distance_to_census = 
-      particles->speed[pindex]*particles->dt_to_census[pindex];
+    double speed = sqrt(2.0*particles->e[pindex]*eV_TO_J/PARTICLE_MASS);
+    double distance_to_census = speed*particles->dt_to_census[pindex];
     double mfp_to_collision = particles->mfp_to_collision[pindex];
     double cell_mfp = particles->cell_mfp[pindex];
     double ed = particles->energy_deposition[pindex];
@@ -485,8 +484,8 @@ void handle_facets(
 
       // Check the timestep required to move the particles along a single axis
       // If the velocity is positive then the top or right boundary will be hit
-      double u_x_inv = 1.0/(omega_x*particles->speed[pindex]);
-      double u_y_inv = 1.0/(omega_y*particles->speed[pindex]);
+      double u_x_inv = 1.0/(omega_x*speed);
+      double u_y_inv = 1.0/(omega_y*speed);
 
       double x0 = edgex[cellx];
       double x1 = edgex[cellx+1];
@@ -506,7 +505,7 @@ void handle_facets(
       // a = vector on first edge to be hit
       // u = velocity vector
 
-      double mag_u0 = particles->speed[pindex];
+      double mag_u0 = speed;
 
       x_facet = (dt_x < dt_y) ? 1 : 0;
       if(x_facet) {
@@ -546,7 +545,7 @@ void handle_facets(
 
     particles->x_facet[pindex] = x_facet;
     particles->distance_to_facet[pindex] = distance_to_facet;
-    particles->dt_to_census[pindex] = distance_to_census/particles->speed[pindex];
+    particles->dt_to_census[pindex] = distance_to_census/speed;
     particles->x[pindex] = x;
     particles->y[pindex] = y;
     particles->omega_x[pindex] = omega_x;
@@ -596,8 +595,8 @@ void handle_collisions(
     double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
     double distance_to_collision = 
       particles->mfp_to_collision[pindex]*particles->cell_mfp[pindex];
-    particles->dt_to_census[pindex] -= 
-      distance_to_collision/particles->speed[pindex];
+    double speed = sqrt(2.0*particles->e[pindex]*eV_TO_J/PARTICLE_MASS);
+    particles->dt_to_census[pindex] -= distance_to_collision/speed;
 
     particles->energy_deposition[pindex] += calculate_energy_deposition(
         pindex, particles, distance_to_collision, number_density, 
@@ -649,7 +648,7 @@ void handle_collisions(
       particles->omega_x[pindex] = omega_x_new;
       particles->omega_y[pindex] = omega_y_new;
       particles->e[pindex] = e_new;
-      particles->speed[pindex] = sqrt(2.0*e_new*eV_TO_J/PARTICLE_MASS);
+      speed = sqrt(2.0*e_new*eV_TO_J/PARTICLE_MASS);
     }
 
     gen_random_numbers(master_key, 1001, ii, &rn[0], &rn[1]);
@@ -659,8 +658,8 @@ void handle_collisions(
     // If the velocity is positive then the top or right boundary will be hit
     const int cellx = particles->cellx[pindex]-x_off+PAD;
     const int celly = particles->celly[pindex]-y_off+PAD;
-    double u_x_inv = 1.0/(particles->omega_x[pindex]*particles->speed[pindex]);
-    double u_y_inv = 1.0/(particles->omega_y[pindex]*particles->speed[pindex]);
+    double u_x_inv = 1.0/(particles->omega_x[pindex]*speed);
+    double u_y_inv = 1.0/(particles->omega_y[pindex]*speed);
 
     double x0 = edgex[cellx];
     double x1 = edgex[cellx+1];
@@ -682,7 +681,7 @@ void handle_collisions(
     // a = vector on first edge to be hit
     // u = velocity vector
 
-    double mag_u0 = particles->speed[pindex];
+    double mag_u0 = speed;
 
     particles->x_facet[pindex] = (dt_x < dt_y) ? 1 : 0;
     if(particles->x_facet[pindex]) {
@@ -709,7 +708,7 @@ void handle_collisions(
     distance_to_collision = 
       particles->mfp_to_collision[pindex]*particles->cell_mfp[pindex];
     const double distance_to_census = 
-      particles->speed[pindex]*particles->dt_to_census[pindex];
+      speed*particles->dt_to_census[pindex];
 
     if(distance_to_collision < distance_to_census && 
         distance_to_collision < particles->distance_to_facet[pindex]) {
@@ -773,8 +772,9 @@ void handle_census(
     int cellx = particles->cellx[pindex]-x_off+PAD;
     int celly = particles->celly[pindex]-y_off+PAD;
 
+    double speed = sqrt(2.0*particles->e[pindex]*eV_TO_J/PARTICLE_MASS);
     const double distance_to_census = 
-      particles->speed[pindex]*particles->dt_to_census[pindex];
+      speed*particles->dt_to_census[pindex];
     particles->local_density[pindex] = density[celly*(nx+2*PAD)+cellx];
     double number_density = (particles->local_density[pindex]*AVOGADROS/MOLAR_MASS);
     double microscopic_cs_scatter = microscopic_cs_for_energy(
