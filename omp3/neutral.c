@@ -703,6 +703,7 @@ size_t inject_particles(
   }
 
   START_PROFILING(&compute_profile);
+#pragma omp parallel for
   for(int ii = 0; ii < nparticles; ++ii) {
     Particle* particle = &(*particles)[ii];
 
