@@ -15,7 +15,7 @@ CFLAGS_CLANG     = -O3 -fopenmp=libomp -fopenmp-targets=nvptx64-nvidia-cuda \
 CFLAGS_XL				 = -O3 -qsmp=omp
 
 OPTIONS         += -DTILES -D__STDC_CONSTANT_MACROS \
-									 #-DENABLE_PROFILING #-DVISIT_DUMP
+									 -DENABLE_PROFILING #-DVISIT_DUMP
 
 ifeq ($(DEBUG), yes)
   OPTIONS += -O0 -DDEBUG -g

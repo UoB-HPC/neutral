@@ -374,10 +374,13 @@ void handle_facets(
   const double inv_nparticles_total = 1.0/nparticles;
 
   /* HANDLE FACET ENCOUNTERS */
-#pragma omp parallel for reduction(+:nnew_collisions, nnew_facets) 
+#pragma omp parallel for reduction(+:nnew_collisions, nnew_facets)
 #pragma vector aligned
   for(int ii = 0; ii < nparticles; ++ii) {
     const int pindex = particles_offset+ii;
+    if(particles->next_event[pindex] != FACET) {
+      continue;
+    }
 
     double microscopic_cs_scatter = microscopic_cs_for_energy(
         cs_scatter_table, particles->e[pindex], &particles->scatter_cs_index[pindex]);
@@ -387,6 +390,7 @@ void handle_facets(
     double macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
     double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
     double distance_to_facet = particles->distance_to_facet[pindex];
+    double speed = 
     double distance_to_census = 
       particles->speed[pindex]*particles->dt_to_census[pindex];
     double mfp_to_collision = particles->mfp_to_collision[pindex];
@@ -577,7 +581,6 @@ void handle_collisions(
 #pragma vector aligned
   for(int ii = 0; ii < nparticles; ++ii) {
     const int pindex = particles_offset+ii;
-
     if(particles->next_event[pindex] != COLLISION) {
       continue;
     }
@@ -593,6 +596,8 @@ void handle_collisions(
     double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
     double distance_to_collision = 
       particles->mfp_to_collision[pindex]*particles->cell_mfp[pindex];
+    particles->dt_to_census[pindex] -= 
+      distance_to_collision/particles->speed[pindex];
 
     particles->energy_deposition[pindex] += calculate_energy_deposition(
         pindex, particles, distance_to_collision, number_density, 
@@ -649,7 +654,6 @@ void handle_collisions(
 
     gen_random_numbers(master_key, 1001, ii, &rn[0], &rn[1]);
     particles->mfp_to_collision[pindex] = -log(rn[0])/macroscopic_cs_scatter;
-    particles->dt_to_census[pindex] -= distance_to_collision/particles->speed[pindex];
 
     // Check the timestep required to move the particles along a single axis
     // If the velocity is positive then the top or right boundary will be hit
@@ -762,15 +766,15 @@ void handle_census(
 #pragma vector aligned
   for(int ii = 0; ii < nparticles; ++ii) {
     const int pindex = particles_offset+ii;
-
-    if(particles->next_event[pindex] != CENSUS) {
+    if(particles->next_event[pindex] == DEAD) {
       continue;
     }
 
-    const double distance_to_census = 
-      particles->speed[pindex]*particles->dt_to_census[pindex];
     int cellx = particles->cellx[pindex]-x_off+PAD;
     int celly = particles->celly[pindex]-y_off+PAD;
+
+    const double distance_to_census = 
+      particles->speed[pindex]*particles->dt_to_census[pindex];
     particles->local_density[pindex] = density[celly*(nx+2*PAD)+cellx];
     double number_density = (particles->local_density[pindex]*AVOGADROS/MOLAR_MASS);
     double microscopic_cs_scatter = microscopic_cs_for_energy(
@@ -792,11 +796,14 @@ void handle_census(
         microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb);
     particles->dt_to_census[pindex] = 0.0;
 
-    // TODO: NPARTICLES_TOTAL needed...
+    if(particles->next_event[pindex] == NEW_DEAD) {
+      // TODO: NPARTICLES_TOTAL needed...
 #pragma omp atomic update
-    energy_deposition_tally[(celly-PAD)*nx+(cellx-PAD)] += 
-      particles->energy_deposition[pindex]*inv_nparticles_total;
-    particles->energy_deposition[pindex] = 0.0;
+      energy_deposition_tally[(celly-PAD)*nx+(cellx-PAD)] += 
+        particles->energy_deposition[pindex]*inv_nparticles_total;
+      particles->energy_deposition[pindex] = 0.0;
+      particles->next_event[pindex] = DEAD;
+    }
   }
 }
 
