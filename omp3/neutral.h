@@ -38,7 +38,7 @@ void calc_distance_to_facet(
 
 // Makes the necessary updates to the particle given that
 // the facet was encountered
-int handle_facet_encounter(
+void handle_facet_encounter(
     const int global_nx, const int global_ny, const int nx, const int ny, 
     const int x_off, const int y_off, const int* neighbours, 
     const double distance_to_facet, int x_facet, int* nparticles_sent, 
@@ -49,7 +49,7 @@ int binary_search(
     CrossSection* cs, const double energy);
 
 // Handle the collision event, including absorption and scattering
-int handle_collision(
+void handle_collision(
     Particle* particle, const double macroscopic_cs_absorb, 
     const double macroscopic_cs_total, const double distance_to_collision, 
     RNPool* rn_pool);

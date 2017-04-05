@@ -74,6 +74,8 @@ typedef struct {
   int cellx;                 // x position in mesh
   int celly;                 // y position in mesh
   int state;                  // particle is dead
+  int scatter_cs_index;
+  int absorb_cs_index;
 
 } Particle;
 
