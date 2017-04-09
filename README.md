@@ -25,11 +25,11 @@ Please note: We do not support granular profiling with the over particles parall
 
 The configuration files expose a number of key parameters for the application.
 
-`iterations` - the number of iterations the application will proceed through
-`dt` - the timestep for the application
-`nx` - the number of cells in the x-dimension
-`ny` - the number of cells in the y-dimension
-`initial_energy` - the initial energy that all particles will be set to
+- `iterations` - the number of iterations the application will proceed through
+- `dt` - the timestep for the application
+- `nx` - the number of cells in the x-dimension
+- `ny` - the number of cells in the y-dimension
+- `initial_energy` - the initial energy that all particles will be set to
 
 The performance of the Monte Carlo application is highly problem dependent, and so we provide multiple configuration files that present different computation problems:
 
