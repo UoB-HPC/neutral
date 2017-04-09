@@ -22,6 +22,8 @@ The `neutral` build process is intended to be simple, and has been tested on a n
 make KERNELS=omp3 COMPILER=INTEL
 ```
 
+The `KERNELS` option determines the particular kernel set that will be used when building the project. At this time the difference between the kernel sets is that they are written with different programming models. When you clone the repository there are multiple directories that contain duplicates of the core computational kernels, ported to different models and the name of the directory is the value to be used with the KERNELS option.
+
 A number of other switches and options are provided:
 
 - `DEBUG=<yes/no>` - 'yes' switches off optimisation and adds debug flags
@@ -29,6 +31,16 @@ A number of other switches and options are provided:
 - The `OPTIONS` makefile variable is used to allow visit dumps, with `-DVISIT_DUMP`, and profiling, with `-DENABLE_PROFILING`.
 
 Please note: We do not support granular profiling with the over particles parallelisation scheme because it has a negative impact on the performance of the application and gives spurious results.
+
+# Run
+
+Upon building, an binary file will be output with the extension of the value of KERNELS. e.g. `neutral.omp3`. You can run the application with, for example:
+
+```
+./neutral.omp3 problems/scatter
+```
+
+The `problems/scatter` problem is described in the following section.
 
 # Configuration Files
 
