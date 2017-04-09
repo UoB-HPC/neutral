@@ -7,7 +7,16 @@ This application is a simplified Monte Carlo neutral particle transport mini-app
 
 # Build
 
-The build process is intended to be simple, and has been tested on a number of platforms.
+Before building the dependent `neutral` application, it is necessary to clone the application into the `arch` project. The instructions can be found on the `arch` project README.
+
+```
+git clone git@github.com:uob-hpc/arch
+cd arch
+git clone git@github.com:uob-hpc/neutral
+cd neutral
+```
+
+The `neutral` build process is intended to be simple, and has been tested on a number of platforms.
 
 ```
 make KERNELS=omp3 COMPILER=INTEL
