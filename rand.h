@@ -26,7 +26,6 @@ void prepare_rn_pool(RNPool* rn_pool, const uint64_t key);
 // Generates a random number used the Random 123 library
 double genrand(RNPool* rn_pool);
 
-
 // Fills the rn buffer with random numbers
 void fill_rn_buffer(RNPool* rn_pool);
 

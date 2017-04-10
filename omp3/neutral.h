@@ -49,7 +49,7 @@ int binary_search(
 
 // Handle the collision event, including absorption and scattering
 int handle_collision(
-    Particle* particle, const double macroscopic_cs_absorb, 
+    Particle* particle, const double macroscopic_cs_absorb, uint64_t* counter,
     const double macroscopic_cs_total, const double distance_to_collision, 
     RNPool* rn_pool);
 
@@ -73,4 +73,9 @@ double calculate_energy_deposition(
     Particle* particle, const double inv_ntotal_particles, const double path_length, 
     const double number_density, const double microscopic_cs_absorb, 
     const double microscopic_cs_total);
+
+// Generates a pair of random numbers
+void generate_random_numbers(
+    const uint64_t master_key, const uint64_t secondary_key, 
+    const uint64_t gid, double* rn0, double* rn1);
 

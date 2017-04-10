@@ -1,5 +1,4 @@
 #include <stdint.h>
-#include <stdio.h>
 #include "neutral_data.h"
 #include "rand.h"
 

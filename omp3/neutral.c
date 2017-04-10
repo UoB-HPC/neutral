@@ -225,10 +225,15 @@ int handle_particle(
   double energy_deposition = 0.0;
   const double inv_ntotal_particles = 1.0/(double)ntotal_particles;
 
+  uint64_t counter = 0;
+  double rn[NRANDOM_NUMBERS];
+
   // Set time to census and MFPs until collision, unless travelled particle
   if(initial) {
     particle->dt_to_census = dt;
-    particle->mfp_to_collision = -log(genrand(rn_pool))/macroscopic_cs_scatter;
+    generate_random_numbers(
+        rn_pool->key.v[1], rn_pool->key.v[0], counter++, &rn[0], &rn[1]);
+    particle->mfp_to_collision = -log(rn[0])/macroscopic_cs_scatter;
   }
 
   // Loop until we have reached census
@@ -259,7 +264,7 @@ int handle_particle(
       // The cross sections for scattering and absorption were calculated on 
       // a previous iteration for our given energy
       if(handle_collision(
-            particle, macroscopic_cs_absorb, 
+            particle, macroscopic_cs_absorb, &counter,
             macroscopic_cs_scatter+macroscopic_cs_absorb, 
             distance_to_collision, rn_pool)) {
 
@@ -281,7 +286,9 @@ int handle_particle(
       macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
 
       // Re-sample number of mean free paths to collision
-      particle->mfp_to_collision = -log(genrand(rn_pool))/macroscopic_cs_scatter;
+      generate_random_numbers(
+          rn_pool->key.v[1], rn_pool->key.v[0], counter++, &rn[0], &rn[1]);
+      particle->mfp_to_collision = -log(rn[0])/macroscopic_cs_scatter;
       particle->dt_to_census -= distance_to_collision/speed;
       speed = sqrt((2.0*particle->e*eV_TO_J)/PARTICLE_MASS);
     }
@@ -360,7 +367,7 @@ void update_tallies(
 
 // Handle the collision event, including absorption and scattering
 int handle_collision(
-    Particle* particle, const double macroscopic_cs_absorb, 
+    Particle* particle, const double macroscopic_cs_absorb, uint64_t* counter,
     const double macroscopic_cs_total, const double distance_to_collision, 
     RNPool* rn_pool)
 {
@@ -370,7 +377,11 @@ int handle_collision(
 
   const double p_absorb = macroscopic_cs_absorb/macroscopic_cs_total;
 
-  if(genrand(rn_pool) < p_absorb) {
+  double rn[NRANDOM_NUMBERS];
+  generate_random_numbers(
+      rn_pool->key.v[1], rn_pool->key.v[0], (*counter)++, &rn[0], &rn[1]);
+
+  if(rn[0] < p_absorb) {
     /* Model particle absorption */
 
     // Find the new particle weight after absorption, saving the energy change
@@ -386,7 +397,7 @@ int handle_collision(
     /* Model elastic particle scattering */
 
     // Choose a random scattering angle between -1 and 1
-    const double mu_cm = 1.0 - 2.0*genrand(rn_pool);
+    const double mu_cm = 1.0 - 2.0*rn[1];
 
     // Calculate the new energy based on the relation to angle of incidence
     const double e_new = particle->e*
@@ -707,10 +718,15 @@ size_t inject_particles(
   for(int ii = 0; ii < nparticles; ++ii) {
     Particle* particle = &(*particles)[ii];
 
+    double rn[NRANDOM_NUMBERS];
+    generate_random_numbers(
+        rn_pool->key.v[1], 0, ii, &rn[0], &rn[1]);
+
     // Set the initial nandom location of the particle inside the source region
-    particle->x = local_particle_left_off + genrand(rn_pool)*local_particle_width;
+    particle->x = local_particle_left_off + 
+      rn[0]*local_particle_width;
     particle->y = local_particle_bottom_off + 
-      genrand(rn_pool)*local_particle_height;
+      rn[1]*local_particle_height;
 
     // Check the location of the specific cell that the particle sits within.
     // We have to check this explicitly because the mesh might be non-uniform.
@@ -734,7 +750,9 @@ size_t inject_particles(
 
     // Generating theta has uniform density, however 0.0 and 1.0 produce the same 
     // value which introduces very very very small bias...
-    const double theta = 2.0*M_PI*genrand(rn_pool);
+    generate_random_numbers(
+        rn_pool->key.v[1], 1, ii, &rn[0], &rn[1]);
+    const double theta = 2.0*M_PI*rn[0];
     particle->omega_x = cos(theta);
     particle->omega_y = sin(theta);
 
@@ -752,5 +770,28 @@ size_t inject_particles(
   STOP_PROFILING(&compute_profile, "initialising particles");
 
   return (sizeof(Particle)*nparticles*2);
+}
+
+// Generates a pair of random numbers
+void generate_random_numbers(
+    const uint64_t master_key, const uint64_t secondary_key, 
+    const uint64_t gid, double* rn0, double* rn1)
+{
+  threefry2x64_ctr_t counter;
+  threefry2x64_ctr_t key;
+  counter.v[0] = gid;
+  counter.v[1] = 0;
+  key.v[0] = master_key;
+  key.v[1] = secondary_key;
+
+  // Generate the random numbers
+  threefry2x64_ctr_t rand = threefry2x64(counter, key);
+
+  // Turn our random numbers from integrals to double precision
+  uint64_t max_uint64 = UINT64_C(0xFFFFFFFFFFFFFFFF);  
+  const double factor = 1.0/(max_uint64 + 1.0);
+  const double half_factor = 0.5*factor;
+  *rn0 = rand.v[0]*factor+half_factor;
+  *rn1 = rand.v[1]*factor+half_factor;
 }
 
