@@ -15,18 +15,9 @@ void read_cs_file(
 void initialise_cross_sections(
     NeutralData* neutral_data, Mesh* mesh);
 
-// Initialises a new particle ready for tracking
-void initialise_particle(
-    const int global_nx, const int local_nx, const int local_ny, 
-    const double local_particle_left_off, const double local_particle_bottom_off, 
-    const double local_particle_width, const double local_particle_height, 
-    const int x_off, const int y_off, const double dt, const double* edgex, 
-    const double* edgey, const double initial_energy, RNPool* rn_pool, 
-    Particle* particle);
-
 // Initialises all of the neutral-specific data structures.
 void initialise_neutral_data(
-    NeutralData* neutral_data, Mesh* mesh, RNPool* rn_pool)
+    NeutralData* neutral_data, Mesh* mesh, const uint64_t master_key)
 {
   const int local_nx = mesh->local_nx-2*PAD;
   const int local_ny = mesh->local_ny-2*PAD;
@@ -102,7 +93,7 @@ void initialise_neutral_data(
         neutral_data->nparticles, mesh->global_nx, mesh->local_nx, mesh->local_ny, 
         local_particle_left_off, local_particle_bottom_off, local_particle_width, 
         local_particle_height, mesh->x_off, mesh->y_off, mesh->dt, mesh->edgex, 
-        mesh->edgey, neutral_data->initial_energy, rn_pool, 
+        mesh->edgey, neutral_data->initial_energy, master_key, 
         &neutral_data->local_particles);
   }
 

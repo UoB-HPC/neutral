@@ -151,7 +151,8 @@ void handle_particles(
   uint64_t ncollisions = 0;
   int nparticles_deleted = 0;
 
-#pragma omp parallel for schedule(guided) \
+#pragma omp target teams distribute parallel for \
+  map(tofrom: ncollisions, nfacets, nparticles_deleted) \
   reduction(+: ncollisions, nfacets, nparticles_deleted) 
   for(int pp = 0; pp < nparticles_to_process; ++pp) {
     // Current particle
@@ -631,9 +632,11 @@ double microscopic_cs_for_energy(
       }
     }
 
+#if 0
     if(!found) {
       TERMINATE("No key for energy %.12e in cross sectional lookup.\n", energy);
     }
+#endif // if 0
   }
   else {
     // Use a simple binary search to find the energy group
@@ -706,7 +709,8 @@ size_t inject_particles(
   }
 
   START_PROFILING(&compute_profile);
-#pragma omp parallel for
+
+#pragma omp target teams distribute parallel for
   for(int ii = 0; ii < nparticles; ++ii) {
     Particle* particle = &(*particles)[ii];
 

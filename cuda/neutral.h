@@ -11,5 +11,5 @@ void handle_particles(
     const int ntotal_particles, const int nparticles_to_process, 
     int* nparticles, Particle* particles_start, CrossSection* cs_scatter_table, 
     CrossSection* cs_absorb_table, double* energy_deposition_tally, 
-    RNPool* rn_pools, int* reduce_array0, int* reduce_array1);
+    int* reduce_array0, int* reduce_array1);
 

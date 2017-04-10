@@ -16,8 +16,7 @@ extern "C" {
       Particle* particles, const double* density, const double* edgex, 
       const double* edgey, const double* edgedx, const double* edgedy, 
       CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
-      double* energy_deposition_tally, RNPool* rn_pool,
-      int* reduce_array0, int* reduce_array1);
+      double* energy_deposition_tally, int* reduce_array0, int* reduce_array1);
 
   // Initialises a new particle ready for tracking
   size_t inject_particles(
@@ -25,7 +24,7 @@ extern "C" {
       const double local_particle_left_off, const double local_particle_bottom_off, 
       const double local_particle_width, const double local_particle_height, 
       const int x_off, const int y_off, const double dt, const double* edgex, 
-      const double* edgey, const double initial_energy, RNPool* rn_pool, 
+      const double* edgey, const double initial_energy, const uint64_t master_key, 
       Particle** particles);
 
   // Validates the results of the simulation

@@ -1,7 +1,7 @@
 # User defined parameters
-KERNELS          		= omp3
-COMPILER         		= INTEL
-MPI              		= yes
+KERNELS          		= cuda
+COMPILER         		= GCC
+MPI              		= no
 MAC_RPATH				 		= -Wl,-rpath,${COMPILER_ROOT}/lib 
 CFLAGS_INTEL     		= -O3 -no-prec-div -std=gnu99 -qopenmp -DINTEL \
 								 		  $(MAC_RPATH) -Wall -qopt-report=5 -g #-xhost
@@ -22,8 +22,8 @@ ifeq ($(MPI), yes)
 endif
 
 # Default compiler
-MULTI_COMPILER_CC   = mpiicc
-MULTI_COMPILER_CPP  = mpiicpc
+MULTI_COMPILER_CC   = gcc
+MULTI_COMPILER_CPP  = g++
 MULTI_LINKER    		= $(MULTI_COMPILER_CC)
 MULTI_FLAGS     		= $(CFLAGS_$(COMPILER))
 MULTI_LDFLAGS   		= $(MULTI_FLAGS) -lm
