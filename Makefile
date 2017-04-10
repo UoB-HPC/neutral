@@ -1,15 +1,17 @@
 # User defined parameters
-KERNELS          = omp3
-COMPILER         = INTEL_KNL
-MPI              = yes
-MAC_RPATH				 = -Wl,-rpath,${COMPILER_ROOT}/lib 
-CFLAGS_INTEL     = -O3 -no-prec-div -std=gnu99 -qopenmp -DINTEL \
-									 $(MAC_RPATH) -Wall -qopt-report=5 -g #-xhost
-CFLAGS_INTEL_KNL = -O3 -qopenmp -no-prec-div -std=gnu99 -DINTEL \
-									 -xMIC-AVX512 -Wall -restrict -g #-qopt-report=5 
-CFLAGS_GCC       = -O3 -g -std=gnu99 -fopenmp -march=native -Wall #-std=gnu99
-CFLAGS_CRAY      = -lrt -hlist=a
-OPTIONS         += -DTILES -D__STDC_CONSTANT_MACROS #-DENABLE_PROFILING #-DVISIT_DUMP
+KERNELS          		= omp4
+COMPILER         		= CLANG_OMP4
+MPI              		= no
+MAC_RPATH				 		= -Wl,-rpath,${COMPILER_ROOT}/lib 
+CFLAGS_INTEL     		= -O3 -no-prec-div -std=gnu99 -qopenmp -DINTEL \
+								 		  $(MAC_RPATH) -Wall -qopt-report=5 -g #-xhost
+CFLAGS_INTEL_KNL 		= -O3 -qopenmp -no-prec-div -std=gnu99 -DINTEL \
+								 		  -xMIC-AVX512 -Wall -restrict -g #-qopt-report=5 
+CFLAGS_GCC       		= -O3 -g -std=gnu99 -fopenmp -march=native -Wall #-std=gnu99
+CFLAGS_CRAY      		= -lrt -hlist=a
+CFLAGS_CLANG_OMP4   = -O3 -Wall -fopenmp-targets=nvptx64-nvidia-cuda \
+										 -fopenmp=libomp --cuda-path=/nfs/modules/cuda/8.0.44/
+OPTIONS            += -DTILES -D__STDC_CONSTANT_MACROS #-DENABLE_PROFILING #-DVISIT_DUMP
 
 ifeq ($(DEBUG), yes)
   OPTIONS += -O0 -DDEBUG 
@@ -56,5 +58,6 @@ make_build_dir:
 	@mkdir -p $(MULTI_BUILD_DIR)/$(KERNELS)
 
 clean:
-	rm -rf $(MULTI_BUILD_DIR)/* neutral.$(KERNELS) *.vtk *.bov *.dat *.optrpt *.cub *.ptx *.ap2 *.xf
+	rm -rf $(MULTI_BUILD_DIR)/* neutral.$(KERNELS) *.vtk *.bov \
+		*.dat *.optrpt *.cub *.ptx *.ap2 *.xf
 

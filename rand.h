@@ -15,6 +15,8 @@ typedef struct {
 
 } RNPool;
 
+#pragma omp declare target
+
 // Initialises the random number pool
 void init_rn_pool(RNPool* rn_pool, const uint64_t master_key);
 
@@ -24,8 +26,11 @@ void prepare_rn_pool(RNPool* rn_pool, const uint64_t key);
 // Generates a random number used the Random 123 library
 double genrand(RNPool* rn_pool);
 
+
 // Fills the rn buffer with random numbers
 void fill_rn_buffer(RNPool* rn_pool);
+#pragma omp end declare target
+
 
 // Increment the counter, handling carry as necessary
 void safe_increment(uint64_t* v);
