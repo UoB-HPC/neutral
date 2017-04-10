@@ -15,8 +15,6 @@ typedef struct {
 
 } RNPool;
 
-#pragma omp declare target
-
 // Initialises the random number pool
 void init_rn_pool(RNPool* rn_pool, const uint64_t master_key);
 
@@ -37,6 +35,4 @@ threefry2x64_ctr_t threefry2x64_R(
     unsigned int Nrounds, threefry2x64_ctr_t counter, threefry2x64_key_t key);
 uint64_t RotL_64(
     uint64_t x, unsigned int N);
-
-#pragma omp end declare target
 
