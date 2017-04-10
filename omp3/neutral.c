@@ -754,4 +754,3 @@ size_t inject_particles(
   return (sizeof(Particle)*nparticles*2);
 }
 
-

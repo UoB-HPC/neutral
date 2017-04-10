@@ -29,9 +29,15 @@ double genrand(RNPool* rn_pool);
 
 // Fills the rn buffer with random numbers
 void fill_rn_buffer(RNPool* rn_pool);
-#pragma omp end declare target
-
 
 // Increment the counter, handling carry as necessary
 void safe_increment(uint64_t* v);
+
+// Random123 methods
+threefry2x64_ctr_t threefry2x64_R(
+    unsigned int Nrounds, threefry2x64_ctr_t counter, threefry2x64_key_t key);
+uint64_t RotL_64(
+    uint64_t x, unsigned int N);
+
+#pragma omp end declare target
 
