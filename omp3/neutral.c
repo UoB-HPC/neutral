@@ -607,11 +607,6 @@ double calculate_energy_deposition(
 double microscopic_cs_for_energy(
     const CrossSection* cs, const double energy, int* cs_index)
 {
-  /* Attempt an optimisation of the search by performing a linear operation
-   * if there is an existing location. We assume that the energy has
-   * reduced rather than increased, which seems to be a legitimate 
-   * approximation in this particular case */
-
   int ind = 0; 
   double* key = cs->keys;
   double* value = cs->values;
@@ -647,8 +642,7 @@ double microscopic_cs_for_energy(
 
   *cs_index = ind;
 
-  // TODO: perform some interesting interpolation here
-  // Center weighted is poor accuracy but might even out over enough particles
+  // Linear interpolation is as expected from real data
   return 0.5*(value[ind+1] + value[ind]);
 }
 
