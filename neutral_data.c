@@ -111,7 +111,7 @@ void initialise_neutral_data(
         &neutral_data->local_particles);
   }
 
-  printf("Allocated %.4fGB of data.\n", allocation/(1024.0*1024.0*1024.0));
+  printf("Allocated %.4fGB of data.\n", allocation/GB);
 
   initialise_cross_sections(
       neutral_data, mesh);
