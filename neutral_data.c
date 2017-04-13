@@ -118,8 +118,6 @@ void initialise_neutral_data(
 
 #if 0
 #ifdef MPI
-  // Had to initialise this in the package directly as the data structure is not
-  // general enough to place in the multi-package 
   const int blocks[3] = { 8, 1, 1 };
   MPI_Datatype types[3] = { MPI_DOUBLE, MPI_UINT64_T, MPI_INT };
   MPI_Aint disp[3] = { 0, blocks[0]*sizeof(double), disp[0]+sizeof(uint64_t) };
