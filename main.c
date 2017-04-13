@@ -88,7 +88,7 @@ int main(int argc, char** argv)
 
 #ifdef VISIT_DUMP
     plot_particle_density(
-        &neutral_data, &mesh, tt, nparticles, elapsed_sim_time);
+        &neutral_data, &mesh, tt, neutral_data.nparticles, elapsed_sim_time);
 #endif
 
     double w0 = omp_get_wtime();
@@ -128,7 +128,7 @@ int main(int argc, char** argv)
 
 #ifdef VISIT_DUMP
   plot_particle_density(
-      &neutral_data, &mesh, tt, nparticles, elapsed_sim_time);
+      &neutral_data, &mesh, tt, neutral_data.nparticles, elapsed_sim_time);
 #endif
 
   validate(
