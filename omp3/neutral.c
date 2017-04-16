@@ -388,6 +388,10 @@ int handle_collision(
 
     /* Model elastic particle scattering */
 
+    // TODO: This approximation is not realistic as far as I can tell. 
+    // This considers that all particles reside within a single two-dimensional 
+    // plane, which solves a different equation. Change so that we consider the 
+    // full set of directional cosines, allowing scattering between planes.
     // Choose a random scattering angle between -1 and 1
     const double mu_cm = 1.0 - 2.0*rn[1];
 
