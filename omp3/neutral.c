@@ -646,8 +646,8 @@ double microscopic_cs_for_energy(
 
   *cs_index = ind;
 
-  // Linear interpolation is as expected from real data
-  return 0.5*(value[ind+1] + value[ind]);
+  // Return the value linearly interpolated
+  return value[ind]+((energy-key[ind])/(key[ind+1]-key[ind]))*(value[ind+1]-value[ind]);
 }
 
 // Validates the results of the simulation
