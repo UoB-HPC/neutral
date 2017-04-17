@@ -60,7 +60,8 @@ __device__ double microscopic_cs_for_energy(
 
   *cs_index = ind;
 
-  return 0.5*(value[ind+1] + value[ind]);
+  // Return the value linearly interpolated
+  return value[ind]+((energy-key[ind])/(key[ind+1]-key[ind]))*(value[ind+1]-value[ind]);
 }
 
 // Calculate the energy deposition in the cell

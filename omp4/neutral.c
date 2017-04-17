@@ -650,9 +650,8 @@ double microscopic_cs_for_energy(
 
   *cs_index = ind;
 
-  // TODO: perform some interesting interpolation here
-  // Center weighted is poor accuracy but might even out over enough particles
-  return 0.5*(value[ind+1] + value[ind]);
+  // Return the value linearly interpolated
+  return value[ind]+((energy-key[ind])/(key[ind+1]-key[ind]))*(value[ind+1]-value[ind]);
 }
 
 // Validates the results of the simulation
