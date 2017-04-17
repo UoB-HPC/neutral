@@ -18,10 +18,11 @@ int handle_particle(
     const int global_nx, const int global_ny, const int nx, const int ny, 
     const int x_off, const int y_off, const int* neighbours, const double dt,
     const int initial, const int ntotal_particles, const double* density, 
-    const double* edgex, const double* edgey, const double* edgedx, 
-    const double* edgedy, const CrossSection* cs_scatter_table, 
-    const CrossSection* cs_absorb_table, int* nparticles_sent, uint64_t* facets, 
-    uint64_t* collisions, Particle* particle, 
+    const double* edgex, const double* edgey, const double* edgedx, const double* edgedy,  
+    const double* cs_absorb_table_keys, const double* cs_scatter_table_keys,
+    const double* cs_absorb_table_values, const double* cs_scatter_table_values,
+    const int cs_absorb_table_nentries, const int cs_scatter_table_nentries,
+    int* nparticles_sent, uint64_t* facets, uint64_t* collisions, Particle* particle, 
     double* energy_deposition_tally, const uint64_t master_key);
 
 // Tallies the energy deposition in the cell
@@ -65,7 +66,8 @@ double calculate_energy_deposition(
 
 // Fetch the cross section for a particular energy value
 double microscopic_cs_for_energy(
-    const CrossSection* cs, const double energy, int* cs_index);
+    const double* keys, const double* values, const int nentries,
+    const double energy, int* cs_index);
 
 // Generates a pair of random numbers
 void generate_random_numbers(
@@ -77,7 +79,6 @@ threefry2x64_ctr_t threefry2x64_R(
         unsigned int Nrounds, threefry2x64_ctr_t counter, threefry2x64_key_t key);
 uint64_t RotL_64(
         uint64_t x, unsigned int N);
-
 
 #pragma omp end declare target
 

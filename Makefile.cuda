@@ -1,6 +1,6 @@
 NVCC					= nvcc
 
-NVCC_FLAGS		= -arch=sm_35 $(OPTIONS) -Xptxas="-v" #--ptx 
+NVCC_FLAGS		= -arch=sm_35 $(OPTIONS) -Xptxas="-v" -maxrregcount 60 #--ptx 
 ARCH_LDFLAGS = -lcudart -L$(CUDA_PATH)/lib64 -fopenmp
 ARCH_LINKER 	= $(ARCH_COMPILER_CPP)
 
