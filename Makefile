@@ -11,7 +11,7 @@ CFLAGS_GCC       		= -O3 -g -std=gnu99 -fopenmp -march=native -Wall #-std=gnu99
 CFLAGS_CRAY      		= -lrt -hlist=a
 CFLAGS_CLANG_OMP4   = -O3 -Wall -fopenmp-targets=nvptx64-nvidia-cuda \
 										 -fopenmp=libomp --cuda-path=/nfs/modules/cuda/8.0.44/
-OPTIONS            += -DTILES -D__STDC_CONSTANT_MACROS -DVISIT_DUMP#-DENABLE_PROFILING 
+OPTIONS            += -DTILES -D__STDC_CONSTANT_MACROS #-DENABLE_PROFILING 
 
 ifeq ($(DEBUG), yes)
   OPTIONS += -O0 -DDEBUG 
