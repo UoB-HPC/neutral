@@ -31,8 +31,8 @@ ARCH_BUILD_DIR 		= ../obj/neutral/
 ARCH_DIR       		= ..
 
 ifeq ($(KERNELS), cuda)
-include Makefile.cuda
-OPTIONS += -DSoA
+  include Makefile.cuda
+  OPTIONS += -DSoA
 endif
 
 # Get specialised kernels
