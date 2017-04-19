@@ -1,20 +1,23 @@
 # User defined parameters
-KERNELS          		= omp3
-COMPILER         		= INTEL
-MPI              		= yes
-MAC_RPATH				 		= -Wl,-rpath,${COMPILER_ROOT}/lib 
-CFLAGS_INTEL     		= -O3 -no-prec-div -std=gnu99 -qopenmp -DINTEL \
-								 		  $(MAC_RPATH) -Wall -qopt-report=5 -g #-xhost
-CFLAGS_INTEL_KNL 		= -O3 -qopenmp -no-prec-div -std=gnu99 -DINTEL \
-								 		  -xMIC-AVX512 -Wall -restrict -g #-qopt-report=5 
-CFLAGS_GCC       		= -O3 -g -std=gnu99 -fopenmp -march=native -Wall #-std=gnu99
-CFLAGS_CRAY      		= -lrt -hlist=a
-CFLAGS_CLANG_OMP4   = -O3 -Wall -fopenmp-targets=nvptx64-nvidia-cuda \
-										 -fopenmp=libomp --cuda-path=/nfs/modules/cuda/8.0.44/
+KERNELS          	 = omp3
+COMPILER         	 = CRAY
+MPI              	 = yes
+MAC_RPATH				 	 = -Wl,-rpath,${COMPILER_ROOT}/lib 
+CFLAGS_INTEL			 = -qopenmp -no-prec-div -std=gnu99 -DINTEL \
+										 -Wall -qopt-report=5 #-xhost
+CFLAGS_INTEL_KNL	 = -O3 -g -qopenmp -no-prec-div -std=gnu99 -DINTEL \
+										 -xMIC-AVX512 -Wall -qopt-report=5
+CFLAGS_GCC				 = -std=gnu99 -fopenmp -march=native -Wall #-std=gnu99
+CFLAGS_GCC_POWER   = -O3 -g -mcpu=power8 -mtune=power8 -fopenmp -std=gnu99
+CFLAGS_CRAY				 = -lrt -hlist=a
+CFLAGS_XL					 = -O3 -qsmp=omp
+CFLAGS_XL_OMP4		 = -qsmp -qoffload
+CFLAGS_CLANG_OMP4  = -O3 -Wall -fopenmp-targets=nvptx64-nvidia-cuda -fopenmp-nonaliased-maps \
+										 -fopenmp=libomp --cuda-path=/home/projects/pwr8-rhel73-lsf/cuda/8.0.44/ 
 OPTIONS            += -DTILES -D__STDC_CONSTANT_MACROS #-DENABLE_PROFILING 
 
 ifeq ($(DEBUG), yes)
-  OPTIONS += -O0 -DDEBUG 
+  OPTIONS += -O0 -DDEBUG -g
 endif
 
 ifeq ($(MPI), yes)
