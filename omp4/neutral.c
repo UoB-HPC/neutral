@@ -151,7 +151,15 @@ void handle_particles(
   uint64_t ncollisions = 0;
   int nparticles_deleted = 0;
 
-#pragma omp parallel for schedule(guided) \
+  double* cs_scatter_table_keys = cs_scatter_table->keys;
+  double* cs_scatter_table_values = cs_scatter_table->values;
+  int cs_scatter_table_nentries = cs_scatter_table->nentries;
+  double* cs_absorb_table_keys = cs_scatter_table->keys;
+  double* cs_absorb_table_values = cs_scatter_table->values;
+  int cs_absorb_table_nentries = cs_scatter_table->nentries;
+
+#pragma omp target teams distribute parallel for \
+  map(tofrom: ncollisions, nfacets, nparticles_deleted) \
   reduction(+: ncollisions, nfacets, nparticles_deleted) 
   for(int pp = 0; pp < nparticles_to_process; ++pp) {
     // Current particle
@@ -163,9 +171,10 @@ void handle_particles(
 
     const int result = handle_particle(
         global_nx, global_ny, nx, ny, x_off, y_off, neighbours, dt, initial,
-        ntotal_particles, density, edgex, edgey, edgedx, edgedy, cs_scatter_table, 
-        cs_absorb_table, nparticles_sent, &nfacets, &ncollisions, particle, 
-        energy_deposition_tally, *master_key);
+        ntotal_particles, density, edgex, edgey, edgedx, edgedy, cs_scatter_table_keys, 
+        cs_absorb_table_keys, cs_scatter_table_values, cs_absorb_table_values, 
+        cs_scatter_table_nentries, cs_absorb_table_nentries, nparticles_sent, 
+        &nfacets, &ncollisions, particle, energy_deposition_tally, *master_key);
 
     nparticles_deleted += (result == PARTICLE_SENT || result == PARTICLE_DEAD);
   }
@@ -182,10 +191,11 @@ int handle_particle(
     const int global_nx, const int global_ny, const int nx, const int ny, 
     const int x_off, const int y_off, const int* neighbours, const double dt,
     const int initial, const int ntotal_particles, const double* density, 
-    const double* edgex, const double* edgey, const double* edgedx, 
-    const double* edgedy, const CrossSection* cs_scatter_table, 
-    const CrossSection* cs_absorb_table, int* nparticles_sent, uint64_t* facets, 
-    uint64_t* collisions, Particle* particle, 
+    const double* edgex, const double* edgey, const double* edgedx, const double* edgedy, 
+    const double* cs_absorb_table_keys, const double* cs_scatter_table_keys,
+    const double* cs_absorb_table_values, const double* cs_scatter_table_values,
+    const int cs_absorb_table_nentries, const int cs_scatter_table_nentries,
+    int* nparticles_sent, uint64_t* facets, uint64_t* collisions, Particle* particle, 
     double* energy_deposition_tally, const uint64_t master_key)
 {
   // (1) particle can stream and reach census
@@ -207,9 +217,13 @@ int handle_particle(
   // This makes some assumption about the units of the data stored globally.
   // Might be worth making this more explicit somewhere.
   double microscopic_cs_scatter = 
-    microscopic_cs_for_energy(cs_scatter_table, particle->e, &scatter_cs_index);
+    microscopic_cs_for_energy(
+        cs_scatter_table_keys, cs_scatter_table_values, cs_scatter_table_nentries, 
+        particle->e, &scatter_cs_index);
   double microscopic_cs_absorb = 
-    microscopic_cs_for_energy(cs_absorb_table, particle->e, &absorb_cs_index);
+    microscopic_cs_for_energy(
+        cs_absorb_table_keys, cs_absorb_table_values, cs_absorb_table_nentries, 
+        particle->e, &absorb_cs_index);
   double number_density = (local_density*AVOGADROS/MOLAR_MASS);
   double macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
   double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
@@ -269,10 +283,12 @@ int handle_particle(
       }
 
       // Energy has changed so update the cross-sections
-      microscopic_cs_scatter = 
-        microscopic_cs_for_energy(cs_scatter_table, particle->e, &scatter_cs_index);
-      microscopic_cs_absorb = 
-        microscopic_cs_for_energy(cs_absorb_table, particle->e, &absorb_cs_index);
+      microscopic_cs_scatter = microscopic_cs_for_energy(
+            cs_scatter_table_keys, cs_scatter_table_values, cs_scatter_table_nentries, 
+            particle->e, &scatter_cs_index);
+      microscopic_cs_absorb = microscopic_cs_for_energy(
+            cs_absorb_table_keys, cs_absorb_table_values, cs_absorb_table_nentries, 
+            particle->e, &absorb_cs_index);
       number_density = (local_density*AVOGADROS/MOLAR_MASS);
       macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
       macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
@@ -388,10 +404,6 @@ int handle_collision(
 
     /* Model elastic particle scattering */
 
-    // TODO: This approximation is not realistic as far as I can tell. 
-    // This considers that all particles reside within a single two-dimensional 
-    // plane, which solves a different equation. Change so that we consider the 
-    // full set of directional cosines, allowing scattering between planes.
     // Choose a random scattering angle between -1 and 1
     const double mu_cm = 1.0 - 2.0*rn[1];
 
@@ -609,37 +621,37 @@ double calculate_energy_deposition(
 
 // Fetch the cross section for a particular energy value
 double microscopic_cs_for_energy(
-    const CrossSection* cs, const double energy, int* cs_index)
+    const double* keys, const double* values, const int nentries,
+    const double energy, int* cs_index)
 {
+  /* Attempt an optimisation of the search by performing a linear operation
+   * if there is an existing location. We assume that the energy has
+   * reduced rather than increased, which seems to be a legitimate 
+   * approximation in this particular case */
+
   int ind = 0; 
-  double* key = cs->keys;
-  double* value = cs->values;
 
   if(*cs_index > -1) {
     // Determine the correct search direction required to move towards the
     // new energy
-    const int direction = (energy > key[*cs_index]) ? 1 : -1; 
+    const int direction = (energy > keys[*cs_index]) ? 1 : -1; 
 
     // This search will move in the correct direction towards the new energy group
     int found = 0;
-    for(ind = *cs_index; ind >= 0 && ind < cs->nentries; ind += direction) {
+    for(ind = *cs_index; ind >= 0 && ind < nentries; ind += direction) {
       // Check if we have found the new energy group index
-      if(energy >= key[ind] && energy < key[ind+1]) {
+      if(energy >= keys[ind] && energy < keys[ind+1]) {
         found = 1;
         break;
       }
     }
-
-    if(!found) {
-      TERMINATE("No key for energy %.12e in cross sectional lookup.\n", energy);
-    }
   }
   else {
     // Use a simple binary search to find the energy group
-    ind = cs->nentries/2;
+    ind = nentries/2;
     int width = ind/2;
-    while(energy < key[ind] || energy >= key[ind+1]) {
-      ind += (energy < key[ind]) ? -width : width;
+    while(energy < keys[ind] || energy >= keys[ind+1]) {
+      ind += (energy < keys[ind]) ? -width : width;
       width = max(1, width/2); // To handle odd cases, allows one extra walk
     }
   }
@@ -647,7 +659,7 @@ double microscopic_cs_for_energy(
   *cs_index = ind;
 
   // Return the value linearly interpolated
-  return value[ind]+((energy-key[ind])/(key[ind+1]-key[ind]))*(value[ind+1]-value[ind]);
+  return values[ind]+((energy-keys[ind])/(keys[ind+1]-keys[ind]))*(values[ind+1]-values[ind]);
 }
 
 // Validates the results of the simulation
@@ -704,57 +716,58 @@ size_t inject_particles(
   }
 
   START_PROFILING(&compute_profile);
-#pragma omp parallel for
-  for(int ii = 0; ii < nparticles; ++ii) {
-    Particle* particle = &(*particles)[ii];
 
+  Particle* p = (*particles);
+
+#pragma omp target teams distribute parallel for map(to: p)
+  for(int pp = 0; pp < nparticles; ++pp) {
     double rn[NRANDOM_NUMBERS];
     generate_random_numbers(
-        master_key, 0, ii, &rn[0], &rn[1]);
+        master_key, 0, pp, &rn[0], &rn[1]);
 
     // Set the initial nandom location of the particle inside the source region
-    particle->x = local_particle_left_off + 
+    p[pp].x = local_particle_left_off + 
       rn[0]*local_particle_width;
-    particle->y = local_particle_bottom_off + 
+    p[pp].y = local_particle_bottom_off + 
       rn[1]*local_particle_height;
 
     // Check the location of the specific cell that the particle sits within.
     // We have to check this explicitly because the mesh might be non-uniform.
     int cellx = 0;
     int celly = 0;
-    for(int ii = 0; ii < local_nx; ++ii) {
-      if(particle->x >= edgex[ii+PAD] && particle->x < edgex[ii+PAD+1]) {
-        cellx = x_off+ii;
+    for(int pp = 0; pp < local_nx; ++pp) {
+      if(p[pp].x >= edgex[pp+PAD] && p[pp].x < edgex[pp+PAD+1]) {
+        cellx = x_off+pp;
         break;
       }
     }
-    for(int ii = 0; ii < local_ny; ++ii) {
-      if(particle->y >= edgey[ii+PAD] && particle->y < edgey[ii+PAD+1]) {
-        celly = y_off+ii;
+    for(int pp = 0; pp < local_ny; ++pp) {
+      if(p[pp].y >= edgey[pp+PAD] && p[pp].y < edgey[pp+PAD+1]) {
+        celly = y_off+pp;
         break;
       }
     }
 
-    particle->cellx = cellx;
-    particle->celly = celly;
+    p[pp].cellx = cellx;
+    p[pp].celly = celly;
 
     // Generating theta has uniform density, however 0.0 and 1.0 produce the same 
     // value which introduces very very very small bias...
     generate_random_numbers(
-        master_key, 1, ii, &rn[0], &rn[1]);
+        master_key, 1, pp, &rn[0], &rn[1]);
     const double theta = 2.0*M_PI*rn[0];
-    particle->omega_x = cos(theta);
-    particle->omega_y = sin(theta);
+    p[pp].omega_x = cos(theta);
+    p[pp].omega_y = sin(theta);
 
     // This approximation sets mono-energetic initial state for source particles  
-    particle->e = initial_energy;
+    p[pp].e = initial_energy;
 
     // Set a weight for the particle to track absorption
-    particle->weight = 1.0;
-    particle->dt_to_census = dt;
-    particle->mfp_to_collision = 0.0;
-    particle->dead = 0;
-    particle->key = ii;
+    p[pp].weight = 1.0;
+    p[pp].dt_to_census = dt;
+    p[pp].mfp_to_collision = 0.0;
+    p[pp].dead = 0;
+    p[pp].key = pp;
   }
 
   STOP_PROFILING(&compute_profile, "initialising particles");

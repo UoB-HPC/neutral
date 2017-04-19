@@ -292,7 +292,6 @@ threefry2x##W##_ctr_t threefry2x##W(threefry2x##W##_ctr_t in, threefry2x##W##_ke
     return threefry2x##W##_R(threefry2x##W##_rounds, in, k);            \
 }
 
-
 #define _threefry4x_tpl(W)                                              \
 typedef struct r123array4x##W threefry4x##W##_ctr_t;                        \
 typedef struct r123array4x##W threefry4x##W##_key_t;                        \

@@ -27,8 +27,7 @@ void solve_transport_2d(
     Particle* particles, const double* density, const double* edgex, 
     const double* edgey, const double* edgedx, const double* edgedy, 
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
-    double* energy_deposition_tally, RNPool* rn_pools,
-    int* reduce_array0, int* reduce_array1)
+    double* energy_deposition_tally, int* reduce_array0, int* reduce_array1)
 {
   // Initial idea is to use a kind of queue for handling the particles. Presumably
   // this doesn't have to be a carefully ordered queue but lets see how that goes.
@@ -53,7 +52,7 @@ void solve_transport_2d(
       global_nx, global_ny, nx, ny, x_off, y_off, 1, dt, neighbours, density, 
       edgex, edgey, edgedx, edgedy, &facets, &collisions, nparticles_sent, 
       master_key, nparticles_total, nparticles, &nparticles, particles, 
-      cs_scatter_table, cs_absorb_table, energy_deposition_tally, rn_pools, 
+      cs_scatter_table, cs_absorb_table, energy_deposition_tally, 
       reduce_array0, reduce_array1);
 
 #if 0
@@ -146,9 +145,8 @@ void handle_particles(
     uint64_t* collisions, int* nparticles_sent, uint64_t* master_key, 
     const int nparticles_total, const int nparticles_to_process, 
     int* nparticles, Particle* particles, CrossSection* cs_scatter_table, 
-    CrossSection* cs_absorb_table, 
-    double* energy_deposition_tally, RNPool* rn_pools, int* reduce_array0,
-    int* reduce_array1)
+    CrossSection* cs_absorb_table, double* energy_deposition_tally, 
+    int* reduce_array0, int* reduce_array1)
 {
   int nparticles_deleted = 0;
 
@@ -182,7 +180,7 @@ size_t inject_particles(
     const double local_particle_left_off, const double local_particle_bottom_off, 
     const double local_particle_width, const double local_particle_height, 
     const int x_off, const int y_off, const double dt, const double* edgex, 
-    const double* edgey, const double initial_energy, RNPool* rn_pool, 
+    const double* edgey, const double initial_energy, const uint64_t master_key, 
     Particle** particles)
 {
   *particles = (Particle*)malloc(sizeof(Particle));

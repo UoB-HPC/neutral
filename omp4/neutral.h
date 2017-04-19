@@ -11,15 +11,18 @@ void handle_particles(
     int* nparticles, Particle* particles_start, CrossSection* cs_scatter_table, 
     CrossSection* cs_absorb_table, double* energy_deposition_tally);
 
+#pragma omp declare target
+
 // Handles an individual particle.
 int handle_particle(
     const int global_nx, const int global_ny, const int nx, const int ny, 
     const int x_off, const int y_off, const int* neighbours, const double dt,
     const int initial, const int ntotal_particles, const double* density, 
-    const double* edgex, const double* edgey, const double* edgedx, 
-    const double* edgedy, const CrossSection* cs_scatter_table, 
-    const CrossSection* cs_absorb_table, int* nparticles_sent, uint64_t* facets, 
-    uint64_t* collisions, Particle* particle, 
+    const double* edgex, const double* edgey, const double* edgedx, const double* edgedy,  
+    const double* cs_absorb_table_keys, const double* cs_scatter_table_keys,
+    const double* cs_absorb_table_values, const double* cs_scatter_table_values,
+    const int cs_absorb_table_nentries, const int cs_scatter_table_nentries,
+    int* nparticles_sent, uint64_t* facets, uint64_t* collisions, Particle* particle, 
     double* energy_deposition_tally, const uint64_t master_key);
 
 // Tallies the energy deposition in the cell
@@ -63,24 +66,24 @@ double calculate_energy_deposition(
 
 // Fetch the cross section for a particular energy value
 double microscopic_cs_for_energy(
-    const CrossSection* cs, const double energy, int* cs_index);
-
-// Validates the results of the simulation
-void validate(
-    const int nx, const int ny, const char* params_filename, 
-    const int rank, double* energy_deposition_tally);
-
-// Initialises a new particle ready for tracking
-size_t inject_particles(
-    const int nparticles, const int global_nx, const int local_nx, const int local_ny, 
-    const double local_particle_left_off, const double local_particle_bottom_off, 
-    const double local_particle_width, const double local_particle_height, 
-    const int x_off, const int y_off, const double dt, const double* edgex, 
-    const double* edgey, const double initial_energy, const uint64_t master_key, 
-    Particle** particles);
+    const double* keys, const double* values, const int nentries,
+    const double energy, int* cs_index);
 
 // Generates a pair of random numbers
 void generate_random_numbers(
     const uint64_t master_key, const uint64_t secondary_key, 
     const uint64_t gid, double* rn0, double* rn1);
+
+// Random123 methods
+threefry2x64_ctr_t threefry2x64_R(
+        unsigned int Nrounds, threefry2x64_ctr_t counter, threefry2x64_key_t key);
+uint64_t RotL_64(
+        uint64_t x, unsigned int N);
+
+#pragma omp end declare target
+
+// Validates the results of the simulation
+void validate(
+    const int nx, const int ny, const char* params_filename, 
+    const int rank, double* energy_deposition_tally);
 

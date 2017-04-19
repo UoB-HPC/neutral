@@ -15,18 +15,9 @@ void read_cs_file(
 void initialise_cross_sections(
     NeutralData* neutral_data, Mesh* mesh);
 
-// Initialises a new particle ready for tracking
-void initialise_particle(
-    const int global_nx, const int local_nx, const int local_ny, 
-    const double local_particle_left_off, const double local_particle_bottom_off, 
-    const double local_particle_width, const double local_particle_height, 
-    const int x_off, const int y_off, const double dt, const double* edgex, 
-    const double* edgey, const double initial_energy, RNPool* rn_pool, 
-    Particle* particle);
-
 // Initialises all of the neutral-specific data structures.
 void initialise_neutral_data(
-    NeutralData* neutral_data, Mesh* mesh, RNPool* rn_pool)
+    NeutralData* neutral_data, Mesh* mesh, const uint64_t master_key)
 {
   const int local_nx = mesh->local_nx-2*PAD;
   const int local_ny = mesh->local_ny-2*PAD;
@@ -56,14 +47,11 @@ void initialise_neutral_data(
   double* mesh_edgey_0 = &mesh->edgey[mesh->y_off+PAD];
   double* mesh_edgex_1 = &mesh->edgex[local_nx+mesh->x_off+PAD];
   double* mesh_edgey_1 = &mesh->edgey[local_ny+mesh->y_off+PAD];
-  double* rank_xpos_0;
-  double* rank_ypos_0;
-  double* rank_xpos_1;
-  double* rank_ypos_1;
-  allocate_host_data(&rank_xpos_0, 1);
-  allocate_host_data(&rank_ypos_0, 1);
-  allocate_host_data(&rank_xpos_1, 1);
-  allocate_host_data(&rank_ypos_1, 1);
+  double* rank_xpos_0 = (double*)malloc(sizeof(double));
+  double* rank_ypos_0 = (double*)malloc(sizeof(double));
+  double* rank_xpos_1 = (double*)malloc(sizeof(double));
+  double* rank_ypos_1 = (double*)malloc(sizeof(double));
+
   copy_buffer(1, &mesh_edgex_0, &rank_xpos_0, RECV);
   copy_buffer(1, &mesh_edgey_0, &rank_ypos_0, RECV);
   copy_buffer(1, &mesh_edgex_1, &rank_xpos_1, RECV);
@@ -78,17 +66,21 @@ void initialise_neutral_data(
     max(0.0, *rank_xpos_1-(source_xpos+source_width));
   const double local_particle_top_off =
     max(0.0, *rank_ypos_1-(source_ypos+source_height));
-  const double local_particle_width = 
+  const double local_particle_width =
     max(0.0, (*rank_xpos_1-*rank_xpos_0)-
         (local_particle_right_off+local_particle_left_off));
-  const double local_particle_height = 
+  const double local_particle_height =
     max(0.0, (*rank_ypos_1-*rank_ypos_0)-
         (local_particle_top_off+local_particle_bottom_off));
 
-  deallocate_host_data(rank_xpos_0);
-  deallocate_host_data(rank_ypos_0);
-  deallocate_host_data(rank_xpos_1);
-  deallocate_host_data(rank_ypos_1);
+#if 0
+  // TODO: breaks due to the copy buffer semantics for OpenMP 4, whole concept
+  // needs readdressing
+  free(rank_xpos_0);
+  free(rank_ypos_0);
+  free(rank_xpos_1);
+  free(rank_ypos_1);
+#endif // if 0
 
   // Calculate the number of particles we need based on the shaded area that
   // is covered by our source
@@ -115,19 +107,17 @@ void initialise_neutral_data(
         neutral_data->nparticles, mesh->global_nx, mesh->local_nx, mesh->local_ny, 
         local_particle_left_off, local_particle_bottom_off, local_particle_width, 
         local_particle_height, mesh->x_off, mesh->y_off, mesh->dt, mesh->edgex, 
-        mesh->edgey, neutral_data->initial_energy, rn_pool, 
+        mesh->edgey, neutral_data->initial_energy, master_key, 
         &neutral_data->local_particles);
   }
 
-  printf("Allocated %.4fGB of data.\n", allocation/(1024.0*1024.0*1024.0));
+  printf("Allocated %.4fGB of data.\n", allocation/GB);
 
   initialise_cross_sections(
       neutral_data, mesh);
 
 #if 0
 #ifdef MPI
-  // Had to initialise this in the package directly as the data structure is not
-  // general enough to place in the multi-package 
   const int blocks[3] = { 8, 1, 1 };
   MPI_Datatype types[3] = { MPI_DOUBLE, MPI_UINT64_T, MPI_INT };
   MPI_Aint disp[3] = { 0, blocks[0]*sizeof(double), disp[0]+sizeof(uint64_t) };

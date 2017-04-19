@@ -56,13 +56,8 @@ int main(int argc, char** argv)
       "Warning. Profiling is enabled and will increase the runtime.\n\n");
 #endif
 
-  // Initialise enough pools for every thread and a master pool
-  RNPool* rn_pools = (RNPool*)malloc(sizeof(RNPool)*(neutral_data.nthreads+1));
-
-  // Initialise the master rn pool
-  init_rn_pool(&rn_pools[neutral_data.nthreads], 0xfffff);
-
   // Perform the general initialisation steps for the mesh etc
+  uint64_t master_key = 0;
   initialise_mpi(argc, argv, &mesh.rank, &mesh.nranks);
   initialise_devices(mesh.rank);
   initialise_comms(&mesh);
@@ -76,7 +71,7 @@ int main(int argc, char** argv)
   handle_boundary_2d(
       mesh.local_nx, mesh.local_ny, &mesh, shared_data.rho, NO_INVERT, PACK);
   initialise_neutral_data(
-      &neutral_data, &mesh, &rn_pools[neutral_data.nthreads]);
+      &neutral_data, &mesh, master_key++);
 
   // Make sure initialisation phase is complete
   barrier();
@@ -85,7 +80,6 @@ int main(int argc, char** argv)
   int tt;
   double wallclock = 0.0;
   double elapsed_sim_time = 0.0;
-  uint64_t master_key = 1;
   for(tt = 1; tt <= mesh.niters; ++tt) {
 
     if(mesh.rank == MASTER) {
@@ -94,7 +88,7 @@ int main(int argc, char** argv)
 
 #ifdef VISIT_DUMP
     plot_particle_density(
-        &neutral_data, &mesh, tt, nparticles, elapsed_sim_time);
+        &neutral_data, &mesh, tt, neutral_data.nparticles, elapsed_sim_time);
 #endif
 
     double w0 = omp_get_wtime();
@@ -107,7 +101,7 @@ int main(int argc, char** argv)
         neutral_data.local_particles, shared_data.rho, mesh.edgex, mesh.edgey, 
         mesh.edgedx, mesh.edgedy, neutral_data.cs_scatter_table, 
         neutral_data.cs_absorb_table, neutral_data.energy_deposition_tally, 
-        rn_pools, neutral_data.reduce_array0, neutral_data.reduce_array1);
+        neutral_data.reduce_array0, neutral_data.reduce_array1);
 
     barrier();
 
@@ -134,7 +128,7 @@ int main(int argc, char** argv)
 
 #ifdef VISIT_DUMP
   plot_particle_density(
-      &neutral_data, &mesh, tt, nparticles, elapsed_sim_time);
+      &neutral_data, &mesh, tt, neutral_data.nparticles, elapsed_sim_time);
 #endif
 
   validate(
