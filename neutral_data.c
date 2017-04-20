@@ -48,10 +48,14 @@ void initialise_neutral_data(
   double* mesh_edgex_1 = &mesh->edgex[local_nx+mesh->x_off+PAD];
   double* mesh_edgey_1 = &mesh->edgey[local_ny+mesh->y_off+PAD];
 
-  double* rank_xpos_0 = (double*)malloc(sizeof(double));
-  double* rank_ypos_0 = (double*)malloc(sizeof(double));
-  double* rank_xpos_1 = (double*)malloc(sizeof(double));
-  double* rank_ypos_1 = (double*)malloc(sizeof(double));
+  double* rank_xpos_0;
+  double* rank_ypos_0;
+  double* rank_xpos_1;
+  double* rank_ypos_1;
+  allocate_host_data(&rank_xpos_0, 1);
+  allocate_host_data(&rank_ypos_0, 1);
+  allocate_host_data(&rank_xpos_1, 1);
+  allocate_host_data(&rank_ypos_1, 1);
 
   copy_buffer(1, &mesh_edgex_0, &rank_xpos_0, RECV);
   copy_buffer(1, &mesh_edgey_0, &rank_ypos_0, RECV);
@@ -175,13 +179,8 @@ void read_cs_file(
     fscanf(fp, "%lf", &h_values[ii]);
   }
 
-  // Copy the cross sectional table into device memory if appropriate
-  allocate_data(&cs->keys, cs->nentries);
-  allocate_data(&cs->values, cs->nentries);
-  copy_buffer(cs->nentries, &h_keys, &cs->keys, SEND);
-  copy_buffer(cs->nentries, &h_values, &cs->values, SEND);
-  deallocate_host_data(h_keys);
-  deallocate_host_data(h_values);
+  move_host_buffer_to_device(cs->nentries, &h_keys, &cs->keys);
+  move_host_buffer_to_device(cs->nentries, &h_values, &cs->values);
 }
 
 // Initialises the state 

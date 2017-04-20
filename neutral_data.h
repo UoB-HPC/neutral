@@ -47,7 +47,7 @@ typedef struct {
   double* y;                  // y position in space
   double* omega_x;            // x direction
   double* omega_y;            // y direction
-  double* e;                  // energy
+  double* energy;                  // energy
   double* weight;             // weight of the particle
   double* dt_to_census;       // the time until census is reached
   double* mfp_to_collision;   // the mean free paths until a collision
@@ -66,7 +66,7 @@ typedef struct {
   double y;                  // y position in space
   double omega_x;            // x direction
   double omega_y;            // y direction
-  double e;                  // energy
+  double energy;                  // energy
   double weight;             // weight of the particle
   double dt_to_census;       // the time until census is reached
   double mfp_to_collision;   // the mean free paths until a collision

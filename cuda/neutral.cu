@@ -158,7 +158,7 @@ void handle_particles(
       energy_deposition_tally, particles->cellx, particles->celly, 
       cs_scatter_table->nentries, cs_absorb_table->nentries, cs_scatter_table->keys, 
       cs_scatter_table->values, cs_absorb_table->keys, 
-      cs_absorb_table->values, particles->e, particles->dt_to_census, 
+      cs_absorb_table->values, particles->energy, particles->dt_to_census, 
       particles->mfp_to_collision, particles->weight, particles->omega_x, 
       particles->omega_y, particles->x, particles->y, (*master_key)++, 
       reduce_array0, reduce_array1);
@@ -194,7 +194,7 @@ size_t inject_particles(
   allocation += allocate_data(&particle->y,nparticles*1.5);
   allocation += allocate_data(&particle->omega_x,nparticles*1.5);
   allocation += allocate_data(&particle->omega_y,nparticles*1.5);
-  allocation += allocate_data(&particle->e,nparticles*1.5);
+  allocation += allocate_data(&particle->energy,nparticles*1.5);
   allocation += allocate_data(&particle->weight,nparticles*1.5);
   allocation += allocate_data(&particle->dt_to_census,nparticles*1.5);
   allocation += allocate_data(&particle->mfp_to_collision,nparticles*1.5);
@@ -208,7 +208,7 @@ size_t inject_particles(
       local_particle_bottom_off, local_particle_width, local_particle_height, 
       nparticles, dt, initial_energy, 0, edgex, edgey, (*particles)->x, (*particles)->y, 
       (*particles)->cellx, (*particles)->celly, (*particles)->omega_x, 
-      (*particles)->omega_y, (*particles)->e, (*particles)->weight, 
+      (*particles)->omega_y, (*particles)->energy, (*particles)->weight, 
       (*particles)->dt_to_census, (*particles)->mfp_to_collision);
 
   return allocation;

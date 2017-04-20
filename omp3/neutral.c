@@ -204,13 +204,13 @@ int handle_particle(
   // This makes some assumption about the units of the data stored globally.
   // Might be worth making this more explicit somewhere.
   double microscopic_cs_scatter = 
-    microscopic_cs_for_energy(cs_scatter_table, particle->e, &scatter_cs_index);
+    microscopic_cs_for_energy(cs_scatter_table, particle->energy, &scatter_cs_index);
   double microscopic_cs_absorb = 
-    microscopic_cs_for_energy(cs_absorb_table, particle->e, &absorb_cs_index);
+    microscopic_cs_for_energy(cs_absorb_table, particle->energy, &absorb_cs_index);
   double number_density = (local_density*AVOGADROS/MOLAR_MASS);
   double macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
   double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
-  double speed = sqrt((2.0*particle->e*eV_TO_J)/PARTICLE_MASS);
+  double speed = sqrt((2.0*particle->energy*eV_TO_J)/PARTICLE_MASS);
   double energy_deposition = 0.0;
   const double inv_ntotal_particles = 1.0/(double)ntotal_particles;
 
@@ -267,9 +267,9 @@ int handle_particle(
 
       // Energy has changed so update the cross-sections
       microscopic_cs_scatter = 
-        microscopic_cs_for_energy(cs_scatter_table, particle->e, &scatter_cs_index);
+        microscopic_cs_for_energy(cs_scatter_table, particle->energy, &scatter_cs_index);
       microscopic_cs_absorb = 
-        microscopic_cs_for_energy(cs_absorb_table, particle->e, &absorb_cs_index);
+        microscopic_cs_for_energy(cs_absorb_table, particle->energy, &absorb_cs_index);
       number_density = (local_density*AVOGADROS/MOLAR_MASS);
       macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
       macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
@@ -279,7 +279,7 @@ int handle_particle(
           master_key, particle->key, counter++, &rn[0], &rn[1]);
       particle->mfp_to_collision = -log(rn[0])/macroscopic_cs_scatter;
       particle->dt_to_census -= distance_to_collision/speed;
-      speed = sqrt((2.0*particle->e*eV_TO_J)/PARTICLE_MASS);
+      speed = sqrt((2.0*particle->energy*eV_TO_J)/PARTICLE_MASS);
     }
     // Check if we have reached facet
     else if(distance_to_facet < distance_to_census) {
@@ -376,7 +376,7 @@ int handle_collision(
     // Find the new particle weight after absorption, saving the energy change
     particle->weight *= (1.0 - p_absorb);
 
-    if(particle->e < MIN_ENERGY_OF_INTEREST) {
+    if(particle->energy < MIN_ENERGY_OF_INTEREST) {
       // Energy is too low, so mark the particle for deletion
       particle->dead = 1;
     }
@@ -393,14 +393,14 @@ int handle_collision(
     const double mu_cm = 1.0 - 2.0*rn[1];
 
     // Calculate the new energy based on the relation to angle of incidence
-    const double e_new = particle->e*
+    const double e_new = particle->energy*
       (MASS_NO*MASS_NO + 2.0*MASS_NO*mu_cm + 1.0)/
       ((MASS_NO + 1.0)*(MASS_NO + 1.0));
 
     // Convert the angle into the laboratory frame of reference
     double cos_theta =
-      0.5*((MASS_NO+1.0)*sqrt(e_new/particle->e) - 
-          (MASS_NO-1.0)*sqrt(particle->e/e_new));
+      0.5*((MASS_NO+1.0)*sqrt(e_new/particle->energy) - 
+          (MASS_NO-1.0)*sqrt(particle->energy/e_new));
 
     // Alter the direction of the velocities
     const double sin_theta = sqrt(1.0-cos_theta*cos_theta);
@@ -410,7 +410,7 @@ int handle_collision(
       (particle->omega_x*sin_theta + particle->omega_y*cos_theta);
     particle->omega_x = omega_x_new;
     particle->omega_y = omega_y_new;
-    particle->e = e_new;
+    particle->energy = e_new;
   }
 
   return particle->dead;
@@ -595,11 +595,11 @@ double calculate_energy_deposition(
   const double absorption_heating = 
     (microscopic_cs_absorb/microscopic_cs_total)*average_exit_energy_absorb;
   const double average_exit_energy_scatter = 
-    particle->e*((MASS_NO*MASS_NO+MASS_NO+1)/((MASS_NO+1)*(MASS_NO+1)));
+    particle->energy*((MASS_NO*MASS_NO+MASS_NO+1)/((MASS_NO+1)*(MASS_NO+1)));
   const double scattering_heating = 
     (1.0-(microscopic_cs_absorb/microscopic_cs_total))*average_exit_energy_scatter;
   const double heating_response =
-    (particle->e-scattering_heating-absorption_heating);
+    (particle->energy-scattering_heating-absorption_heating);
   return particle->weight*path_length*(microscopic_cs_total*BARNS)*
     heating_response*number_density;
 }
@@ -744,7 +744,7 @@ size_t inject_particles(
     particle->omega_y = sin(theta);
 
     // This approximation sets mono-energetic initial state for source particles  
-    particle->e = initial_energy;
+    particle->energy = initial_energy;
 
     // Set a weight for the particle to track absorption
     particle->weight = 1.0;
