@@ -213,12 +213,10 @@ int handle_particle(
 
   // This makes some assumption about the units of the data stored globally.
   // Might be worth making this more explicit somewhere.
-  double microscopic_cs_scatter = 
-    microscopic_cs_for_energy(
+  double microscopic_cs_scatter = microscopic_cs_for_energy(
         cs_scatter_table_keys, cs_scatter_table_values, cs_scatter_table_nentries, 
         particle->e, &scatter_cs_index);
-  double microscopic_cs_absorb = 
-    microscopic_cs_for_energy(
+  double microscopic_cs_absorb = microscopic_cs_for_energy(
         cs_absorb_table_keys, cs_absorb_table_values, cs_absorb_table_nentries, 
         particle->e, &absorb_cs_index);
   double number_density = (local_density*AVOGADROS/MOLAR_MASS);
@@ -401,6 +399,10 @@ int handle_collision(
 
     /* Model elastic particle scattering */
 
+    // TODO: This approximation is not realistic as far as I can tell. 
+    // This considers that all particles reside within a single two-dimensional 
+    // plane, which solves a different equation. Change so that we consider the 
+    // full set of directional cosines, allowing scattering between planes.
     // Choose a random scattering angle between -1 and 1
     const double mu_cm = 1.0 - 2.0*rn[1];
 
@@ -451,7 +453,7 @@ int handle_facet_encounter(
       }
       else {
         // Definitely moving to right cell
-        particle->cellx += 1;
+        particle->cellx++;
 
         // Check if we need to pass to another process
         if(particle->cellx >= nx+x_off) {
@@ -468,7 +470,7 @@ int handle_facet_encounter(
       }
       else {
         // Definitely moving to left cell
-        particle->cellx -= 1;
+        particle->cellx--;
 
         // Check if we need to pass to another process
         if(particle->cellx < x_off) {
@@ -487,7 +489,7 @@ int handle_facet_encounter(
       }
       else {
         // Definitely moving to north cell
-        particle->celly += 1;
+        particle->celly++;
 
         // Check if we need to pass to another process
         if(particle->celly >= ny+y_off) {
@@ -504,7 +506,7 @@ int handle_facet_encounter(
       }
       else {
         // Definitely moving to south cell
-        particle->celly -= 1;
+        particle->celly--;
 
         // Check if we need to pass to another process
         if(particle->celly < y_off) {
@@ -621,11 +623,6 @@ double microscopic_cs_for_energy(
     const double* keys, const double* values, const int nentries,
     const double energy, int* cs_index)
 {
-  /* Attempt an optimisation of the search by performing a linear operation
-   * if there is an existing location. We assume that the energy has
-   * reduced rather than increased, which seems to be a legitimate 
-   * approximation in this particular case */
-
   int ind = 0; 
 
   if(*cs_index > -1) {
