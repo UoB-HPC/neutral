@@ -198,7 +198,7 @@ int handle_particle(
   // (1) particle can stream and reach census
   // (2) particle can collide and either
   //      - the particle will be absorbed
-  //      - the particle will scatter (this presumably means the energy changes)
+  //      - the particle will scatter 
   // (3) particle hits a boundary region and needs transferring to another process
 
   int x_facet = 0;
