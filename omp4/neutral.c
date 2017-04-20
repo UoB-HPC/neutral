@@ -157,13 +157,6 @@ void handle_particles(
   double* cs_absorb_table_values = cs_absorb_table->values;
   int cs_absorb_table_nentries = cs_absorb_table->nentries;
 
-#if 0
-  allocate_data(&cs_scatter_table_keys, cs_scatter_table->nentries);
-  allocate_data(&cs_scatter_table_values, cs_scatter_table->nentries);
-  allocate_data(&cs_absorb_table_values, cs_scatter_table->nentries);
-  allocate_data(&cs_absorb_table_keys, cs_scatter_table->nentries);
-#endif // if 0
-
   double* x = particles_start->x;
   double* y = particles_start->y;
   double* omega_x = particles_start->omega_x;
