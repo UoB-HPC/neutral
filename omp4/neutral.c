@@ -385,7 +385,7 @@ void update_tallies(
   const int celly = p_celly-y_off;
 
 #pragma omp atomic update
-  energy_deposition_tally[celly*nx+cellx] += 
+  energy_deposition_tally[celly*nx+cellx] +=
     energy_deposition*inv_ntotal_particles;
 }
 
@@ -694,6 +694,9 @@ void validate(
     const int rank, double* energy_deposition_tally)
 {
   double local_energy_tally = 0.0;
+
+#pragma omp target teams distribute parallel for \
+  map(tofrom: local_energy_tally) reduction(+: local_energy_tally)
   for(int ii = 0; ii < nx*ny; ++ii) {
     local_energy_tally += energy_deposition_tally[ii];
   }
@@ -772,8 +775,7 @@ size_t inject_particles(
 #pragma omp target teams distribute parallel for 
   for(int pp = 0; pp < nparticles; ++pp) {
     double rn[NRANDOM_NUMBERS];
-    generate_random_numbers(
-        master_key, 0, pp, &rn[0], &rn[1]);
+    generate_random_numbers(master_key, 0, pp, &rn[0], &rn[1]);
 
     // Set the initial nandom location of the particle inside the source region
     p_x[pp] = local_particle_left_off + 
@@ -803,8 +805,7 @@ size_t inject_particles(
 
     // Generating theta has uniform density, however 0.0 and 1.0 produce the same 
     // value which introduces very very very small bias...
-    generate_random_numbers(
-        master_key, 1, pp, &rn[0], &rn[1]);
+    generate_random_numbers(master_key, 1, pp, &rn[0], &rn[1]);
     const double theta = 2.0*M_PI*rn[0];
     p_omega_x[pp] = cos(theta);
     p_omega_y[pp] = sin(theta);

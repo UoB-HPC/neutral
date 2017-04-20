@@ -45,6 +45,10 @@ ifeq ($(KERNELS), cuda)
   OPTIONS += -DSoA
 endif
 
+ifeq ($(KERNELS), omp4)
+  OPTIONS += -DSoA
+endif
+
 # Get specialised kernels
 SRC  			 = $(wildcard *.c)
 SRC  			+= $(wildcard $(KERNELS)/*.c)
