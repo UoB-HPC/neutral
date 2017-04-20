@@ -7,3 +7,4 @@ dt                1.0e-7
 nx                4000
 ny                4000
 iterations        10
+visit_dump        0

@@ -40,6 +40,8 @@ int main(int argc, char** argv)
   mesh.rank = MASTER;
   mesh.nranks = 1;
   mesh.ndims = 2;
+  const int visit_dump = 
+    get_int_parameter("visit_dump", neutral_data.neutral_params_filename);
 
   // Get the number of threads and initialise the random number pool
 #pragma omp parallel
@@ -86,10 +88,10 @@ int main(int argc, char** argv)
       printf("\nIteration %d\n", tt);
     }
 
-#ifdef VISIT_DUMP
-    plot_particle_density(
-        &neutral_data, &mesh, tt, neutral_data.nparticles, elapsed_sim_time);
-#endif
+    if(visit_dump) {
+      plot_particle_density(
+          &neutral_data, &mesh, tt, neutral_data.nparticles, elapsed_sim_time);
+    }
 
     double w0 = omp_get_wtime();
 
@@ -108,15 +110,15 @@ int main(int argc, char** argv)
     wallclock += omp_get_wtime()-w0;
     elapsed_sim_time += mesh.dt;
 
-#ifdef VISIT_DUMP
-    char tally_name[100];
-    sprintf(tally_name, "energy%d", tt);
-    int dneighbours[NNEIGHBOURS] = { EDGE, EDGE,  EDGE,  EDGE,  EDGE,  EDGE }; 
-    write_all_ranks_to_visit(
-        mesh.global_nx, mesh.global_ny, mesh.local_nx-2*PAD, mesh.local_ny-2*PAD,
-        mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, dneighbours, 
-        neutral_data.energy_deposition_tally, tally_name, 0, elapsed_sim_time);
-#endif
+    if(visit_dump) {
+      char tally_name[100];
+      sprintf(tally_name, "energy%d", tt);
+      int dneighbours[NNEIGHBOURS] = { EDGE, EDGE,  EDGE,  EDGE,  EDGE,  EDGE }; 
+      write_all_ranks_to_visit(
+          mesh.global_nx, mesh.global_ny, mesh.local_nx-2*PAD, mesh.local_ny-2*PAD,
+          mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, dneighbours, 
+          neutral_data.energy_deposition_tally, tally_name, 0, elapsed_sim_time);
+    }
 
     // Leave the simulation if we have reached the simulation end time
     if(elapsed_sim_time >= mesh.sim_end) {
@@ -126,10 +128,10 @@ int main(int argc, char** argv)
     }
   }
 
-#ifdef VISIT_DUMP
-  plot_particle_density(
-      &neutral_data, &mesh, tt, neutral_data.nparticles, elapsed_sim_time);
-#endif
+  if(visit_dump) {
+    plot_particle_density(
+        &neutral_data, &mesh, tt, neutral_data.nparticles, elapsed_sim_time);
+  }
 
   validate(
       mesh.local_nx-2*PAD, mesh.local_ny-2*PAD, 

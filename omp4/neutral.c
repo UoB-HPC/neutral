@@ -25,9 +25,6 @@ void solve_transport_2d(
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
     double* energy_deposition_tally, int* reduce_array0, int* reduce_array1)
 {
-  // Initial idea is to use a kind of queue for handling the particles. Presumably
-  // this doesn't have to be a carefully ordered queue but lets see how that goes.
-
   // This is the known starting number of particles
   uint64_t facets = 0;
   uint64_t collisions = 0;

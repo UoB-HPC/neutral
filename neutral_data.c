@@ -47,6 +47,7 @@ void initialise_neutral_data(
   double* mesh_edgey_0 = &mesh->edgey[mesh->y_off+PAD];
   double* mesh_edgex_1 = &mesh->edgex[local_nx+mesh->x_off+PAD];
   double* mesh_edgey_1 = &mesh->edgey[local_ny+mesh->y_off+PAD];
+
   double* rank_xpos_0 = (double*)malloc(sizeof(double));
   double* rank_ypos_0 = (double*)malloc(sizeof(double));
   double* rank_xpos_1 = (double*)malloc(sizeof(double));
