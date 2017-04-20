@@ -25,9 +25,6 @@ void solve_transport_2d(
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
     double* energy_deposition_tally, int* reduce_array0, int* reduce_array1)
 {
-  // Initial idea is to use a kind of queue for handling the particles. Presumably
-  // this doesn't have to be a carefully ordered queue but lets see how that goes.
-
   // This is the known starting number of particles
   uint64_t facets = 0;
   uint64_t collisions = 0;
@@ -442,7 +439,7 @@ int handle_facet_encounter(
       }
       else {
         // Definitely moving to right cell
-        particle->cellx += 1;
+        particle->cellx++;
 
         // Check if we need to pass to another process
         if(particle->cellx >= nx+x_off) {
@@ -459,7 +456,7 @@ int handle_facet_encounter(
       }
       else {
         // Definitely moving to left cell
-        particle->cellx -= 1;
+        particle->cellx--;
 
         // Check if we need to pass to another process
         if(particle->cellx < x_off) {
@@ -478,7 +475,7 @@ int handle_facet_encounter(
       }
       else {
         // Definitely moving to north cell
-        particle->celly += 1;
+        particle->celly++;
 
         // Check if we need to pass to another process
         if(particle->celly >= ny+y_off) {
@@ -495,7 +492,7 @@ int handle_facet_encounter(
       }
       else {
         // Definitely moving to south cell
-        particle->celly -= 1;
+        particle->celly--;
 
         // Check if we need to pass to another process
         if(particle->celly < y_off) {
@@ -612,19 +609,19 @@ double microscopic_cs_for_energy(
     const CrossSection* cs, const double energy, int* cs_index)
 {
   int ind = 0; 
-  double* key = cs->keys;
-  double* value = cs->values;
+  double* keys = cs->keys;
+  double* values = cs->values;
 
   if(*cs_index > -1) {
     // Determine the correct search direction required to move towards the
     // new energy
-    const int direction = (energy > key[*cs_index]) ? 1 : -1; 
+    const int direction = (energy > keys[*cs_index]) ? 1 : -1; 
 
     // This search will move in the correct direction towards the new energy group
     int found = 0;
     for(ind = *cs_index; ind >= 0 && ind < cs->nentries; ind += direction) {
       // Check if we have found the new energy group index
-      if(energy >= key[ind] && energy < key[ind+1]) {
+      if(energy >= keys[ind] && energy < keys[ind+1]) {
         found = 1;
         break;
       }
@@ -638,8 +635,8 @@ double microscopic_cs_for_energy(
     // Use a simple binary search to find the energy group
     ind = cs->nentries/2;
     int width = ind/2;
-    while(energy < key[ind] || energy >= key[ind+1]) {
-      ind += (energy < key[ind]) ? -width : width;
+    while(energy < keys[ind] || energy >= keys[ind+1]) {
+      ind += (energy < keys[ind]) ? -width : width;
       width = max(1, width/2); // To handle odd cases, allows one extra walk
     }
   }
@@ -647,7 +644,7 @@ double microscopic_cs_for_energy(
   *cs_index = ind;
 
   // Return the value linearly interpolated
-  return value[ind]+((energy-key[ind])/(key[ind+1]-key[ind]))*(value[ind+1]-value[ind]);
+  return values[ind]+((energy-keys[ind])/(keys[ind+1]-keys[ind]))*(values[ind+1]-values[ind]);
 }
 
 // Validates the results of the simulation
