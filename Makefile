@@ -44,9 +44,6 @@ ifeq ($(KERNELS), cuda)
   include Makefile.cuda
   OPTIONS += -DSoA
 endif
-ifeq ($(KERNELS), omp4)
-  OPTIONS += -DSoA
-endif
 
 # Get specialised kernels
 SRC  			 = $(wildcard *.c)
