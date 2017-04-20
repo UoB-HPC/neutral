@@ -148,33 +148,55 @@ void handle_particles(
   uint64_t ncollisions = 0;
   int nparticles_deleted = 0;
 
+  // Localising to get around the fact that CCE doesn't support
+  // array data that is part of a struct...
   double* cs_scatter_table_keys = cs_scatter_table->keys;
   double* cs_scatter_table_values = cs_scatter_table->values;
   int cs_scatter_table_nentries = cs_scatter_table->nentries;
-  double* cs_absorb_table_keys = cs_scatter_table->keys;
-  double* cs_absorb_table_values = cs_scatter_table->values;
-  int cs_absorb_table_nentries = cs_scatter_table->nentries;
+  double* cs_absorb_table_keys = cs_absorb_table->keys;
+  double* cs_absorb_table_values = cs_absorb_table->values;
+  int cs_absorb_table_nentries = cs_absorb_table->nentries;
+
+#if 0
+  allocate_data(&cs_scatter_table_keys, cs_scatter_table->nentries);
+  allocate_data(&cs_scatter_table_values, cs_scatter_table->nentries);
+  allocate_data(&cs_absorb_table_values, cs_scatter_table->nentries);
+  allocate_data(&cs_absorb_table_keys, cs_scatter_table->nentries);
+#endif // if 0
+
+  double* x = particles_start->x;
+  double* y = particles_start->y;
+  double* omega_x = particles_start->omega_x;
+  double* omega_y = particles_start->omega_y;
+  double* energy = particles_start->energy;
+  double* weight = particles_start->weight;
+  double* dt_to_census = particles_start->dt_to_census;
+  double* mfp_to_collision = particles_start->mfp_to_collision;
+  int* cellx = particles_start->cellx;
+  int* celly = particles_start->celly;
+  int* dead = particles_start->dead;
+  uint64_t local_master_key = *master_key;
 
 #pragma omp target teams distribute parallel for \
-  map(tofrom: ncollisions, nfacets, nparticles_deleted) \
-  reduction(+: ncollisions, nfacets, nparticles_deleted) 
-  for(int pp = 0; pp < nparticles_to_process; ++pp) {
-    // Current particle
-    Particle* particle = &particles_start[pp];
+    map(tofrom: ncollisions, nfacets, nparticles_deleted) \
+    reduction(+: ncollisions, nfacets, nparticles_deleted) 
+    for(int pp = 0; pp < nparticles_to_process; ++pp) {
+      if(dead[pp]) {
+        continue;
+      }
 
-    if(particle->dead) {
-      continue;
+      const int result = handle_particle(
+          global_nx, global_ny, nx, ny, x_off, y_off, neighbours, dt, initial,
+          ntotal_particles, density, edgex, edgey, edgedx, edgedy,  
+          cs_absorb_table_keys, cs_scatter_table_keys, 
+          cs_absorb_table_values, cs_scatter_table_values, 
+          cs_absorb_table_nentries, cs_scatter_table_nentries, nparticles_sent, 
+          &nfacets, &ncollisions, pp, &x[pp], &y[pp], &omega_x[pp], &omega_y[pp], 
+          &energy[pp], &weight[pp], &dt_to_census[pp], &mfp_to_collision[pp], 
+          &cellx[pp], &celly[pp], &dead[pp], energy_deposition_tally, local_master_key);
+
+      nparticles_deleted += (result == PARTICLE_SENT || result == PARTICLE_DEAD);
     }
-
-    const int result = handle_particle(
-        global_nx, global_ny, nx, ny, x_off, y_off, neighbours, dt, initial,
-        ntotal_particles, density, edgex, edgey, edgedx, edgedy, cs_scatter_table_keys, 
-        cs_absorb_table_keys, cs_scatter_table_values, cs_absorb_table_values, 
-        cs_scatter_table_nentries, cs_absorb_table_nentries, nparticles_sent, 
-        &nfacets, &ncollisions, particle, energy_deposition_tally, *master_key);
-
-    nparticles_deleted += (result == PARTICLE_SENT || result == PARTICLE_DEAD);
-  }
 
   *facets = nfacets;
   *collisions = ncollisions;
@@ -192,7 +214,10 @@ int handle_particle(
     const double* cs_absorb_table_keys, const double* cs_scatter_table_keys,
     const double* cs_absorb_table_values, const double* cs_scatter_table_values,
     const int cs_absorb_table_nentries, const int cs_scatter_table_nentries,
-    int* nparticles_sent, uint64_t* facets, uint64_t* collisions, Particle* particle, 
+    int* nparticles_sent, uint64_t* facets, uint64_t* collisions, const int pp, 
+    double* p_x, double* p_y, double* p_omega_x, double* p_omega_y, 
+    double* p_energy, double* p_weight, double* p_dt_to_census, 
+    double* p_mfp_to_collision, int* p_cellx, int* p_celly, int* p_dead, 
     double* energy_deposition_tally, const uint64_t master_key)
 {
   // (1) particle can stream and reach census
@@ -205,51 +230,52 @@ int handle_particle(
   int absorb_cs_index = -1;
   int scatter_cs_index = -1;
   double cell_mfp = 0.0;
+  uint64_t local_key = 0;
+  uint64_t counter = pp;
 
   // Update the cross sections, referencing into the padded mesh
-  int cellx = particle->cellx-x_off+PAD;
-  int celly = particle->celly-y_off+PAD;
+  int cellx = *p_cellx-x_off+PAD;
+  int celly = *p_celly-y_off+PAD;
   double local_density = density[celly*(nx+2*PAD)+cellx];
 
   // This makes some assumption about the units of the data stored globally.
   // Might be worth making this more explicit somewhere.
   double microscopic_cs_scatter = microscopic_cs_for_energy(
-        cs_scatter_table_keys, cs_scatter_table_values, cs_scatter_table_nentries, 
-        particle->e, &scatter_cs_index);
+      cs_scatter_table_keys, cs_scatter_table_values, cs_scatter_table_nentries, 
+      *p_energy, &scatter_cs_index);
   double microscopic_cs_absorb = microscopic_cs_for_energy(
-        cs_absorb_table_keys, cs_absorb_table_values, cs_absorb_table_nentries, 
-        particle->e, &absorb_cs_index);
+      cs_absorb_table_keys, cs_absorb_table_values, cs_absorb_table_nentries, 
+      *p_energy, &absorb_cs_index);
   double number_density = (local_density*AVOGADROS/MOLAR_MASS);
   double macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
   double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
-  double speed = sqrt((2.0*particle->e*eV_TO_J)/PARTICLE_MASS);
+  double speed = sqrt((2.0*(*p_energy)*eV_TO_J)/PARTICLE_MASS);
   double energy_deposition = 0.0;
   const double inv_ntotal_particles = 1.0/(double)ntotal_particles;
 
-  uint64_t counter = 0;
   double rn[NRANDOM_NUMBERS];
 
   // Set time to census and MFPs until collision, unless travelled particle
   if(initial) {
-    particle->dt_to_census = dt;
+    *p_dt_to_census = dt;
     generate_random_numbers(
-        master_key, particle->key, counter++, &rn[0], &rn[1]);
-    particle->mfp_to_collision = -log(rn[0])/macroscopic_cs_scatter;
+        master_key, local_key++, counter, &rn[0], &rn[1]);
+    *p_mfp_to_collision = -log(rn[0])/macroscopic_cs_scatter;
   }
 
   // Loop until we have reached census
-  while(particle->dt_to_census > 0.0) {
+  while(*p_dt_to_census > 0.0) {
     cell_mfp = 1.0/(macroscopic_cs_scatter+macroscopic_cs_absorb);
 
     // Work out the distance until the particle hits a facet
     double distance_to_facet = 0.0;
     calc_distance_to_facet(
-        global_nx, particle->x, particle->y, x_off, y_off, particle->omega_x,
-        particle->omega_y, speed, particle->cellx, particle->celly,
+        global_nx, *p_x, *p_y, x_off, y_off, *p_omega_x,
+        *p_omega_y, speed, *p_cellx, *p_celly,
         &distance_to_facet, &x_facet, edgex, edgey);
 
-    const double distance_to_collision = particle->mfp_to_collision*cell_mfp;
-    const double distance_to_census = speed*particle->dt_to_census;
+    const double distance_to_collision = (*p_mfp_to_collision)*cell_mfp;
+    const double distance_to_census = speed*(*p_dt_to_census);
 
     // Check if our next event is a collision
     if(distance_to_collision < distance_to_facet &&
@@ -258,73 +284,75 @@ int handle_particle(
 
       // Don't need to tally into mesh on collision
       energy_deposition += calculate_energy_deposition(
-          global_nx, nx, x_off, y_off, particle, inv_ntotal_particles, 
-          distance_to_collision, number_density, 
+          global_nx, nx, x_off, y_off, inv_ntotal_particles, 
+          distance_to_collision, *p_energy, *p_weight, number_density, 
           microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb);
 
       // The cross sections for scattering and absorption were calculated on 
       // a previous iteration for our given energy
       if(handle_collision(
-            particle, macroscopic_cs_absorb, &counter,
-            macroscopic_cs_scatter+macroscopic_cs_absorb, 
+            p_x, p_y, p_omega_x, p_omega_y, p_energy, p_weight, p_dt_to_census, 
+            p_mfp_to_collision, p_cellx, p_celly, p_dead, macroscopic_cs_absorb, 
+            counter, &local_key, macroscopic_cs_scatter+macroscopic_cs_absorb, 
             distance_to_collision, master_key)) {
 
         // Need to store tally information as finished with particle
         update_tallies(
-            nx, x_off, y_off, particle, inv_ntotal_particles, energy_deposition,
-            energy_deposition_tally);
+            nx, x_off, y_off, *p_cellx, *p_celly, inv_ntotal_particles, 
+            energy_deposition, energy_deposition_tally);
 
         return PARTICLE_DEAD;
       }
 
       // Energy has changed so update the cross-sections
       microscopic_cs_scatter = microscopic_cs_for_energy(
-            cs_scatter_table_keys, cs_scatter_table_values, cs_scatter_table_nentries, 
-            particle->e, &scatter_cs_index);
+          cs_scatter_table_keys, cs_scatter_table_values, cs_scatter_table_nentries, 
+          *p_energy, &scatter_cs_index);
       microscopic_cs_absorb = microscopic_cs_for_energy(
-            cs_absorb_table_keys, cs_absorb_table_values, cs_absorb_table_nentries, 
-            particle->e, &absorb_cs_index);
+          cs_absorb_table_keys, cs_absorb_table_values, cs_absorb_table_nentries, 
+          *p_energy, &absorb_cs_index);
       number_density = (local_density*AVOGADROS/MOLAR_MASS);
       macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
       macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
 
       // Re-sample number of mean free paths to collision
       generate_random_numbers(
-          master_key, particle->key, counter++, &rn[0], &rn[1]);
-      particle->mfp_to_collision = -log(rn[0])/macroscopic_cs_scatter;
-      particle->dt_to_census -= distance_to_collision/speed;
-      speed = sqrt((2.0*particle->e*eV_TO_J)/PARTICLE_MASS);
+          master_key, local_key++, counter, &rn[0], &rn[1]);
+      *p_mfp_to_collision = -log(rn[0])/macroscopic_cs_scatter;
+      *p_dt_to_census -= distance_to_collision/speed;
+      speed = sqrt((2.0*(*p_energy)*eV_TO_J)/PARTICLE_MASS);
     }
     // Check if we have reached facet
     else if(distance_to_facet < distance_to_census) {
       (*facets)++;
 
       // Update the mean free paths until collision
-      particle->mfp_to_collision -= (distance_to_facet/cell_mfp);
-      particle->dt_to_census -= (distance_to_facet/speed);
+      *p_mfp_to_collision -= (distance_to_facet/cell_mfp);
+      *p_dt_to_census -= (distance_to_facet/speed);
 
       // Don't need to tally into mesh on collision
       energy_deposition += calculate_energy_deposition(
-          global_nx, nx, x_off, y_off, particle, inv_ntotal_particles, 
-          distance_to_facet, number_density, microscopic_cs_absorb, 
-          microscopic_cs_scatter+microscopic_cs_absorb);
+          global_nx, nx, x_off, y_off, inv_ntotal_particles, 
+          distance_to_facet, *p_energy, *p_weight, number_density, 
+          microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb);
 
       // Update tallies as we leave a cell
       update_tallies(
-          nx, x_off, y_off, particle, inv_ntotal_particles, energy_deposition,
-          energy_deposition_tally);
+          nx, x_off, y_off, *p_cellx, *p_celly, inv_ntotal_particles, 
+          energy_deposition, energy_deposition_tally);
       energy_deposition = 0.0;
 
       // Encounter facet, and jump out if particle left this rank's domain
       if(handle_facet_encounter(
             global_nx, global_ny, nx, ny, x_off, y_off, neighbours, 
-            distance_to_facet, x_facet, nparticles_sent, particle)) {
+            distance_to_facet, x_facet, nparticles_sent, p_x, p_y, 
+            p_omega_x, p_omega_y, p_cellx, p_celly, p_dead)) {
         return PARTICLE_SENT;
       }
 
       // Update the data based on new cell
-      cellx = particle->cellx-x_off+PAD;
-      celly = particle->celly-y_off+PAD;
+      cellx = (*p_cellx)-x_off+PAD;
+      celly = (*p_celly)-y_off+PAD;
       local_density = density[celly*(nx+2*PAD)+cellx];
       number_density = (local_density*AVOGADROS/MOLAR_MASS);
       macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
@@ -333,20 +361,20 @@ int handle_particle(
     // Check if we have reached census
     else {
       // We have not changed cell or energy level at this stage
-      particle->x += distance_to_census*particle->omega_x;
-      particle->y += distance_to_census*particle->omega_y;
-      particle->mfp_to_collision -= (distance_to_census/cell_mfp);
+      *p_x += distance_to_census*(*p_omega_x);
+      *p_y += distance_to_census*(*p_omega_y);
+      *p_mfp_to_collision -= (distance_to_census/cell_mfp);
       energy_deposition += calculate_energy_deposition(
-          global_nx, nx, x_off, y_off, particle, inv_ntotal_particles, 
-          distance_to_census, number_density, microscopic_cs_absorb, 
-          microscopic_cs_scatter+microscopic_cs_absorb);
+          global_nx, nx, x_off, y_off, inv_ntotal_particles, 
+          distance_to_census, *p_energy, *p_weight, number_density, 
+          microscopic_cs_absorb, microscopic_cs_scatter+microscopic_cs_absorb);
 
       // Need to store tally information as finished with particle
       update_tallies(
-          nx, x_off, y_off, particle, inv_ntotal_particles, energy_deposition,
-          energy_deposition_tally);
+          nx, x_off, y_off, *p_cellx, *p_celly, inv_ntotal_particles, 
+          energy_deposition, energy_deposition_tally);
 
-      particle->dt_to_census = 0.0;
+      *p_dt_to_census = 0.0;
       break;
     }
   }
@@ -356,12 +384,12 @@ int handle_particle(
 
 // Tallies the energy deposition in the cell
 void update_tallies(
-    const int nx, const int x_off, const int y_off, Particle* particle, 
-    const double inv_ntotal_particles, const double energy_deposition,
-    double* energy_deposition_tally)
+    const int nx, const int x_off, const int y_off, const int p_cellx, 
+    const int p_celly, const double inv_ntotal_particles, 
+    const double energy_deposition, double* energy_deposition_tally)
 {
-  const int cellx = particle->cellx-x_off;
-  const int celly = particle->celly-y_off;
+  const int cellx = p_cellx-x_off;
+  const int celly = p_celly-y_off;
 
 #pragma omp atomic update
   energy_deposition_tally[celly*nx+cellx] += 
@@ -370,29 +398,31 @@ void update_tallies(
 
 // Handle the collision event, including absorption and scattering
 int handle_collision(
-    Particle* particle, const double macroscopic_cs_absorb, uint64_t* counter,
-    const double macroscopic_cs_total, const double distance_to_collision, 
-    uint64_t master_key)
+    double* p_x, double* p_y, double* p_omega_x, double* p_omega_y, double* p_energy, 
+    double* p_weight, double* p_dt_to_census, double* p_mfp_to_collision, 
+    int* p_cellx, int* p_celly, int* p_dead, const double macroscopic_cs_absorb, 
+    uint64_t counter, uint64_t* local_key, const double macroscopic_cs_total, 
+    const double distance_to_collision, uint64_t master_key)
 {
   // Moves the particle to the collision site
-  particle->x += distance_to_collision*particle->omega_x;
-  particle->y += distance_to_collision*particle->omega_y;
+  *p_x += distance_to_collision**p_omega_x;
+  *p_y += distance_to_collision**p_omega_y;
 
   const double p_absorb = macroscopic_cs_absorb/macroscopic_cs_total;
 
   double rn[NRANDOM_NUMBERS];
   generate_random_numbers(
-      master_key, particle->key, (*counter)++, &rn[0], &rn[1]);
+      master_key, (*local_key)++, counter, &rn[0], &rn[1]);
 
   if(rn[0] < p_absorb) {
     /* Model particle absorption */
 
     // Find the new particle weight after absorption, saving the energy change
-    particle->weight *= (1.0 - p_absorb);
+    *p_weight *= (1.0 - p_absorb);
 
-    if(particle->e < MIN_ENERGY_OF_INTEREST) {
+    if(*p_energy < MIN_ENERGY_OF_INTEREST) {
       // Energy is too low, so mark the particle for deletion
-      particle->dead = 1;
+      *p_dead = 1;
     }
   }
   else {
@@ -407,27 +437,27 @@ int handle_collision(
     const double mu_cm = 1.0 - 2.0*rn[1];
 
     // Calculate the new energy based on the relation to angle of incidence
-    const double e_new = particle->e*
+    const double e_new = (*p_energy)*
       (MASS_NO*MASS_NO + 2.0*MASS_NO*mu_cm + 1.0)/
       ((MASS_NO + 1.0)*(MASS_NO + 1.0));
 
     // Convert the angle into the laboratory frame of reference
     double cos_theta =
-      0.5*((MASS_NO+1.0)*sqrt(e_new/particle->e) - 
-          (MASS_NO-1.0)*sqrt(particle->e/e_new));
+      0.5*((MASS_NO+1.0)*sqrt(e_new/(*p_energy)) - 
+          (MASS_NO-1.0)*sqrt((*p_energy)/e_new));
 
     // Alter the direction of the velocities
     const double sin_theta = sqrt(1.0-cos_theta*cos_theta);
     const double omega_x_new =
-      (particle->omega_x*cos_theta - particle->omega_y*sin_theta);
+      ((*p_omega_x)*cos_theta - (*p_omega_y)*sin_theta);
     const double omega_y_new =
-      (particle->omega_x*sin_theta + particle->omega_y*cos_theta);
-    particle->omega_x = omega_x_new;
-    particle->omega_y = omega_y_new;
-    particle->e = e_new;
+      ((*p_omega_x)*sin_theta + (*p_omega_y)*cos_theta);
+    *p_omega_x = omega_x_new;
+    *p_omega_y = omega_y_new;
+    *p_energy = e_new;
   }
 
-  return particle->dead;
+  return *p_dead;
 }
 
 // Makes the necessary updates to the particle given that
@@ -436,84 +466,93 @@ int handle_facet_encounter(
     const int global_nx, const int global_ny, const int nx, const int ny, 
     const int x_off, const int y_off, const int* neighbours, 
     const double distance_to_facet, int x_facet, int* nparticles_sent, 
-    Particle* particle)
+    double* p_x, double* p_y, double* p_omega_x, double* p_omega_y,
+    int* p_cellx, int* p_celly, int* p_dead)
 {
   // TODO: Make sure that the roundoff is handled here, perhaps actually set it
   // fully to one of the edges here
-  particle->x += distance_to_facet*particle->omega_x;
-  particle->y += distance_to_facet*particle->omega_y;
+  *p_x += distance_to_facet*(*p_omega_x);
+  *p_y += distance_to_facet*(*p_omega_y);
 
   // This use of x_facet is a slight misnoma, as it is really a facet
   // along the y dimensions
   if(x_facet) {
-    if(particle->omega_x > 0.0) {
+    if(*p_omega_x > 0.0) {
       // Reflect at the boundary
-      if(particle->cellx >= (global_nx-1)) {
-        particle->omega_x = -(particle->omega_x);
+      if(*p_cellx >= (global_nx-1)) {
+        *p_omega_x = -(*p_omega_x);
       }
       else {
         // Definitely moving to right cell
-        particle->cellx++;
+        (*p_cellx)++;
 
+#if 0
         // Check if we need to pass to another process
-        if(particle->cellx >= nx+x_off) {
-          send_and_mark_particle(neighbours[EAST], particle);
+        if(*p_cellx >= nx+x_off) {
+          send_and_mark_particle(neighbours[EAST], p_dead);
           nparticles_sent[EAST]++;
           return 1;
         }
+#endif // if 0
       }
     }
-    else if(particle->omega_x < 0.0) {
-      if(particle->cellx <= 0) {
+    else if(*p_omega_x < 0.0) {
+      if(*p_cellx <= 0) {
         // Reflect at the boundary
-        particle->omega_x = -(particle->omega_x);
+        *p_omega_x = -(*p_omega_x);
       }
       else {
         // Definitely moving to left cell
-        particle->cellx--;
+        (*p_cellx)--;
 
+#if 0
         // Check if we need to pass to another process
-        if(particle->cellx < x_off) {
-          send_and_mark_particle(neighbours[WEST], particle);
+        if(*p_cellx < x_off) {
+          send_and_mark_particle(neighbours[WEST], p_dead);
           nparticles_sent[WEST]++;
           return 1;
         }
+#endif // if 0
       }
     }
   }
   else {
-    if(particle->omega_y > 0.0) {
+    if(*p_omega_y > 0.0) {
       // Reflect at the boundary
-      if(particle->celly >= (global_ny-1)) {
-        particle->omega_y = -(particle->omega_y);
+      if(*p_celly >= (global_ny-1)) {
+        *p_omega_y = -(*p_omega_y);
       }
       else {
         // Definitely moving to north cell
-        particle->celly++;
+        (*p_celly)++;
 
+#if 0
         // Check if we need to pass to another process
-        if(particle->celly >= ny+y_off) {
-          send_and_mark_particle(neighbours[NORTH], particle);
+        if(*p_celly >= ny+y_off) {
+          send_and_mark_particle(neighbours[NORTH], p_dead);
           nparticles_sent[NORTH]++;
           return 1;
         }
+#endif // if 0
       }
     }
-    else if(particle->omega_y < 0.0) {
+    else if(*p_omega_y < 0.0) {
       // Reflect at the boundary
-      if(particle->celly <= 0) {
-        particle->omega_y = -(particle->omega_y);
+      if(*p_celly <= 0) {
+        *p_omega_y = -(*p_omega_y);
       }
       else {
         // Definitely moving to south cell
-        particle->celly--;
+        (*p_celly)--;
 
+#if 0
         // Check if we need to pass to another process
-        if(particle->celly < y_off) {
-          send_and_mark_particle(neighbours[SOUTH], particle);
+        if(*p_celly < y_off) {
+          send_and_mark_particle(neighbours[SOUTH], p_dead);
           nparticles_sent[SOUTH]++;
           return 1;
         }
+#endif // if 0
       }
     }
   }
@@ -523,7 +562,7 @@ int handle_facet_encounter(
 
 // Sends a particle to a neighbour and replaces in the particle list
 void send_and_mark_particle(
-    const int destination, Particle* particle)
+    const int destination, int* p_dead)
 {
 #if 0
 #ifdef MPI
@@ -531,7 +570,7 @@ void send_and_mark_particle(
     return;
   }
 
-  particle->dead = 1;
+  *p_dead = 1;
 
   // Send the particle
   MPI_Send(
@@ -546,21 +585,21 @@ void send_and_mark_particle(
 void calc_distance_to_facet(
     const int global_nx, const double x, const double y, const int x_off,
     const int y_off, const double omega_x, const double omega_y,
-    const double speed, const int particle_cellx, 
-    const int particle_celly, double* distance_to_facet,
+    const double speed, const int p_cellx, 
+    const int p_celly, double* distance_to_facet,
     int* x_facet, const double* edgex, const double* edgey)
 {
   // Check the timestep required to move the particle along a single axis
   // If the velocity is positive then the top or right boundary will be hit
-  const int cellx = particle_cellx-x_off+PAD;
-  const int celly = particle_celly-y_off+PAD;
+  const int cellx = p_cellx-x_off+PAD;
+  const int celly = p_celly-y_off+PAD;
   double u_x_inv = 1.0/(omega_x*speed);
   double u_y_inv = 1.0/(omega_y*speed);
 
   // The bound is open on the left and bottom so we have to correct for this and
   // required the movement to the facet to go slightly further than the edge
   // in the calculated values, using OPEN_BOUND_CORRECTION, which is the smallest
-  // possible distance we can be from the closed bound e.g. 1.0e-14.
+  // possible distance we can be from the closed bound energy.g. 1.0e-14.
   double dt_x = (omega_x >= 0.0)
     ? ((edgex[cellx+1])-x)*u_x_inv
     : ((edgex[cellx]-OPEN_BOUND_CORRECTION)-x)*u_x_inv;
@@ -600,8 +639,8 @@ void calc_distance_to_facet(
 // Calculate the energy deposition in the cell
 double calculate_energy_deposition(
     const int global_nx, const int nx, const int x_off, const int y_off, 
-    Particle* particle, const double inv_ntotal_particles, const double path_length, 
-    const double number_density, 
+    const double inv_ntotal_particles, const double path_length, 
+    const double p_energy, const double p_weight, const double number_density, 
     const double microscopic_cs_absorb, const double microscopic_cs_total)
 {
   // Calculate the energy deposition based on the path length
@@ -609,12 +648,12 @@ double calculate_energy_deposition(
   const double absorption_heating = 
     (microscopic_cs_absorb/microscopic_cs_total)*average_exit_energy_absorb;
   const double average_exit_energy_scatter = 
-    particle->e*((MASS_NO*MASS_NO+MASS_NO+1)/((MASS_NO+1)*(MASS_NO+1)));
+    p_energy*((MASS_NO*MASS_NO+MASS_NO+1)/((MASS_NO+1)*(MASS_NO+1)));
   const double scattering_heating = 
     (1.0-(microscopic_cs_absorb/microscopic_cs_total))*average_exit_energy_scatter;
   const double heating_response =
-    (particle->e-scattering_heating-absorption_heating);
-  return particle->weight*path_length*(microscopic_cs_total*BARNS)*
+    (p_energy-scattering_heating-absorption_heating);
+  return p_weight*path_length*(microscopic_cs_total*BARNS)*
     heating_response*number_density;
 }
 
@@ -704,25 +743,49 @@ size_t inject_particles(
     const double* edgey, const double initial_energy, const uint64_t master_key, 
     Particle** particles)
 {
-  *particles = (Particle*)malloc(sizeof(Particle)*nparticles*2);
+  *particles = (Particle*)malloc(sizeof(Particle));
   if(!*particles) {
     TERMINATE("Could not allocate particle array.\n");
   }
 
+  Particle* particle = *particles;
+  size_t allocation = 0;
+  allocation += allocate_data(&particle->x,nparticles*1.5);
+  allocation += allocate_data(&particle->y,nparticles*1.5);
+  allocation += allocate_data(&particle->omega_x,nparticles*1.5);
+  allocation += allocate_data(&particle->omega_y,nparticles*1.5);
+  allocation += allocate_data(&particle->energy,nparticles*1.5);
+  allocation += allocate_data(&particle->weight,nparticles*1.5);
+  allocation += allocate_data(&particle->dt_to_census,nparticles*1.5);
+  allocation += allocate_data(&particle->mfp_to_collision,nparticles*1.5);
+  allocation += allocate_int_data(&particle->cellx,nparticles*1.5);
+  allocation += allocate_int_data(&particle->celly,nparticles*1.5);
+  allocation += allocate_int_data(&particle->dead,nparticles*1.5);
+
+  double* p_x = particle->x;
+  double* p_y = particle->y;
+  double* p_omega_x = particle->omega_x;
+  double* p_omega_y = particle->omega_y;
+  double* p_energy = particle->energy;
+  double* p_weight = particle->weight;
+  double* p_dt_to_census = particle->dt_to_census;
+  double* p_mfp_to_collision = particle->mfp_to_collision;
+  int* p_cellx = particle->cellx;
+  int* p_celly = particle->celly;
+  int* p_dead = particle->dead;
+
   START_PROFILING(&compute_profile);
 
-  Particle* p = (*particles);
-
-#pragma omp target teams distribute parallel for map(to: p)
+#pragma omp target teams distribute parallel for 
   for(int pp = 0; pp < nparticles; ++pp) {
     double rn[NRANDOM_NUMBERS];
     generate_random_numbers(
         master_key, 0, pp, &rn[0], &rn[1]);
 
     // Set the initial nandom location of the particle inside the source region
-    p[pp].x = local_particle_left_off + 
+    p_x[pp] = local_particle_left_off + 
       rn[0]*local_particle_width;
-    p[pp].y = local_particle_bottom_off + 
+    p_y[pp] = local_particle_bottom_off + 
       rn[1]*local_particle_height;
 
     // Check the location of the specific cell that the particle sits within.
@@ -730,43 +793,42 @@ size_t inject_particles(
     int cellx = 0;
     int celly = 0;
     for(int pp = 0; pp < local_nx; ++pp) {
-      if(p[pp].x >= edgex[pp+PAD] && p[pp].x < edgex[pp+PAD+1]) {
+      if(p_x[pp] >= edgex[pp+PAD] && p_x[pp] < edgex[pp+PAD+1]) {
         cellx = x_off+pp;
         break;
       }
     }
     for(int pp = 0; pp < local_ny; ++pp) {
-      if(p[pp].y >= edgey[pp+PAD] && p[pp].y < edgey[pp+PAD+1]) {
+      if(p_y[pp] >= edgey[pp+PAD] && p_y[pp] < edgey[pp+PAD+1]) {
         celly = y_off+pp;
         break;
       }
     }
 
-    p[pp].cellx = cellx;
-    p[pp].celly = celly;
+    p_cellx[pp] = cellx;
+    p_celly[pp] = celly;
 
     // Generating theta has uniform density, however 0.0 and 1.0 produce the same 
     // value which introduces very very very small bias...
     generate_random_numbers(
         master_key, 1, pp, &rn[0], &rn[1]);
     const double theta = 2.0*M_PI*rn[0];
-    p[pp].omega_x = cos(theta);
-    p[pp].omega_y = sin(theta);
+    p_omega_x[pp] = cos(theta);
+    p_omega_y[pp] = sin(theta);
 
     // This approximation sets mono-energetic initial state for source particles  
-    p[pp].e = initial_energy;
+    p_energy[pp] = initial_energy;
 
     // Set a weight for the particle to track absorption
-    p[pp].weight = 1.0;
-    p[pp].dt_to_census = dt;
-    p[pp].mfp_to_collision = 0.0;
-    p[pp].dead = 0;
-    p[pp].key = pp;
+    p_weight[pp] = 1.0;
+    p_dt_to_census[pp] = dt;
+    p_mfp_to_collision[pp] = 0.0;
+    p_dead[pp] = 0;
   }
 
   STOP_PROFILING(&compute_profile, "initialising particles");
 
-  return (sizeof(Particle)*nparticles*2);
+  return allocation;
 }
 
 // Generates a pair of random numbers

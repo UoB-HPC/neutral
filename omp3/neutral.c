@@ -546,7 +546,7 @@ void calc_distance_to_facet(
   // The bound is open on the left and bottom so we have to correct for this and
   // required the movement to the facet to go slightly further than the edge
   // in the calculated values, using OPEN_BOUND_CORRECTION, which is the smallest
-  // possible distance we can be from the closed bound e.g. 1.0e-14.
+  // possible distance we can be from the closed bound energy.g. 1.0e-14.
   double dt_x = (omega_x >= 0.0)
     ? ((edgex[cellx+1])-x)*u_x_inv
     : ((edgex[cellx]-OPEN_BOUND_CORRECTION)-x)*u_x_inv;

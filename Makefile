@@ -1,10 +1,10 @@
 # User defined parameters
-KERNELS  					 = omp4
-COMPILER 					 = CLANG_OMP4
+KERNELS  					 = cuda
+COMPILER 					 = GCC
 MPI      					 = no
 OPTIONS  					+= -DTILES #-DENABLE_PROFILING 
-ARCH_COMPILER_CC   = ~/llvm/build/bin/clang
-ARCH_COMPILER_CPP  = ~/llvm/build/bin/clang++
+ARCH_COMPILER_CC   = gcc
+ARCH_COMPILER_CPP  = g++
 
 # Compiler-specific flags
 CFLAGS_INTEL			 = -qopenmp -no-prec-div -std=gnu99 -DINTEL \
@@ -20,7 +20,7 @@ CFLAGS_XL					 = -O3 -qsmp=omp
 CFLAGS_XL_OMP4		 = -qsmp -qoffload
 CFLAGS_CLANG			 = -std=gnu99 -fopenmp -march=native -Wall
 CFLAGS_CLANG_OMP4  = -O3 -Wall -fopenmp-targets=nvptx64-nvidia-cuda -fopenmp-nonaliased-maps \
-										 -fopenmp=libomp --cuda-path=/home/projects/pwr8-rhel73-lsf/cuda/8.0.44/ \
+										 -fopenmp=libomp --cuda-path=/nfs/modules/cuda/8.0.44/ \
 										 -I/home/projects/pwr8-rhel73-lsf/gcc/6.3.0/lib/gcc/powerpc64le-unknown-linux-gnu/6.3.0/include
 
 OPTIONS  					+= -D__STDC_CONSTANT_MACROS

@@ -18,24 +18,29 @@ int handle_particle(
     const int global_nx, const int global_ny, const int nx, const int ny, 
     const int x_off, const int y_off, const int* neighbours, const double dt,
     const int initial, const int ntotal_particles, const double* density, 
-    const double* edgex, const double* edgey, const double* edgedx, const double* edgedy,  
+    const double* edgex, const double* edgey, const double* edgedx, const double* edgedy, 
     const double* cs_absorb_table_keys, const double* cs_scatter_table_keys,
     const double* cs_absorb_table_values, const double* cs_scatter_table_values,
     const int cs_absorb_table_nentries, const int cs_scatter_table_nentries,
-    int* nparticles_sent, uint64_t* facets, uint64_t* collisions, Particle* particle, 
+    int* nparticles_sent, uint64_t* facets, uint64_t* collisions, const int pp, 
+    double* p_x, double* p_y, double* p_omega_x, double* p_omega_y, 
+    double* p_energy, double* p_weight, double* p_dt_to_census, 
+    double* p_mfp_to_collision, int* p_cellx, int* p_celly, int* p_dead, 
     double* energy_deposition_tally, const uint64_t master_key);
 
 // Tallies the energy deposition in the cell
 void update_tallies(
-    const int nx, const int x_off, const int y_off, Particle* particle, 
-    const double inv_ntotal_particles, const double energy_deposition,
-    double* energy_deposition_tally);
+    const int nx, const int x_off, const int y_off, const int p_cellx, 
+    const int p_celly, const double inv_ntotal_particles, 
+    const double energy_deposition, double* energy_deposition_tally);
 
 // Handle the collision event, including absorption and scattering
 int handle_collision(
-    Particle* particle, const double macroscopic_cs_absorb, uint64_t* counter,
-    const double macroscopic_cs_total, const double distance_to_collision, 
-    uint64_t master_key);
+    double* p_x, double* p_y, double* p_omega_x, double* p_omega_y, double* p_e, 
+    double* p_weight, double* p_dt_to_census, double* p_mfp_to_collision, 
+    int* p_cellx, int* p_celly, int* p_dead, const double macroscopic_cs_absorb, 
+    uint64_t counter, uint64_t* local_key, const double macroscopic_cs_total, 
+    const double distance_to_collision, uint64_t master_key);
 
 // Makes the necessary updates to the particle given that
 // the facet was encountered
@@ -43,11 +48,12 @@ int handle_facet_encounter(
     const int global_nx, const int global_ny, const int nx, const int ny, 
     const int x_off, const int y_off, const int* neighbours, 
     const double distance_to_facet, int x_facet, int* nparticles_sent, 
-    Particle* particle);
+    double* p_x, double* p_y, double* p_omega_x, double* p_omega_y,
+    int* p_cellx, int* p_celly, int* p_dead);
 
 // Sends a particle to a neighbour and replaces in the particle list
 void send_and_mark_particle(
-    const int destination, Particle* particle);
+    const int destination, int* p_dead);
 
 // Calculate the distance to the next facet
 void calc_distance_to_facet(
@@ -60,8 +66,8 @@ void calc_distance_to_facet(
 // Calculate the energy deposition in the cell
 double calculate_energy_deposition(
     const int global_nx, const int nx, const int x_off, const int y_off, 
-    Particle* particle, const double inv_ntotal_particles, const double path_length, 
-    const double number_density, 
+    const double inv_ntotal_particles, const double path_length, 
+    const double p_energy, const double p_weight, const double number_density, 
     const double microscopic_cs_absorb, const double microscopic_cs_total);
 
 // Fetch the cross section for a particular energy value
