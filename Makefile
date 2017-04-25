@@ -26,6 +26,19 @@ CFLAGS_PGI				 = -O3 -fast -mp #-Minfo
 
 OPTIONS  					+= -D__STDC_CONSTANT_MACROS
 
+ifeq ($(KERNELS), cuda)
+  CHECK_CUDA_ROOT = yes
+endif
+ifeq ($(COMPILER), CLANG_OMP4)
+  CHECK_CUDA_ROOT = yes
+endif
+
+ifeq ($(CHECK_CUDA_ROOT), yes)
+ifeq ("${CUDAROOT}", "")
+$(error "$$CUDAROOT is not set, please set this to the root of your CUDA install.")
+endif
+endif
+
 ifeq ($(DEBUG), yes)
   OPTIONS += -O0 -DDEBUG -g
 endif
