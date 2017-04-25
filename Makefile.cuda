@@ -1,5 +1,5 @@
 NVCC					 = nvcc
-NVCC_FLAGS		 = -O3 -arch=sm_60 $(OPTIONS)
+NVCC_FLAGS		 = -O3 -arch=sm_35 $(OPTIONS)
 
 CCBIN_XL				= xlc++
 CCBIN_GCC 			= g++

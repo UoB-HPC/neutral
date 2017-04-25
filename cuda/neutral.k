@@ -1,7 +1,8 @@
 #include "../../cuda/shared.h"
 #include "../../cuda/reduction.k"
 
-#if __CUDA_ARCH__ < 600
+#if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 600
+#else
 __device__ double atomicAdd(double* address, double val)
 {
   unsigned long long int* address_as_ull = (unsigned long long int*)address;
