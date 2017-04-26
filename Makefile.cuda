@@ -1,5 +1,5 @@
 NVCC					 = nvcc
-NVCC_FLAGS		 = -O3 -arch=sm_60 $(OPTIONS)
+NVCC_FLAGS		 = -O3 -arch=sm_35 $(OPTIONS)
 
 CCBIN_XL				= xlc++
 CCBIN_GCC 			= g++
@@ -7,7 +7,7 @@ CCBIN_GCC_POWER = g++
 CCBIN						= $(CCBIN_$(COMPILER))
 
 ARCH_LINKER 	 = $(ARCH_COMPILER_CPP)
-ARCH_LDFLAGS   = -fopenmp -lcudart -L$(CUDA_PATH)/lib64
+ARCH_LDFLAGS   = -fopenmp -lcudart -L$(CUDAROOT)/lib64
 
 CUDA_SRC   			= $(wildcard $(KERNELS)/*.cu)
 CUDA_SRC  		 += $(wildcard $(ARCH_DIR)/$(KERNELS)/*.cu)
@@ -15,8 +15,8 @@ CUDA_SRC_CLEAN  = $(subst $(ARCH_DIR)/,,$(CUDA_SRC))
 OBJS 			 			= $(patsubst %.cu, $(ARCH_BUILD_DIR)/%.o, $(CUDA_SRC_CLEAN))
 
 $(ARCH_BUILD_DIR)/%.o: %.cu Makefile
-	$(NVCC) -Xcompiler "-O3" -ccbin $(CCBIN) $(NVCC_FLAGS) $(OPTIONS) -c $< -o $@
+	$(NVCC) -Xcompiler "-O3" -ccbin $(CCBIN) $(NVCC_FLAGS) -c $< -o $@
 
 $(ARCH_BUILD_DIR)/%.o: $(ARCH_DIR)/%.cu Makefile
-	$(NVCC) -Xcompiler "-O3" -ccbin $(CCBIN) $(NVCC_FLAGS) $(OPTIONS) -c $< -o $@
+	$(NVCC) -Xcompiler "-O3" -ccbin $(CCBIN) $(NVCC_FLAGS) -c $< -o $@
 
