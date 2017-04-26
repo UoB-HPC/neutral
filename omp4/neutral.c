@@ -170,7 +170,7 @@ void handle_particles(
   int* dead = particles_start->dead;
   uint64_t local_master_key = *master_key;
 
-#pragma omp target teams distribute parallel for \
+#pragma omp target teams distribute parallel for simd \
     map(tofrom: ncollisions, nfacets, nparticles_deleted) \
     reduction(+: ncollisions, nfacets, nparticles_deleted) 
     for(int pp = 0; pp < nparticles_to_process; ++pp) {
@@ -246,14 +246,15 @@ int handle_particle(
   double energy_deposition = 0.0;
   const double inv_ntotal_particles = 1.0/(double)ntotal_particles;
 
-  double rn[NRANDOM_NUMBERS];
+  double rn0;
+  double rn1;
 
   // Set time to census and MFPs until collision, unless travelled particle
   if(initial) {
     *p_dt_to_census = dt;
     generate_random_numbers(
-        master_key, local_key++, counter, &rn[0], &rn[1]);
-    *p_mfp_to_collision = -log(rn[0])/macroscopic_cs_scatter;
+        master_key, local_key++, counter, &rn0, &rn1);
+    *p_mfp_to_collision = -log(rn0)/macroscopic_cs_scatter;
   }
 
   // Loop until we have reached census
@@ -310,8 +311,8 @@ int handle_particle(
 
       // Re-sample number of mean free paths to collision
       generate_random_numbers(
-          master_key, local_key++, counter, &rn[0], &rn[1]);
-      *p_mfp_to_collision = -log(rn[0])/macroscopic_cs_scatter;
+          master_key, local_key++, counter, &rn0, &rn1);
+      *p_mfp_to_collision = -log(rn0)/macroscopic_cs_scatter;
       *p_dt_to_census -= distance_to_collision/speed;
       speed = sqrt((2.0*(*p_energy)*eV_TO_J)/PARTICLE_MASS);
     }
@@ -403,11 +404,13 @@ int handle_collision(
 
   const double p_absorb = macroscopic_cs_absorb/macroscopic_cs_total;
 
-  double rn[NRANDOM_NUMBERS];
-  generate_random_numbers(
-      master_key, (*local_key)++, counter, &rn[0], &rn[1]);
+  double rn0;
+  double rn1;
 
-  if(rn[0] < p_absorb) {
+  generate_random_numbers(
+      master_key, (*local_key)++, counter, &rn0, &rn1);
+
+  if(rn0 < p_absorb) {
     /* Model particle absorption */
 
     // Find the new particle weight after absorption, saving the energy change
@@ -427,7 +430,7 @@ int handle_collision(
     // plane, which solves a different equation. Change so that we consider the 
     // full set of directional cosines, allowing scattering between planes.
     // Choose a random scattering angle between -1 and 1
-    const double mu_cm = 1.0 - 2.0*rn[1];
+    const double mu_cm = 1.0 - 2.0*rn1;
 
     // Calculate the new energy based on the relation to angle of incidence
     const double e_new = (*p_energy)*
@@ -774,14 +777,15 @@ size_t inject_particles(
 
 #pragma omp target teams distribute parallel for 
   for(int pp = 0; pp < nparticles; ++pp) {
-    double rn[NRANDOM_NUMBERS];
-    generate_random_numbers(master_key, 0, pp, &rn[0], &rn[1]);
+    double rn0;
+    double rn1;
+    generate_random_numbers(master_key, 0, pp, &rn0, &rn1);
 
     // Set the initial nandom location of the particle inside the source region
     p_x[pp] = local_particle_left_off + 
-      rn[0]*local_particle_width;
+      rn0*local_particle_width;
     p_y[pp] = local_particle_bottom_off + 
-      rn[1]*local_particle_height;
+      rn1*local_particle_height;
 
     // Check the location of the specific cell that the particle sits within.
     // We have to check this explicitly because the mesh might be non-uniform.
@@ -805,8 +809,8 @@ size_t inject_particles(
 
     // Generating theta has uniform density, however 0.0 and 1.0 produce the same 
     // value which introduces very very very small bias...
-    generate_random_numbers(master_key, 1, pp, &rn[0], &rn[1]);
-    const double theta = 2.0*M_PI*rn[0];
+    generate_random_numbers(master_key, 1, pp, &rn0, &rn1);
+    const double theta = 2.0*M_PI*rn0;
     p_omega_x[pp] = cos(theta);
     p_omega_y[pp] = sin(theta);
 

@@ -20,9 +20,9 @@ CFLAGS_XL					 = -O3 -qsmp=omp
 CFLAGS_XL_OMP4		 = -qsmp -qoffload
 CFLAGS_CLANG			 = -std=gnu99 -fopenmp -march=native -Wall
 CFLAGS_CLANG_OMP4  = -O3 -Wall -fopenmp-targets=nvptx64-nvidia-cuda -fopenmp-nonaliased-maps \
-										 -fopenmp=libomp --cuda-path=$(CUDAROOT)
+										 -fopenmp=libomp --cuda-path=$(CUDAROOT) -DCLANG
 										 #-I/home/projects/pwr8-rhel73-lsf/gcc/6.3.0/lib/gcc/powerpc64le-unknown-linux-gnu/6.3.0/include
-CFLAGS_PGI				 = -O3 -fast -mp #-Minfo
+CFLAGS_PGI				 = -O3 -fast -mp -Minfo
 
 OPTIONS  					+= -D__STDC_CONSTANT_MACROS
 
@@ -74,5 +74,5 @@ make_build_dir:
 
 clean:
 	rm -rf $(ARCH_BUILD_DIR)/* neutral.$(KERNELS) *.vtk *.bov \
-		*.dat *.optrpt *.cub *.ptx *.ap2 *.xf
+		*.dat *.optrpt *.cub *.ptx *.ap2 *.xf *.ptx1
 
