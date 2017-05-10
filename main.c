@@ -133,7 +133,7 @@ int main(int argc, char** argv)
     int ny = (mesh.local_ny-2*PAD);
 #pragma omp parallel for
     for(int ii = 0; ii < nx*ny; ++ii) {
-      for(int tt = 1; tt < 44; ++tt) {
+      for(int tt = 1; tt < neutral_data.nthreads; ++tt) {
         neutral_data.energy_deposition_tally[ii] += 
           neutral_data.energy_deposition_tally[tt*nx*nx+ii];
       }
