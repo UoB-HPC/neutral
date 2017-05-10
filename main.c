@@ -111,13 +111,24 @@ int main(int argc, char** argv)
     elapsed_sim_time += mesh.dt;
 
     if(visit_dump) {
+      int nx = (mesh.local_nx-2*PAD);
+      int ny = (mesh.local_ny-2*PAD);
+      double* temp_energy_deposition = (double*)malloc(sizeof(double)*nx*ny);
+#pragma omp parallel for
+      for(int ii = 0; ii < nx*ny; ++ii) {
+        temp_energy_deposition[ii] = 0.0;
+        for(int tt = 0; tt < neutral_data.nthreads; ++tt) {
+          temp_energy_deposition[ii] += neutral_data.energy_deposition_tally[tt][ii];
+        }
+      }
+
       char tally_name[100];
       sprintf(tally_name, "energy%d", tt);
       int dneighbours[NNEIGHBOURS] = { EDGE, EDGE,  EDGE,  EDGE,  EDGE,  EDGE }; 
       write_all_ranks_to_visit(
           mesh.global_nx, mesh.global_ny, mesh.local_nx-2*PAD, mesh.local_ny-2*PAD,
           mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, dneighbours, 
-          neutral_data.energy_deposition_tally, tally_name, 0, elapsed_sim_time);
+          temp_energy_deposition, tally_name, 0, elapsed_sim_time);
     }
 
     // Leave the simulation if we have reached the simulation end time
@@ -128,36 +139,41 @@ int main(int argc, char** argv)
     }
   }
 
-    double w0 = omp_get_wtime();
-    int nx = (mesh.local_nx-2*PAD);
-    int ny = (mesh.local_ny-2*PAD);
+#if 0
+#endif // if 0
+
+  if(visit_dump) {
+    plot_particle_density(
+        &neutral_data, &mesh, tt, neutral_data.nparticles, elapsed_sim_time);
+  }
+
+  // Flatten the energy deposition replication
+  //double w0 = omp_get_wtime();
+  int nx = (mesh.local_nx-2*PAD);
+  int ny = (mesh.local_ny-2*PAD);
+
 #pragma omp parallel for
-    for(int ii = 0; ii < nx*ny; ++ii) {
-      for(int tt = 1; tt < neutral_data.nthreads; ++tt) {
-        neutral_data.energy_deposition_tally[ii] += 
-          neutral_data.energy_deposition_tally[tt*nx*nx+ii];
-      }
+  for(int ii = 0; ii < nx*ny; ++ii) {
+    for(int tt = 1; tt < neutral_data.nthreads; ++tt) {
+      neutral_data.energy_deposition_tally[0][ii] += 
+        neutral_data.energy_deposition_tally[tt][ii];
     }
-    wallclock += omp_get_wtime()-w0;
+  }
+  //wallclock += omp_get_wtime()-w0;
 
-    if(visit_dump) {
-      plot_particle_density(
-          &neutral_data, &mesh, tt, neutral_data.nparticles, elapsed_sim_time);
-    }
+  validate(
+      mesh.local_nx-2*PAD, mesh.local_ny-2*PAD, 
+      neutral_data.neutral_params_filename, mesh.rank, 
+      neutral_data.energy_deposition_tally[0]);
 
-    validate(
-        mesh.local_nx-2*PAD, mesh.local_ny-2*PAD, 
-        neutral_data.neutral_params_filename, mesh.rank, 
-        neutral_data.energy_deposition_tally);
+  if(mesh.rank == MASTER) {
+    PRINT_PROFILING_RESULTS(&p);
 
-    if(mesh.rank == MASTER) {
-      PRINT_PROFILING_RESULTS(&p);
+    printf("Wallclock %.9fs, Elapsed Simulation Time %.6fs\n", 
+        wallclock, elapsed_sim_time);
+  }
 
-      printf("Wallclock %.9fs, Elapsed Simulation Time %.6fs\n", 
-          wallclock, elapsed_sim_time);
-    }
-
-    return 0;
+  return 0;
 }
 
 // This is a bit hacky and temporary for now

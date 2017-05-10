@@ -23,7 +23,7 @@ void solve_transport_2d(
     Particle* particles, const double* density, const double* edgex, 
     const double* edgey, const double* edgedx, const double* edgedy, 
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
-    double* energy_deposition_tally, int* reduce_array0, int* reduce_array1)
+    double** energy_deposition_tally, int* reduce_array0, int* reduce_array1)
 {
   // This is the known starting number of particles
   uint64_t facets = 0;
@@ -137,7 +137,7 @@ void handle_particles(
     uint64_t* collisions, int* nparticles_sent, uint64_t* master_key, 
     const int ntotal_particles, const int nparticles_to_process, 
     int* nparticles, Particle* particles_start, CrossSection* cs_scatter_table, 
-    CrossSection* cs_absorb_table, double* energy_deposition_tally)
+    CrossSection* cs_absorb_table, double** energy_deposition_tally)
 {
   // Have to maintain a master key, so that particles don't keep seeing
   // the same random number streams. 
@@ -183,7 +183,7 @@ int handle_particle(
     const double* edgedy, const CrossSection* cs_scatter_table, 
     const CrossSection* cs_absorb_table, int* nparticles_sent, uint64_t* facets, 
     uint64_t* collisions, Particle* particle, 
-    double* energy_deposition_tally, const uint64_t master_key)
+    double** energy_deposition_tally, const uint64_t master_key)
 {
   // (1) particle can stream and reach census
   // (2) particle can collide and either
@@ -344,12 +344,12 @@ int handle_particle(
 void update_tallies(
     const int nx, const int x_off, const int y_off, Particle* particle, 
     const double inv_ntotal_particles, const double energy_deposition,
-    double* energy_deposition_tally)
+    double** energy_deposition_tally)
 {
   const int cellx = particle->cellx-x_off;
   const int celly = particle->celly-y_off;
 
-  energy_deposition_tally[omp_get_thread_num()*nx*nx+celly*nx+cellx] += 
+  energy_deposition_tally[omp_get_thread_num()][celly*nx+cellx] += 
     energy_deposition*inv_ntotal_particles;
 }
 
@@ -652,6 +652,8 @@ void validate(
     const int rank, double* energy_deposition_tally)
 {
   double local_energy_tally = 0.0;
+
+#pragma omp parallel for reduction(+: local_energy_tally)
   for(int ii = 0; ii < nx*ny; ++ii) {
     local_energy_tally += energy_deposition_tally[ii];
   }

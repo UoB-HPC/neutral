@@ -16,7 +16,7 @@ extern "C" {
       Particle* particles, const double* density, const double* edgex, 
       const double* edgey, const double* edgedx, const double* edgedy, 
       CrossSection* cs_scatter_table, CrossSection* cs_absorb_table, 
-      double* energy_deposition_tally, int* reduce_array0, int* reduce_array1);
+      double** energy_deposition_tally, int* reduce_array0, int* reduce_array1);
 
   // Initialises a new particle ready for tracking
   size_t inject_particles(
@@ -30,7 +30,7 @@ extern "C" {
   // Validates the results of the simulation
   void validate(
       const int nx, const int ny, const char* params_filename, 
-      const int rank, double* energy_tally);
+      const int rank, double* energy_deposition_tally);
 
 #ifdef __cplusplus
 }

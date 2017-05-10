@@ -95,7 +95,7 @@ typedef struct {
   int nlocal_particles;
 
   double* scalar_flux_tally;
-  double* energy_deposition_tally;
+  double** energy_deposition_tally;
 
   const char* neutral_params_filename;
 
