@@ -128,24 +128,36 @@ int main(int argc, char** argv)
     }
   }
 
-  if(visit_dump) {
-    plot_particle_density(
-        &neutral_data, &mesh, tt, neutral_data.nparticles, elapsed_sim_time);
-  }
+    double w0 = omp_get_wtime();
+    int nx = (mesh.local_nx-2*PAD);
+    int ny = (mesh.local_ny-2*PAD);
+#pragma omp parallel for
+    for(int ii = 0; ii < nx*ny; ++ii) {
+      for(int tt = 1; tt < 44; ++tt) {
+        neutral_data.energy_deposition_tally[ii] += 
+          neutral_data.energy_deposition_tally[tt*nx*nx+ii];
+      }
+    }
+    wallclock += omp_get_wtime()-w0;
 
-  validate(
-      mesh.local_nx-2*PAD, mesh.local_ny-2*PAD, 
-      neutral_data.neutral_params_filename, mesh.rank, 
-      neutral_data.energy_deposition_tally);
+    if(visit_dump) {
+      plot_particle_density(
+          &neutral_data, &mesh, tt, neutral_data.nparticles, elapsed_sim_time);
+    }
 
-  if(mesh.rank == MASTER) {
-    PRINT_PROFILING_RESULTS(&p);
+    validate(
+        mesh.local_nx-2*PAD, mesh.local_ny-2*PAD, 
+        neutral_data.neutral_params_filename, mesh.rank, 
+        neutral_data.energy_deposition_tally);
 
-    printf("Wallclock %.9fs, Elapsed Simulation Time %.6fs\n", 
-        wallclock, elapsed_sim_time);
-  }
+    if(mesh.rank == MASTER) {
+      PRINT_PROFILING_RESULTS(&p);
 
-  return 0;
+      printf("Wallclock %.9fs, Elapsed Simulation Time %.6fs\n", 
+          wallclock, elapsed_sim_time);
+    }
+
+    return 0;
 }
 
 // This is a bit hacky and temporary for now

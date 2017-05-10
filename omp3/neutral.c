@@ -349,8 +349,7 @@ void update_tallies(
   const int cellx = particle->cellx-x_off;
   const int celly = particle->celly-y_off;
 
-#pragma omp atomic update
-  energy_deposition_tally[celly*nx+cellx] += 
+  energy_deposition_tally[omp_get_thread_num()*nx*nx+celly*nx+cellx] += 
     energy_deposition*inv_ntotal_particles;
 }
 
