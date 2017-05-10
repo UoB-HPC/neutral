@@ -65,11 +65,6 @@ double calculate_energy_deposition(
 double microscopic_cs_for_energy(
     const CrossSection* cs, const double energy, int* cs_index);
 
-// Validates the results of the simulation
-void validate(
-    const int nx, const int ny, const char* params_filename, 
-    const int rank, double* energy_deposition_tally);
-
 // Initialises a new particle ready for tracking
 size_t inject_particles(
     const int nparticles, const int global_nx, const int local_nx, const int local_ny, 
