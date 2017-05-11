@@ -100,7 +100,7 @@ void initialise_neutral_data(
   // TO MAKE SURE THAT THEY ALL SUM UP TO THE CORRECT VALUE
 
   size_t allocation = allocate_data(
-      &neutral_data->energy_deposition_tally, local_nx*local_ny*neutral_data->nthreads);
+      &neutral_data->energy_deposition_tally, (size_t)local_nx*local_ny*neutral_data->nthreads);
   allocation += 
     allocate_int_data(&neutral_data->reduce_array0, neutral_data->nparticles);
   allocation += 

@@ -135,7 +135,7 @@ int main(int argc, char** argv)
     for(int ii = 0; ii < nx*ny; ++ii) {
       for(int tt = 1; tt < neutral_data.nthreads; ++tt) {
         neutral_data.energy_deposition_tally[ii] += 
-          neutral_data.energy_deposition_tally[tt*nx*nx+ii];
+          neutral_data.energy_deposition_tally[(size_t)tt*nx*nx+ii];
       }
     }
     wallclock += omp_get_wtime()-w0;
