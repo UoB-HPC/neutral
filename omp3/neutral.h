@@ -9,7 +9,7 @@ void handle_particles(
     uint64_t* collisions, int* nparticles_sent, uint64_t* master_key, 
     const int ntotal_particles, const int nparticles_to_process, 
     int* nparticles, Particle* particles_start, CrossSection* cs_scatter_table, 
-    CrossSection* cs_absorb_table, double** energy_deposition_tally);
+    CrossSection* cs_absorb_table, double* energy_deposition_tally);
 
 // Handles an individual particle.
 int handle_particle(
@@ -20,13 +20,13 @@ int handle_particle(
     const double* edgedy, const CrossSection* cs_scatter_table, 
     const CrossSection* cs_absorb_table, int* nparticles_sent, uint64_t* facets, 
     uint64_t* collisions, Particle* particle, 
-    double** energy_deposition_tally, const uint64_t master_key);
+    double* energy_deposition_tally, const uint64_t master_key);
 
 // Tallies the energy deposition in the cell
 void update_tallies(
     const int nx, const int x_off, const int y_off, Particle* particle, 
     const double inv_ntotal_particles, const double energy_deposition,
-    double** energy_deposition_tally);
+    double* energy_deposition_tally);
 
 // Handle the collision event, including absorption and scattering
 int handle_collision(
@@ -64,6 +64,11 @@ double calculate_energy_deposition(
 // Fetch the cross section for a particular energy value
 double microscopic_cs_for_energy(
     const CrossSection* cs, const double energy, int* cs_index);
+
+// Validates the results of the simulation
+void validate(
+    const int nx, const int ny, const char* params_filename, 
+    const int rank, double* energy_deposition_tally);
 
 // Initialises a new particle ready for tracking
 size_t inject_particles(
