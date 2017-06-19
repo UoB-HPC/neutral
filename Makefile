@@ -1,10 +1,10 @@
 # User defined parameters
-KERNELS  					 = cuda
-COMPILER 					 = GCC
+KERNELS  					 = omp3
+COMPILER 					 = INTEL
 MPI      					 = no
 OPTIONS  					+= -DTILES #-DENABLE_PROFILING 
-ARCH_COMPILER_CC   = gcc
-ARCH_COMPILER_CPP  = g++
+ARCH_COMPILER_CC   = mpicc
+ARCH_COMPILER_CPP  = mpic++
 
 # Compiler-specific flags
 CFLAGS_INTEL			 = -qopenmp -no-prec-div -std=gnu99 -DINTEL \

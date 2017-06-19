@@ -106,8 +106,8 @@ __device__ void generate_random_numbers(
 }
 
 __global__ void inject_particles_kernel(
-    const int local_nx, const int local_ny, const int x_off, const int y_off, 
-    const double local_particle_left_off, 
+    const int local_nx, const int local_ny, const int pad, const int x_off, 
+    const int y_off, const double local_particle_left_off, 
     const double local_particle_bottom_off, const double local_particle_width, 
     const double local_particle_height, const int nparticles, const double dt,
     const double initial_energy, const int master_key, const double* edgex,
@@ -130,15 +130,15 @@ __global__ void inject_particles_kernel(
   int cellx = 0;
   int celly = 0;
   for(int cc = 0; cc < local_nx; ++cc) {
-    if(x[gid] >= edgex[cc+PAD] && 
-        x[gid] < edgex[cc+PAD+1]) {
+    if(x[gid] >= edgex[cc+pad] && 
+        x[gid] < edgex[cc+pad+1]) {
       cellx = x_off+cc;
       break;
     }
   }
   for(int cc = 0; cc < local_ny; ++cc) {
-    if(y[gid] >= edgey[cc+PAD] && 
-        y[gid] < edgey[cc+PAD+1]) {
+    if(y[gid] >= edgey[cc+pad] && 
+        y[gid] < edgey[cc+pad+1]) {
       celly = y_off+cc;
       break;
     }
@@ -166,9 +166,9 @@ __global__ void inject_particles_kernel(
 
 // Handles an individual particle.
 __global__ void handle_particles_kernel(
-    const int nparticles, const int global_nx, const int global_ny, const int nx, const int ny, 
-    const int x_off, const int y_off, const double dt,
-    const int initial, const int ntotal_particles, const double* density, 
+    const int nparticles, const int global_nx, const int global_ny, 
+    const int nx, const int ny, const int pad, const int x_off, const int y_off, 
+    const double dt, const int initial, const int ntotal_particles, const double* density, 
     const double* edgex, const double* edgey, const double* edgedx, 
     const double* edgedy, double* energy_deposition_tally, int* particle_cellx, 
     int* particle_celly, const int cs_scatter_nentries, 
@@ -202,15 +202,15 @@ __global__ void handle_particles_kernel(
     uint64_t local_key = 0;
 
     // Update the cross sections, referencing into the padded mesh
-    int cellx = particle_cellx[pindex]-x_off+PAD;
-    int celly = particle_celly[pindex]-y_off+PAD;
+    int cellx = particle_cellx[pindex]-x_off+pad;
+    int celly = particle_celly[pindex]-y_off+pad;
 
     double x = particle_x[pindex];
     double y = particle_y[pindex];
     double weight = particle_weight[pindex];
     double omega_x = particle_omega_x[pindex];
     double omega_y = particle_omega_y[pindex];
-    double local_density = density[celly*(nx+2*PAD)+cellx];
+    double local_density = density[celly*(nx+2*pad)+cellx];
     double dt_to_census = particle_dt_to_census[pindex];
     double mfp_to_collision = particle_mfp_to_collision[pindex];
 
@@ -347,7 +347,7 @@ __global__ void handle_particles_kernel(
         if(e < MIN_ENERGY_OF_INTEREST) {
           // Energy is too low, so mark the particle for deletion
           // Need to store tally information as finished with particle
-          atomicAdd(&energy_deposition_tally[(celly-PAD)*nx+(cellx-PAD)],
+          atomicAdd(&energy_deposition_tally[(celly-pad)*nx+(cellx-pad)],
               energy_deposition*inv_ntotal_particles);
           energy_deposition = 0.0;
           break;
@@ -385,7 +385,7 @@ __global__ void handle_particles_kernel(
             microscopic_cs_scatter+microscopic_cs_absorb, pabsorb);
 
         // Update tallies as we leave a cell
-        atomicAdd(&energy_deposition_tally[(celly-PAD)*nx+(cellx-PAD)],
+        atomicAdd(&energy_deposition_tally[(celly-pad)*nx+(cellx-pad)],
             energy_deposition*inv_ntotal_particles);
         energy_deposition = 0.0;
 
@@ -437,7 +437,7 @@ __global__ void handle_particles_kernel(
         }
 
         // Update the data based on new cell
-        local_density = density[celly*(nx+2*PAD)+cellx];
+        local_density = density[celly*(nx+2*pad)+cellx];
         number_density = (local_density*AVOGADROS/MOLAR_MASS);
         macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
         macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
@@ -456,7 +456,7 @@ __global__ void handle_particles_kernel(
             microscopic_cs_scatter+microscopic_cs_absorb, pabsorb);
 
         // Need to store tally information as finished with particle
-        atomicAdd(&energy_deposition_tally[(celly-PAD)*nx+(cellx-PAD)],
+        atomicAdd(&energy_deposition_tally[(celly-pad)*nx+(cellx-pad)],
             energy_deposition*inv_ntotal_particles);
         energy_deposition = 0.0;
         break;

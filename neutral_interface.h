@@ -8,10 +8,10 @@
 extern "C" {
 #endif
 
-  // Performs a solve of dependent variables for particle transport.
   void solve_transport_2d(
       const int nx, const int ny, const int global_nx, const int global_ny, 
-      const int x_off, const int y_off, const double dt, const int ntotal_particles,
+      const int pad, const int x_off, const int y_off, const double dt, 
+      const int ntotal_particles,
       int* nlocal_particles, uint64_t* master_key, const int* neighbours, 
       Particle* particles, const double* density, const double* edgex, 
       const double* edgey, const double* edgedx, const double* edgedy, 
@@ -21,7 +21,7 @@ extern "C" {
   // Initialises a new particle ready for tracking
   size_t inject_particles(
       const int nparticles, const int global_nx, const int local_nx, const int local_ny, 
-      const double local_particle_left_off, const double local_particle_bottom_off, 
+      const int pad, const double local_particle_left_off, const double local_particle_bottom_off, 
       const double local_particle_width, const double local_particle_height, 
       const int x_off, const int y_off, const double dt, const double* edgex, 
       const double* edgey, const double initial_energy, const uint64_t master_key, 

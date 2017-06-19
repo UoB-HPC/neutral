@@ -30,8 +30,9 @@ int main(int argc, char** argv)
   neutral_data.neutral_params_filename = argv[1];
   mesh.global_nx = get_int_parameter("nx", neutral_data.neutral_params_filename);
   mesh.global_ny = get_int_parameter("ny", neutral_data.neutral_params_filename);
-  mesh.local_nx = mesh.global_nx + 2*PAD;
-  mesh.local_ny = mesh.global_ny + 2*PAD;
+  mesh.pad = mesh.pad;
+  mesh.local_nx = mesh.global_nx + 2*mesh.pad;
+  mesh.local_ny = mesh.global_ny + 2*mesh.pad;
   mesh.width = get_double_parameter("width", ARCH_ROOT_PARAMS);
   mesh.height = get_double_parameter("height", ARCH_ROOT_PARAMS);
   mesh.dt = get_double_parameter("dt", neutral_data.neutral_params_filename);
@@ -67,7 +68,7 @@ int main(int argc, char** argv)
   SharedData shared_data = {0};
   initialise_shared_data_2d(
       mesh.global_nx, mesh.global_ny, mesh.local_nx, mesh.local_ny, 
-      mesh.x_off, mesh.y_off, mesh.width, mesh.height, 
+      mesh.pad, mesh.x_off, mesh.y_off, mesh.width, mesh.height, 
       neutral_data.neutral_params_filename, mesh.edgex, mesh.edgey, &shared_data);
 
   handle_boundary_2d(
@@ -97,8 +98,8 @@ int main(int argc, char** argv)
 
     // Begin the main solve step
     solve_transport_2d(
-        mesh.local_nx-2*PAD, mesh.local_ny-2*PAD, mesh.global_nx, mesh.global_ny, 
-        mesh.x_off, mesh.y_off, mesh.dt, neutral_data.nparticles, 
+        mesh.local_nx-2*mesh.pad, mesh.local_ny-2*mesh.pad, mesh.global_nx, mesh.global_ny, 
+        mesh.pad, mesh.x_off, mesh.y_off, mesh.dt, neutral_data.nparticles, 
         &neutral_data.nlocal_particles, &master_key, mesh.neighbours, 
         neutral_data.local_particles, shared_data.rho, mesh.edgex, mesh.edgey, 
         mesh.edgedx, mesh.edgedy, neutral_data.cs_scatter_table, 
@@ -115,8 +116,8 @@ int main(int argc, char** argv)
       sprintf(tally_name, "energy%d", tt);
       int dneighbours[NNEIGHBOURS] = { EDGE, EDGE,  EDGE,  EDGE,  EDGE,  EDGE }; 
       write_all_ranks_to_visit(
-          mesh.global_nx, mesh.global_ny, mesh.local_nx-2*PAD, mesh.local_ny-2*PAD,
-          mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, dneighbours, 
+          mesh.global_nx, mesh.global_ny, mesh.local_nx-2*mesh.pad, mesh.local_ny-2*mesh.pad,
+          mesh.pad, mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, dneighbours, 
           neutral_data.energy_deposition_tally, tally_name, 0, elapsed_sim_time);
     }
 
@@ -134,7 +135,7 @@ int main(int argc, char** argv)
   }
 
   validate(
-      mesh.local_nx-2*PAD, mesh.local_ny-2*PAD, 
+      mesh.local_nx-2*mesh.pad, mesh.local_ny-2*mesh.pad, 
       neutral_data.neutral_params_filename, mesh.rank, 
       neutral_data.energy_deposition_tally);
 
@@ -167,7 +168,7 @@ void plot_particle_density(
     const int cellx = particle->cellx-mesh->x_off;
     const int celly = particle->celly-mesh->y_off;
 #endif
-    temp[celly*(mesh->local_nx-2*PAD)+cellx] += 1.0;
+    temp[celly*(mesh->local_nx-2*mesh->pad)+cellx] += 1.0;
   }
 
   // Dummy neighbours that stops any padding from happening
@@ -175,8 +176,8 @@ void plot_particle_density(
   char particles_name[100];
   sprintf(particles_name, "particles%d", tt);
   write_all_ranks_to_visit(
-      mesh->global_nx, mesh->global_ny, mesh->local_nx-2*PAD, 
-      mesh->local_ny-2*PAD, mesh->x_off, mesh->y_off, mesh->rank, 
+      mesh->global_nx, mesh->global_ny, mesh->local_nx-2*mesh->pad, 
+      mesh->local_ny-2*mesh->pad, mesh->pad, mesh->x_off, mesh->y_off, mesh->rank, 
       mesh->nranks, neighbours, temp, particles_name, 0, elapsed_sim_time);
   free(temp);
 }

@@ -18,7 +18,8 @@
 // Performs a solve of dependent variables for particle transport.
 void solve_transport_2d(
     const int nx, const int ny, const int global_nx, const int global_ny, 
-    const int x_off, const int y_off, const double dt, const int ntotal_particles,
+    const int pad, const int x_off, const int y_off, const double dt, 
+    const int ntotal_particles,
     int* nlocal_particles, uint64_t* master_key, const int* neighbours, 
     Particle* particles, const double* density, const double* edgex, 
     const double* edgey, const double* edgedx, const double* edgedy, 
@@ -42,7 +43,7 @@ void solve_transport_2d(
   }
 
   handle_particles(
-      global_nx, global_ny, nx, ny, x_off, y_off, 1, dt, neighbours, density, 
+      global_nx, global_ny, nx, ny, pad, x_off, y_off, 1, dt, neighbours, density, 
       edgex, edgey, edgedx, edgedy, &facets, &collisions, nparticles_sent, 
       master_key, ntotal_particles, nparticles, &nparticles, particles, 
       cs_scatter_table, cs_absorb_table, energy_deposition_tally);
@@ -131,7 +132,7 @@ void solve_transport_2d(
 // Handles the current active batch of particles
 void handle_particles(
     const int global_nx, const int global_ny, const int nx, const int ny, 
-    const int x_off, const int y_off, const int initial, const double dt, 
+    const int pad, const int x_off, const int y_off, const int initial, const double dt, 
     const int* neighbours, const double* density, const double* edgex, 
     const double* edgey, const double* edgedx, const double* edgedy, uint64_t* facets, 
     uint64_t* collisions, int* nparticles_sent, uint64_t* master_key, 
@@ -179,7 +180,7 @@ void handle_particles(
       }
 
       const int result = handle_particle(
-          global_nx, global_ny, nx, ny, x_off, y_off, neighbours, dt, initial,
+          global_nx, global_ny, nx, ny, pad, x_off, y_off, neighbours, dt, initial,
           ntotal_particles, density, edgex, edgey, edgedx, edgedy,  
           cs_absorb_table_keys, cs_scatter_table_keys, 
           cs_absorb_table_values, cs_scatter_table_values, 
@@ -201,7 +202,7 @@ void handle_particles(
 // Handles an individual particle.
 int handle_particle(
     const int global_nx, const int global_ny, const int nx, const int ny, 
-    const int x_off, const int y_off, const int* neighbours, const double dt,
+    const int pad, const int x_off, const int y_off, const int* neighbours, const double dt,
     const int initial, const int ntotal_particles, const double* density, 
     const double* edgex, const double* edgey, const double* edgedx, const double* edgedy, 
     const double* cs_absorb_table_keys, const double* cs_scatter_table_keys,
@@ -227,9 +228,9 @@ int handle_particle(
   uint64_t counter = pp;
 
   // Update the cross sections, referencing into the padded mesh
-  int cellx = *p_cellx-x_off+PAD;
-  int celly = *p_celly-y_off+PAD;
-  double local_density = density[celly*(nx+2*PAD)+cellx];
+  int cellx = *p_cellx-x_off+pad;
+  int celly = *p_celly-y_off+pad;
+  double local_density = density[celly*(nx+2*pad)+cellx];
 
   // This makes some assumption about the units of the data stored globally.
   // Might be worth making this more explicit somewhere.
@@ -345,9 +346,9 @@ int handle_particle(
       }
 
       // Update the data based on new cell
-      cellx = (*p_cellx)-x_off+PAD;
-      celly = (*p_celly)-y_off+PAD;
-      local_density = density[celly*(nx+2*PAD)+cellx];
+      cellx = (*p_cellx)-x_off+pad;
+      celly = (*p_celly)-y_off+pad;
+      local_density = density[celly*(nx+2*pad)+cellx];
       number_density = (local_density*AVOGADROS/MOLAR_MASS);
       macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
       macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
@@ -579,7 +580,7 @@ void send_and_mark_particle(
 
 // Calculate the distance to the next facet
 void calc_distance_to_facet(
-    const int global_nx, const double x, const double y, const int x_off,
+    const int global_nx, const double x, const double y, const int pad, const int x_off,
     const int y_off, const double omega_x, const double omega_y,
     const double speed, const int p_cellx, 
     const int p_celly, double* distance_to_facet,
@@ -587,8 +588,8 @@ void calc_distance_to_facet(
 {
   // Check the timestep required to move the particle along a single axis
   // If the velocity is positive then the top or right boundary will be hit
-  const int cellx = p_cellx-x_off+PAD;
-  const int celly = p_celly-y_off+PAD;
+  const int cellx = p_cellx-x_off+pad;
+  const int celly = p_celly-y_off+pad;
   double u_x_inv = 1.0/(omega_x*speed);
   double u_y_inv = 1.0/(omega_y*speed);
 
@@ -736,7 +737,7 @@ void validate(
 // Initialises a new particle ready for tracking
 size_t inject_particles(
     const int nparticles, const int global_nx, const int local_nx, const int local_ny, 
-    const double local_particle_left_off, const double local_particle_bottom_off, 
+    const int pad, const double local_particle_left_off, const double local_particle_bottom_off, 
     const double local_particle_width, const double local_particle_height, 
     const int x_off, const int y_off, const double dt, const double* edgex, 
     const double* edgey, const double initial_energy, const uint64_t master_key, 
@@ -792,13 +793,13 @@ size_t inject_particles(
     int cellx = 0;
     int celly = 0;
     for(int pp = 0; pp < local_nx; ++pp) {
-      if(p_x[pp] >= edgex[pp+PAD] && p_x[pp] < edgex[pp+PAD+1]) {
+      if(p_x[pp] >= edgex[pp+pad] && p_x[pp] < edgex[pp+pad+1]) {
         cellx = x_off+pp;
         break;
       }
     }
     for(int pp = 0; pp < local_ny; ++pp) {
-      if(p_y[pp] >= edgey[pp+PAD] && p_y[pp] < edgey[pp+PAD+1]) {
+      if(p_y[pp] >= edgey[pp+pad] && p_y[pp] < edgey[pp+pad+1]) {
         celly = y_off+pp;
         break;
       }
