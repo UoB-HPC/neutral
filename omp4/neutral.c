@@ -265,7 +265,7 @@ int handle_particle(
     // Work out the distance until the particle hits a facet
     double distance_to_facet = 0.0;
     calc_distance_to_facet(
-        global_nx, *p_x, *p_y, x_off, y_off, *p_omega_x,
+        global_nx, *p_x, *p_y, pad, x_off, y_off, *p_omega_x,
         *p_omega_y, speed, *p_cellx, *p_celly,
         &distance_to_facet, &x_facet, edgex, edgey);
 
