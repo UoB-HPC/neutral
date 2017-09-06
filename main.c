@@ -30,7 +30,7 @@ int main(int argc, char** argv) {
       get_int_parameter("nx", neutral_data.neutral_params_filename);
   mesh.global_ny =
       get_int_parameter("ny", neutral_data.neutral_params_filename);
-  mesh.pad = PAD;
+  mesh.pad = 0;
   mesh.local_nx = mesh.global_nx + 2 * mesh.pad;
   mesh.local_ny = mesh.global_ny + 2 * mesh.pad;
   mesh.width = get_double_parameter("width", ARCH_ROOT_PARAMS);
@@ -100,9 +100,8 @@ int main(int argc, char** argv) {
         mesh.local_nx - 2 * mesh.pad, mesh.local_ny - 2 * mesh.pad,
         mesh.global_nx, mesh.global_ny, mesh.pad, mesh.x_off, mesh.y_off,
         mesh.dt, neutral_data.nparticles, &neutral_data.nlocal_particles,
-        &master_key, mesh.neighbours, neutral_data.local_particles,
-        shared_data.rho, mesh.edgex, mesh.edgey, mesh.edgedx, mesh.edgedy,
-        neutral_data.cs_scatter_table, neutral_data.cs_absorb_table,
+        &master_key, neutral_data.local_particles, shared_data.rho, mesh.edgex,
+        mesh.edgey, neutral_data.cs_scatter_table, neutral_data.cs_absorb_table,
         neutral_data.energy_deposition_tally, neutral_data.reduce_array0,
         neutral_data.reduce_array1);
 

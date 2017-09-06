@@ -11,20 +11,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#ifdef MPI
-#include "mpi.h"
-#endif
-
 // Performs a solve of dependent variables for particle transport.
-void solve_transport_2d(
-    const int nx, const int ny, const int global_nx, const int global_ny,
-    const int pad, const int x_off, const int y_off, const double dt,
-    const int ntotal_particles, int* nlocal_particles, uint64_t* master_key,
-    const int* neighbours, Particle* particles, const double* density,
-    const double* edgex, const double* edgey, const double* edgedx,
-    const double* edgedy, CrossSection* cs_scatter_table,
-    CrossSection* cs_absorb_table, double* energy_deposition_tally,
-    int* reduce_array0, int* reduce_array1) {
+void solve_transport_2d(const int nx, const int ny, const int global_nx,
+                        const int global_ny, const int pad, const int x_off,
+                        const int y_off, const double dt,
+                        const int ntotal_particles, int* nlocal_particles,
+                        uint64_t* master_key, Particle* particles,
+                        const double* density, const double* edgex,
+                        const double* edgey, CrossSection* cs_scatter_table,
+                        CrossSection* cs_absorb_table,
+                        double* energy_deposition_tally, int* reduce_array0,
+                        int* reduce_array1) {
+
   // This is the known starting number of particles
   uint64_t facets = 0;
   uint64_t collisions = 0;
@@ -42,86 +40,9 @@ void solve_transport_2d(
   }
 
   handle_particles(global_nx, global_ny, nx, ny, pad, x_off, y_off, 1, dt,
-                   neighbours, density, edgex, edgey, edgedx, edgedy, &facets,
-                   &collisions, nparticles_sent, master_key, ntotal_particles,
-                   nparticles, &nparticles, particles, cs_scatter_table,
-                   cs_absorb_table, energy_deposition_tally);
-
-#if 0
-#ifdef MPI
-  while(1) {
-    int nneighbours = 0;
-    int nparticles_recv[NNEIGHBOURS];
-    MPI_Request recv_req[NNEIGHBOURS];
-    MPI_Request send_req[NNEIGHBOURS];
-    for(int ii = 0; ii < NNEIGHBOURS; ++ii) {
-      // Initialise received particles
-      nparticles_recv[ii] = 0;
-
-      // No communication required at edge
-      if(neighbours[ii] == EDGE) {
-        continue;
-      }
-
-      // Check which neighbours are sending some particles
-      MPI_Irecv(
-          &nparticles_recv[ii], 1, MPI_INT, neighbours[ii],
-          TAG_SEND_RECV, MPI_COMM_WORLD, &recv_req[nneighbours]);
-      MPI_Isend(
-          &nparticles_sent[ii], 1, MPI_INT, neighbours[ii],
-          TAG_SEND_RECV, MPI_COMM_WORLD, &send_req[nneighbours++]);
-    }
-
-    MPI_Waitall(
-        nneighbours, recv_req, MPI_STATUSES_IGNORE);
-    nneighbours = 0;
-
-    // Manage all of the received particles
-    int nunprocessed_particles = 0;
-    const int unprocessed_start = nparticles;
-    for(int ii = 0; ii < NNEIGHBOURS; ++ii) {
-      if(neighbours[ii] == EDGE) {
-        continue;
-      }
-
-      // Receive the particles from this neighbour
-      for(int jj = 0; jj < nparticles_recv[ii]; ++jj) {
-        MPI_Recv(
-            &particles[unprocessed_start+nunprocessed_particles], 
-            1, particle_type, neighbours[ii], TAG_PARTICLE, 
-            MPI_COMM_WORLD, MPI_STATUSES_IGNORE);
-        nunprocessed_particles++;
-      }
-
-      nparticles_recv[ii] = 0;
-      nparticles_sent[ii] = 0;
-    }
-
-    nparticles += nunprocessed_particles;
-    if(nunprocessed_particles) {
-      handle_particles(
-          global_nx, global_ny, nx, ny, x_off, y_off, 0, dt, neighbours,
-          density, edgex, edgey, edgedx, edgedy, &facets, &collisions, 
-          nparticles_sent, ntotal_particles, nunprocessed_particles, &nparticles, 
-          &particles[unprocessed_start], particles_out, cs_scatter_table, 
-          cs_absorb_table, energy_deposition_tally, master_key);
-    }
-
-    // Check if any of the ranks had unprocessed particles
-    int particles_to_process;
-    MPI_Allreduce(
-        &nunprocessed_particles, &particles_to_process, 
-        1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-
-    // All ranks have reached census
-    if(!particles_to_process) {
-      break;
-    }
-  }
-#endif
-
-  barrier();
-#endif // if 0
+                   density, edgex, edgey, &facets, &collisions, nparticles_sent,
+                   master_key, ntotal_particles, nparticles, particles,
+                   cs_scatter_table, cs_absorb_table, energy_deposition_tally);
 
   *nlocal_particles = nparticles;
 
@@ -129,19 +50,20 @@ void solve_transport_2d(
 }
 
 // Handles the current active batch of particles
-void handle_particles(
-    const int global_nx, const int global_ny, const int nx, const int ny,
-    const int pad, const int x_off, const int y_off, const int initial,
-    const double dt, const int* neighbours, const double* density,
-    const double* edgex, const double* edgey, const double* edgedx,
-    const double* edgedy, uint64_t* facets, uint64_t* collisions,
-    int* nparticles_sent, uint64_t* master_key, const int ntotal_particles,
-    const int nparticles_to_process, int* nparticles, Particle* particles_start,
-    CrossSection* cs_scatter_table, CrossSection* cs_absorb_table,
-    double* energy_deposition_tally) {
+void handle_particles(const int global_nx, const int global_ny, const int nx,
+                      const int ny, const int pad, const int x_off,
+                      const int y_off, const int initial, const double dt,
+                      const double* density, const double* edgex,
+                      const double* edgey, uint64_t* facets,
+                      uint64_t* collisions, int* nparticles_sent,
+                      uint64_t* master_key, const int ntotal_particles,
+                      const int nparticles_to_process,
+                      Particle* particles_start, CrossSection* cs_scatter_table,
+                      CrossSection* cs_absorb_table,
+                      double* energy_deposition_tally) {
+
   // Have to maintain a master key, so that particles don't keep seeing
   // the same random number streams.
-  // TODO: THIS IS NOT GOING TO WORK WITH MPI...
   (*master_key)++;
 
   uint64_t nfacets = 0;
@@ -159,10 +81,10 @@ void handle_particles(
     }
 
     const int result = handle_particle(
-        global_nx, global_ny, nx, ny, pad, x_off, y_off, neighbours, dt,
-        initial, ntotal_particles, density, edgex, edgey, edgedx, edgedy,
-        cs_scatter_table, cs_absorb_table, nparticles_sent, &nfacets,
-        &ncollisions, particle, energy_deposition_tally, *master_key);
+        global_nx, global_ny, nx, ny, pad, x_off, y_off, dt, initial,
+        ntotal_particles, density, edgex, edgey, cs_scatter_table,
+        cs_absorb_table, nparticles_sent, &nfacets, &ncollisions, particle,
+        energy_deposition_tally, *master_key);
 
     nparticles_deleted += (result == PARTICLE_SENT || result == PARTICLE_DEAD);
   }
@@ -177,15 +99,15 @@ void handle_particles(
 // Handles an individual particle.
 int handle_particle(const int global_nx, const int global_ny, const int nx,
                     const int ny, const int pad, const int x_off,
-                    const int y_off, const int* neighbours, const double dt,
-                    const int initial, const int ntotal_particles,
-                    const double* density, const double* edgex,
-                    const double* edgey, const double* edgedx,
-                    const double* edgedy, const CrossSection* cs_scatter_table,
+                    const int y_off, const double dt, const int initial,
+                    const int ntotal_particles, const double* density,
+                    const double* edgex, const double* edgey,
+                    const CrossSection* cs_scatter_table,
                     const CrossSection* cs_absorb_table, int* nparticles_sent,
                     uint64_t* facets, uint64_t* collisions, Particle* particle,
                     double* energy_deposition_tally,
                     const uint64_t master_key) {
+
   // (1) particle can stream and reach census
   // (2) particle can collide and either
   //      - the particle will be absorbed
@@ -230,12 +152,14 @@ int handle_particle(const int global_nx, const int global_ny, const int nx,
 
   // Loop until we have reached census
   while (particle->dt_to_census > 0.0) {
+
+    // Determine the mean free path for the cell
     cell_mfp = 1.0 / (macroscopic_cs_scatter + macroscopic_cs_absorb);
 
     // Work out the distance until the particle hits a facet
     double distance_to_facet = 0.0;
-    calc_distance_to_facet(global_nx, particle->x, particle->y, pad, x_off,
-                           y_off, particle->omega_x, particle->omega_y, speed,
+    calc_distance_to_facet(particle->x, particle->y, pad, x_off, y_off,
+                           particle->omega_x, particle->omega_y, speed,
                            particle->cellx, particle->celly, &distance_to_facet,
                            &x_facet, edgex, edgey);
 
@@ -249,8 +173,8 @@ int handle_particle(const int global_nx, const int global_ny, const int nx,
 
       // Don't need to tally into mesh on collision
       energy_deposition += calculate_energy_deposition(
-          global_nx, nx, x_off, y_off, particle, inv_ntotal_particles,
-          distance_to_collision, number_density, microscopic_cs_absorb,
+          particle, distance_to_collision, number_density,
+          microscopic_cs_absorb,
           microscopic_cs_scatter + microscopic_cs_absorb);
 
       // The cross sections for scattering and absorption were calculated on
@@ -292,8 +216,7 @@ int handle_particle(const int global_nx, const int global_ny, const int nx,
 
       // Don't need to tally into mesh on collision
       energy_deposition += calculate_energy_deposition(
-          global_nx, nx, x_off, y_off, particle, inv_ntotal_particles,
-          distance_to_facet, number_density, microscopic_cs_absorb,
+          particle, distance_to_facet, number_density, microscopic_cs_absorb,
           microscopic_cs_scatter + microscopic_cs_absorb);
 
       // Update tallies as we leave a cell
@@ -303,8 +226,8 @@ int handle_particle(const int global_nx, const int global_ny, const int nx,
 
       // Encounter facet, and jump out if particle left this rank's domain
       if (handle_facet_encounter(global_nx, global_ny, nx, ny, x_off, y_off,
-                                 neighbours, distance_to_facet, x_facet,
-                                 nparticles_sent, particle)) {
+                                 distance_to_facet, x_facet, nparticles_sent,
+                                 particle)) {
         return PARTICLE_SENT;
       }
 
@@ -323,8 +246,7 @@ int handle_particle(const int global_nx, const int global_ny, const int nx,
       particle->y += distance_to_census * particle->omega_y;
       particle->mfp_to_collision -= (distance_to_census / cell_mfp);
       energy_deposition += calculate_energy_deposition(
-          global_nx, nx, x_off, y_off, particle, inv_ntotal_particles,
-          distance_to_census, number_density, microscopic_cs_absorb,
+          particle, distance_to_census, number_density, microscopic_cs_absorb,
           microscopic_cs_scatter + microscopic_cs_absorb);
 
       // Need to store tally information as finished with particle
@@ -344,6 +266,7 @@ void update_tallies(const int nx, const int x_off, const int y_off,
                     Particle* particle, const double inv_ntotal_particles,
                     const double energy_deposition,
                     double* energy_deposition_tally) {
+
   const int cellx = particle->cellx - x_off;
   const int celly = particle->celly - y_off;
 
@@ -380,10 +303,6 @@ int handle_collision(Particle* particle, const double macroscopic_cs_absorb,
 
     /* Model elastic particle scattering */
 
-    // TODO: This approximation is not realistic as far as I can tell.
-    // This considers that all particles reside within a single two-dimensional
-    // plane, which solves a different equation. Change so that we consider the
-    // full set of directional cosines, allowing scattering between planes.
     // Choose a random scattering angle between -1 and 1
     const double mu_cm = 1.0 - 2.0 * rn[1];
 
@@ -414,11 +333,11 @@ int handle_collision(Particle* particle, const double macroscopic_cs_absorb,
 // the facet was encountered
 int handle_facet_encounter(const int global_nx, const int global_ny,
                            const int nx, const int ny, const int x_off,
-                           const int y_off, const int* neighbours,
-                           const double distance_to_facet, int x_facet,
-                           int* nparticles_sent, Particle* particle) {
-  // TODO: Make sure that the roundoff is handled here, perhaps actually set it
-  // fully to one of the edges here
+                           const int y_off, const double distance_to_facet,
+                           int x_facet, int* nparticles_sent,
+                           Particle* particle) {
+
+  // Update the particle location
   particle->x += distance_to_facet * particle->omega_x;
   particle->y += distance_to_facet * particle->omega_y;
 
@@ -435,7 +354,6 @@ int handle_facet_encounter(const int global_nx, const int global_ny,
 
         // Check if we need to pass to another process
         if (particle->cellx >= nx + x_off) {
-          send_and_mark_particle(neighbours[EAST], particle);
           nparticles_sent[EAST]++;
           return 1;
         }
@@ -450,7 +368,6 @@ int handle_facet_encounter(const int global_nx, const int global_ny,
 
         // Check if we need to pass to another process
         if (particle->cellx < x_off) {
-          send_and_mark_particle(neighbours[WEST], particle);
           nparticles_sent[WEST]++;
           return 1;
         }
@@ -467,7 +384,6 @@ int handle_facet_encounter(const int global_nx, const int global_ny,
 
         // Check if we need to pass to another process
         if (particle->celly >= ny + y_off) {
-          send_and_mark_particle(neighbours[NORTH], particle);
           nparticles_sent[NORTH]++;
           return 1;
         }
@@ -482,7 +398,6 @@ int handle_facet_encounter(const int global_nx, const int global_ny,
 
         // Check if we need to pass to another process
         if (particle->celly < y_off) {
-          send_and_mark_particle(neighbours[SOUTH], particle);
           nparticles_sent[SOUTH]++;
           return 1;
         }
@@ -493,28 +408,9 @@ int handle_facet_encounter(const int global_nx, const int global_ny,
   return 0;
 }
 
-// Sends a particle to a neighbour and replaces in the particle list
-void send_and_mark_particle(const int destination, Particle* particle) {
-#if 0
-#ifdef MPI
-  if(destination == EDGE) {
-    return;
-  }
-
-  particle->dead = 1;
-
-  // Send the particle
-  MPI_Send(
-      particle, 1, particle_type, destination, TAG_PARTICLE, MPI_COMM_WORLD);
-#else
-  TERMINATE("Unreachable - shouldn't send particles unless MPI enabled.\n");
-#endif
-#endif // if 0
-}
-
 // Calculate the distance to the next facet
-void calc_distance_to_facet(const int global_nx, const double x, const double y,
-                            const int pad, const int x_off, const int y_off,
+void calc_distance_to_facet(const double x, const double y, const int pad,
+                            const int x_off, const int y_off,
                             const double omega_x, const double omega_y,
                             const double speed, const int particle_cellx,
                             const int particle_celly, double* distance_to_facet,
@@ -530,8 +426,8 @@ void calc_distance_to_facet(const int global_nx, const double x, const double y,
   // The bound is open on the left and bottom so we have to correct for this and
   // required the movement to the facet to go slightly further than the edge
   // in the calculated values, using OPEN_BOUND_CORRECTION, which is the
-  // smallest
-  // possible distance we can be from the closed bound energy.g. 1.0e-14.
+  // smallest possible distance we can be from the closed bound energy.g.
+  // 1.0e-14.
   double dt_x = (omega_x >= 0.0)
                     ? ((edgex[cellx + 1]) - x) * u_x_inv
                     : ((edgex[cellx] - OPEN_BOUND_CORRECTION) - x) * u_x_inv;
@@ -543,16 +439,10 @@ void calc_distance_to_facet(const int global_nx, const double x, const double y,
   // Calculated the projection to be
   // a = vector on first edge to be hit
   // u = velocity vector
-
   double mag_u0 = speed;
 
   if (*x_facet) {
-    // cos(theta) = ||(x, 0)||/||(u_x', u_y')|| - u' is u at boundary
-    // cos(theta) = (x.u)/(||x||.||u||)
-    // x_x/||u'|| = (x_x, 0)*(u_x, u_y) / (x_x.||u||)
-    // x_x/||u'|| = (x_x.u_x / x_x.||u||)
-    // x_x/||u'|| = u_x/||u||
-    // ||u'|| = (x_x.||u||)/u_x
+
     // We are centered on the origin, so the y component is 0 after travelling
     // aint the x axis to the edge (ax, 0).(x, y)
     *distance_to_facet =
@@ -570,11 +460,11 @@ void calc_distance_to_facet(const int global_nx, const double x, const double y,
 }
 
 // Calculate the energy deposition in the cell
-double calculate_energy_deposition(
-    const int global_nx, const int nx, const int x_off, const int y_off,
-    Particle* particle, const double inv_ntotal_particles,
-    const double path_length, const double number_density,
-    const double microscopic_cs_absorb, const double microscopic_cs_total) {
+double calculate_energy_deposition(Particle* particle, const double path_length,
+                                   const double number_density,
+                                   const double microscopic_cs_absorb,
+                                   const double microscopic_cs_total) {
+
   // Calculate the energy deposition based on the path length
   const double average_exit_energy_absorb = 0.0;
   const double absorption_heating =
@@ -673,8 +563,8 @@ void validate(const int nx, const int ny, const char* params_filename,
 }
 
 // Initialises a new particle ready for tracking
-size_t inject_particles(const int nparticles, const int global_nx,
-                        const int local_nx, const int local_ny, const int pad,
+size_t inject_particles(const int nparticles, const int local_nx,
+                        const int local_ny, const int pad,
                         const double local_particle_left_off,
                         const double local_particle_bottom_off,
                         const double local_particle_width,
@@ -682,6 +572,7 @@ size_t inject_particles(const int nparticles, const int global_nx,
                         const int y_off, const double dt, const double* edgex,
                         const double* edgey, const double initial_energy,
                         const uint64_t master_key, Particle** particles) {
+
   *particles = (Particle*)malloc(sizeof(Particle) * nparticles * 2);
   if (!*particles) {
     TERMINATE("Could not allocate particle array.\n");

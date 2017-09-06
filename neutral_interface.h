@@ -8,19 +8,20 @@
 extern "C" {
 #endif
 
-void solve_transport_2d(
-    const int nx, const int ny, const int global_nx, const int global_ny,
-    const int pad, const int x_off, const int y_off, const double dt,
-    const int ntotal_particles, int* nlocal_particles, uint64_t* master_key,
-    const int* neighbours, Particle* particles, const double* density,
-    const double* edgex, const double* edgey, const double* edgedx,
-    const double* edgedy, CrossSection* cs_scatter_table,
-    CrossSection* cs_absorb_table, double* energy_deposition_tally,
-    int* reduce_array0, int* reduce_array1);
+void solve_transport_2d(const int nx, const int ny, const int global_nx,
+                        const int global_ny, const int pad, const int x_off,
+                        const int y_off, const double dt,
+                        const int ntotal_particles, int* nlocal_particles,
+                        uint64_t* master_key, Particle* particles,
+                        const double* density, const double* edgex,
+                        const double* edgey, CrossSection* cs_scatter_table,
+                        CrossSection* cs_absorb_table,
+                        double* energy_deposition_tally, int* reduce_array0,
+                        int* reduce_array1);
 
 // Initialises a new particle ready for tracking
-size_t inject_particles(const int nparticles, const int global_nx,
-                        const int local_nx, const int local_ny, const int pad,
+size_t inject_particles(const int nparticles, const int local_nx,
+                        const int local_ny, const int pad,
                         const double local_particle_left_off,
                         const double local_particle_bottom_off,
                         const double local_particle_width,

@@ -74,15 +74,6 @@ void initialise_neutral_data(NeutralData* neutral_data, Mesh* mesh,
       max(0.0, (*rank_ypos_1 - *rank_ypos_0) -
                    (local_particle_top_off + local_particle_bottom_off));
 
-#if 0
-  // TODO: breaks due to the copy buffer semantics for OpenMP 4, whole concept
-  // needs readdressing
-  free(rank_xpos_0);
-  free(rank_ypos_0);
-  free(rank_xpos_1);
-  free(rank_ypos_1);
-#endif // if 0
-
   // Calculate the number of particles we need based on the shaded area that
   // is covered by our source
   const double nlocal_particles_real =
@@ -92,10 +83,6 @@ void initialise_neutral_data(NeutralData* neutral_data, Mesh* mesh,
 
   // Rounding hack to make sure correct number of particles is selected
   neutral_data->nlocal_particles = nlocal_particles_real + 0.5;
-
-  // TODO: SHOULD PROBABLY PERFORM A REDUCTION OVER THE NUMBER OF LOCAL
-  // PARTICLES
-  // TO MAKE SURE THAT THEY ALL SUM UP TO THE CORRECT VALUE
 
   size_t allocation = allocate_data(&neutral_data->energy_deposition_tally,
                                     local_nx * local_ny);
@@ -107,8 +94,8 @@ void initialise_neutral_data(NeutralData* neutral_data, Mesh* mesh,
   // Inject some particles into the mesh if we need to
   if (neutral_data->nlocal_particles) {
     allocation += inject_particles(
-        neutral_data->nparticles, mesh->global_nx, mesh->local_nx,
-        mesh->local_ny, pad, local_particle_left_off, local_particle_bottom_off,
+        neutral_data->nparticles, mesh->local_nx, mesh->local_ny, pad,
+        local_particle_left_off, local_particle_bottom_off,
         local_particle_width, local_particle_height, mesh->x_off, mesh->y_off,
         mesh->dt, mesh->edgex, mesh->edgey, neutral_data->initial_energy,
         master_key, &neutral_data->local_particles);
@@ -117,17 +104,6 @@ void initialise_neutral_data(NeutralData* neutral_data, Mesh* mesh,
   printf("Allocated %.4fGB of data.\n", allocation / GB);
 
   initialise_cross_sections(neutral_data, mesh);
-
-#if 0
-#ifdef MPI
-  const int blocks[3] = { 8, 1, 1 };
-  MPI_Datatype types[3] = { MPI_DOUBLE, MPI_UINT64_T, MPI_INT };
-  MPI_Aint disp[3] = { 0, blocks[0]*sizeof(double), disp[0]+sizeof(uint64_t) };
-  MPI_Type_create_struct(
-      2, blocks, disp, types, &particle_type);
-  MPI_Type_commit(&particle_type);
-#endif
-#endif // if 0
 }
 
 // Reads in a cross-sectional data file
