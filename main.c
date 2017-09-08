@@ -29,8 +29,8 @@ int main(int argc, char** argv)
   neutral_data.neutral_params_filename = argv[1];
   mesh.global_nx = get_int_parameter("nx", neutral_data.neutral_params_filename);
   mesh.global_ny = get_int_parameter("ny", neutral_data.neutral_params_filename);
-  mesh.local_nx = mesh.global_nx + 2*PAD;
-  mesh.local_ny = mesh.global_ny + 2*PAD;
+  mesh.local_nx = mesh.global_nx + 2*0;
+  mesh.local_ny = mesh.global_ny + 2*0;
   mesh.width = get_double_parameter("width", ARCH_ROOT_PARAMS);
   mesh.height = get_double_parameter("height", ARCH_ROOT_PARAMS);
   mesh.dt = get_double_parameter("dt", neutral_data.neutral_params_filename);
@@ -63,7 +63,7 @@ int main(int argc, char** argv)
   SharedData shared_data = {0};
   initialise_shared_data_2d(
       mesh.global_nx, mesh.global_ny, mesh.local_nx, mesh.local_ny, 
-      mesh.x_off, mesh.y_off, mesh.width, mesh.height, 
+      0, mesh.x_off, mesh.y_off, mesh.width, mesh.height, 
       neutral_data.neutral_params_filename, mesh.edgex, mesh.edgey, &shared_data);
   initialise_neutral_data(
       &neutral_data, &mesh);
@@ -91,7 +91,7 @@ int main(int argc, char** argv)
 
     // Begin the main solve step
     solve_transport_2d(
-        mesh.local_nx-2*PAD, mesh.local_ny-2*PAD, mesh.global_nx, mesh.global_ny, 
+        mesh.local_nx-2*0, mesh.local_ny-2*0, mesh.global_nx, mesh.global_ny, 
         mesh.x_off, mesh.y_off, mesh.dt, neutral_data.nparticles, 
         &neutral_data.nlocal_particles, &master_key, mesh.neighbours, 
         neutral_data.local_particles, shared_data.rho, mesh.edgex, mesh.edgey, 
@@ -114,7 +114,7 @@ int main(int argc, char** argv)
     copy_buffer(
         mesh.local_nx*mesh.local_ny, &neutral_data.energy_deposition_tally, &ed, RECV);
     write_all_ranks_to_visit(
-        mesh.global_nx, mesh.global_ny, mesh.local_nx-2*PAD, mesh.local_ny-2*PAD,
+        mesh.global_nx, mesh.global_ny, mesh.local_nx-2*0, mesh.local_ny-2*0,
         mesh.x_off, mesh.y_off, mesh.rank, mesh.nranks, dneighbours, 
         ed, tally_name, 0, elapsed_sim_time);
 #endif
@@ -168,6 +168,7 @@ void plot_particle_density(
   deallocate_host_int_data(cx);
   deallocate_host_int_data(cy);
 
+  #if 0
   // Dummy neighbours that stops any padding from happening
   char particles_name[100];
   sprintf(particles_name, "particles%d", tt);
@@ -175,5 +176,6 @@ void plot_particle_density(
       mesh->global_nx, mesh->global_ny, mesh->local_nx, mesh->local_ny, 
       mesh->x_off, mesh->y_off, mesh->rank, mesh->nranks, mesh->neighbours, temp, 
       particles_name, 0, elapsed_sim_time);
+#endif // if 0
 }
 

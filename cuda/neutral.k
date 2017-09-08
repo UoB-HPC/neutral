@@ -1,7 +1,8 @@
 #include "../../cuda/shared.h"
 #include "../../cuda/reduction.k"
 
-#if __CUDA_ARCH__ < 600 
+#if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 600 
+#else
 __device__ double atomicAdd(double* address, double val) 
 { 
   unsigned long long int* address_as_ull = (unsigned long long int*)address;
@@ -150,9 +151,9 @@ __global__ void event_initialisation_kernel(
     const double microscopic_cs_absorb = microscopic_cs_for_energy(
         cs_absorb_keys, cs_absorb_values, cs_absorb_nentries, 
         cs_absorb_log_width, e[pindex], &absorb_cs_index[pindex]);
-    const int cellx = particle_cellx[pindex]-x_off+PAD;
-    const int celly = particle_celly[pindex]-y_off+PAD;
-    local_density[pindex] = density[celly*(nx+2*PAD)+cellx];
+    const int cellx = particle_cellx[pindex]-x_off+0;
+    const int celly = particle_celly[pindex]-y_off+0;
+    local_density[pindex] = density[celly*(nx+2*0)+cellx];
     const double number_density = (local_density[pindex]*AVOGADROS/MOLAR_MASS);
     const double macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
     const double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
@@ -187,8 +188,8 @@ __global__ void calc_next_event_kernel(
 
     // Check the timestep required to move the particles along a single axis
     // If the speed is positive then the top or right boundary will be hit
-    const int cellx = particle_cellx[pindex]-x_off+PAD;
-    const int celly = particle_celly[pindex]-y_off+PAD;
+    const int cellx = particle_cellx[pindex]-x_off+0;
+    const int celly = particle_celly[pindex]-y_off+0;
     double u_x_inv = 1.0/(omega_x[pindex]*speed[pindex]);
     double u_y_inv = 1.0/(omega_y[pindex]*speed[pindex]);
 
@@ -287,8 +288,8 @@ __global__ void handle_facets_kernel(
       return;
     }
 
-    const int cellx = particle_cellx[pindex]-x_off+PAD;
-    const int celly = particle_celly[pindex]-y_off+PAD;
+    const int cellx = particle_cellx[pindex]-x_off+0;
+    const int celly = particle_celly[pindex]-y_off+0;
     double number_density = (local_density[pindex]*AVOGADROS/MOLAR_MASS);
 
     const double microscopic_cs_scatter = microscopic_cs_for_energy(
@@ -362,7 +363,7 @@ __global__ void handle_facets_kernel(
       }
     }
 
-    local_density[pindex] = density[celly*(nx+2*PAD)+cellx];
+    local_density[pindex] = density[celly*(nx+2*0)+cellx];
     number_density = (local_density[pindex]*AVOGADROS/MOLAR_MASS);
     macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
     macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
@@ -521,8 +522,8 @@ __global__ void handle_census_kernel(
 
   // We also mop up and energy deposition from the newly dead particles
   particle_event[pindex] = (particle_event[pindex] == NEW_DEAD) ? DEAD : CENSUS;
-  const int cellx = particle_cellx[pindex]-x_off+PAD;
-  const int celly = particle_celly[pindex]-y_off+PAD;
+  const int cellx = particle_cellx[pindex]-x_off+0;
+  const int celly = particle_celly[pindex]-y_off+0;
   atomicAdd(&energy_deposition_tally[celly*nx+cellx], 
       (energy_deposition[pindex]+ed)/nparticles);
 }
@@ -576,15 +577,15 @@ __global__ void inject_particles_kernel(
   int cellx = 0;
   int celly = 0;
   for(int cc = 0; cc < local_nx; ++cc) {
-    if(x[gid] >= edgex[cc+PAD] && 
-        x[gid] < edgex[cc+PAD+1]) {
+    if(x[gid] >= edgex[cc+0] && 
+        x[gid] < edgex[cc+0+1]) {
       cellx = x_off+cc;
       break;
     }
   }
   for(int cc = 0; cc < local_ny; ++cc) {
-    if(y[gid] >= edgey[cc+PAD] && 
-        y[gid] < edgey[cc+PAD+1]) {
+    if(y[gid] >= edgey[cc+0] && 
+        y[gid] < edgey[cc+0+1]) {
       celly = y_off+cc;
       break;
     }

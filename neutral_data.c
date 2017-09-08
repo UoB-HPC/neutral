@@ -16,8 +16,8 @@ void initialise_cross_sections(
 void initialise_neutral_data(
     NeutralData* neutral_data, Mesh* mesh)
 {
-  const int local_nx = mesh->local_nx-2*PAD;
-  const int local_ny = mesh->local_ny-2*PAD;
+  const int local_nx = mesh->local_nx-2*0;
+  const int local_ny = mesh->local_ny-2*0;
 
   neutral_data->nparticles = 
     get_int_parameter("nparticles", neutral_data->neutral_params_filename);
@@ -46,10 +46,10 @@ void initialise_neutral_data(
   const double source_width = values[nkeys-2]*mesh->width;
   const double source_height = values[nkeys-1]*mesh->height;
 
-  double* mesh_edgex_0 = &mesh->edgex[mesh->x_off+PAD];
-  double* mesh_edgey_0 = &mesh->edgey[mesh->y_off+PAD];
-  double* mesh_edgex_1 = &mesh->edgex[local_nx+mesh->x_off+PAD];
-  double* mesh_edgey_1 = &mesh->edgey[local_ny+mesh->y_off+PAD];
+  double* mesh_edgex_0 = &mesh->edgex[mesh->x_off+0];
+  double* mesh_edgey_0 = &mesh->edgey[mesh->y_off+0];
+  double* mesh_edgex_1 = &mesh->edgex[local_nx+mesh->x_off+0];
+  double* mesh_edgey_1 = &mesh->edgey[local_ny+mesh->y_off+0];
   double* rank_xpos_0;
   double* rank_ypos_0;
   double* rank_xpos_1;
@@ -97,7 +97,7 @@ void initialise_neutral_data(
   // TO MAKE SURE THAT THEY ALL SUM UP TO THE CORRECT VALUE!
 
   neutral_data->local_particles = 
-    (Particles*)_mm_malloc(sizeof(Particles), VEC_ALIGN);
+    (Particles*)malloc(sizeof(Particles));
 
   Particles* particle = neutral_data->local_particles;
 
