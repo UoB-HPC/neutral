@@ -179,7 +179,7 @@ __global__ void handle_particles_kernel(
     double* particle_dt_to_census, double* particle_mfp_to_collision,
     double* particle_weight, double* particle_omega_x, double* particle_omega_y,
     double* particle_x, double* particle_y, uint64_t master_key,
-    int* reduce_array0, int* reduce_array1) {
+    uint64_t* reduce_array0, uint64_t* reduce_array1) {
   // (1) particle can stream and reach census
   // (2) particle can collide and either
   //      - the particle will be absorbed
@@ -187,8 +187,8 @@ __global__ void handle_particles_kernel(
   // (3) particle hits a boundary region and needs transferring to another
   // process
 
-  int nfacets = 0;
-  int ncollisions = 0;
+  uint64_t nfacets = 0;
+  uint64_t ncollisions = 0;
 
   const int gid = blockIdx.x * blockDim.x + threadIdx.x;
   const int pindex = gid;
@@ -486,16 +486,16 @@ __global__ void handle_particles_kernel(
     particle_celly[pindex] = celly;
   }
 
-  __shared__ int nfacets_shared[NTHREADS];
-  __shared__ int ncollisions_shared[NTHREADS];
+  __shared__ uint64_t nfacets_shared[NTHREADS];
+  __shared__ uint64_t ncollisions_shared[NTHREADS];
 
   const int tid = threadIdx.x;
   nfacets_shared[tid] = nfacets;
   ncollisions_shared[tid] = ncollisions;
 
   __syncthreads();
-  sum_reduce_in_shared<int, NTHREADS>(tid, nfacets_shared);
-  sum_reduce_in_shared<int, NTHREADS>(tid, ncollisions_shared);
+  sum_reduce_in_shared<uint64_t, NTHREADS>(tid, nfacets_shared);
+  sum_reduce_in_shared<uint64_t, NTHREADS>(tid, ncollisions_shared);
   if (tid == 0) {
     reduce_array0[blockIdx.x] = nfacets_shared[0];
     reduce_array1[blockIdx.x] = ncollisions_shared[0];

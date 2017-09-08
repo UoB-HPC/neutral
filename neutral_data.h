@@ -99,8 +99,8 @@ typedef struct {
 
   const char* neutral_params_filename;
 
-  int* reduce_array0;
-  int* reduce_array1;
+  uint64_t* reduce_array0;
+  uint64_t* reduce_array1;
 
 } NeutralData;
 

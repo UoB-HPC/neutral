@@ -30,7 +30,7 @@ int main(int argc, char** argv) {
       get_int_parameter("nx", neutral_data.neutral_params_filename);
   mesh.global_ny =
       get_int_parameter("ny", neutral_data.neutral_params_filename);
-  mesh.pad = PAD;
+  mesh.pad = 0;
   mesh.local_nx = mesh.global_nx + 2 * mesh.pad;
   mesh.local_ny = mesh.global_ny + 2 * mesh.pad;
   mesh.width = get_double_parameter("width", ARCH_ROOT_PARAMS);

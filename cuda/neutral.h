@@ -11,4 +11,4 @@ void handle_particles(
     int* nparticles_sent, uint64_t* master_key, const int nparticles_total,
     const int nparticles_to_process, int* nparticles, Particle* particles,
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table,
-    double* energy_deposition_tally, int* reduce_array0, int* reduce_array1);
+    double* energy_deposition_tally, uint64_t* reduce_array0, uint64_t* reduce_array1);

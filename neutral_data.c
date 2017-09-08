@@ -93,16 +93,13 @@ void initialise_neutral_data(NeutralData* neutral_data, Mesh* mesh,
   // Rounding hack to make sure correct number of particles is selected
   neutral_data->nlocal_particles = nlocal_particles_real + 0.5;
 
-  // TODO: SHOULD PROBABLY PERFORM A REDUCTION OVER THE NUMBER OF LOCAL
-  // PARTICLES
-  // TO MAKE SURE THAT THEY ALL SUM UP TO THE CORRECT VALUE
-
   size_t allocation = allocate_data(&neutral_data->energy_deposition_tally,
                                     local_nx * local_ny);
+
   allocation +=
-      allocate_int_data(&neutral_data->reduce_array0, neutral_data->nparticles);
+      allocate_uint64_data(&neutral_data->reduce_array0, neutral_data->nparticles);
   allocation +=
-      allocate_int_data(&neutral_data->reduce_array1, neutral_data->nparticles);
+      allocate_uint64_data(&neutral_data->reduce_array1, neutral_data->nparticles);
 
   // Inject some particles into the mesh if we need to
   if (neutral_data->nlocal_particles) {

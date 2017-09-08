@@ -28,7 +28,8 @@ void solve_transport_2d(
     const double* edgex, const double* edgey, const double* edgedx,
     const double* edgedy, CrossSection* cs_scatter_table,
     CrossSection* cs_absorb_table, double* energy_deposition_tally,
-    int* reduce_array0, int* reduce_array1) {
+    uint64_t* reduce_array0, uint64_t* reduce_array1) {
+
   // Initial idea is to use a kind of queue for handling the particles.
   // Presumably
   // this doesn't have to be a carefully ordered queue but lets see how that
@@ -148,7 +149,8 @@ void handle_particles(
     int* nparticles_sent, uint64_t* master_key, const int nparticles_total,
     const int nparticles_to_process, int* nparticles, Particle* particles,
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table,
-    double* energy_deposition_tally, int* reduce_array0, int* reduce_array1) {
+    double* energy_deposition_tally, uint64_t* reduce_array0, uint64_t* reduce_array1) {
+
   int nparticles_deleted = 0;
 
   const int nthreads = NTHREADS;
@@ -164,10 +166,10 @@ void handle_particles(
       particles->omega_y, particles->x, particles->y, (*master_key)++,
       reduce_array0, reduce_array1);
 
-  int nfacets = 0;
-  int ncollisions = 0;
-  finish_sum_int_reduce(nblocks, reduce_array0, &nfacets);
-  finish_sum_int_reduce(nblocks, reduce_array1, &ncollisions);
+  uint64_t nfacets = 0;
+  uint64_t ncollisions = 0;
+  finish_sum_uint64_reduce(nblocks, reduce_array0, &nfacets);
+  finish_sum_uint64_reduce(nblocks, reduce_array1, &ncollisions);
   *facets = nfacets;
   *collisions = ncollisions;
 
