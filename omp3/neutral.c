@@ -24,7 +24,8 @@ void solve_transport_2d(
     const double* edgex, const double* edgey, const double* edgedx,
     const double* edgedy, CrossSection* cs_scatter_table,
     CrossSection* cs_absorb_table, double* energy_deposition_tally,
-    int* reduce_array0, int* reduce_array1) {
+    uint64_t* reduce_array0, uint64_t* reduce_array1) {
+
   // This is the known starting number of particles
   uint64_t facets = 0;
   uint64_t collisions = 0;
