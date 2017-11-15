@@ -20,7 +20,7 @@ CFLAGS_XL					 = -O3 -qsmp=omp
 CFLAGS_XL_OMP4		 = -qsmp -qoffload
 CFLAGS_CLANG			 = -std=gnu99 -fopenmp -march=native -Wall
 CFLAGS_CLANG_OMP4  = -O3 -Wall -fopenmp-targets=nvptx64-nvidia-cuda -fopenmp-nonaliased-maps \
-										 -fopenmp=libomp --cuda-path=$(CUDAROOT) -DCLANG
+										 -fopenmp=libomp --cuda-path=$(CUDA_PATH) -DCLANG
 										 #-I/home/projects/pwr8-rhel73-lsf/gcc/6.3.0/lib/gcc/powerpc64le-unknown-linux-gnu/6.3.0/include
 CFLAGS_PGI				 = -O3 -fast -mp -Minfo
 
@@ -34,8 +34,8 @@ ifeq ($(COMPILER), CLANG_OMP4)
 endif
 
 ifeq ($(CHECK_CUDA_ROOT), yes)
-ifeq ("${CUDAROOT}", "")
-$(error "$$CUDAROOT is not set, please set this to the root of your CUDA install.")
+ifeq ("${CUDA_PATH}", "")
+$(error "$$CUDA_PATH is not set, please set this to the root of your CUDA install.")
 endif
 endif
 
