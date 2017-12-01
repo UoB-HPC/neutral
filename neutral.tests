@@ -1,3 +1,3 @@
-problems/scatter result=3.411662060900e-02
-problems/stream result=5.760064605960129e-24
-problems/csp result=1.119213869468e+07
+problems/scatter.params result=3.411662060900e-02
+problems/stream.params result=5.760064605960129e-24
+problems/csp.params result=1.119213869468e+07
