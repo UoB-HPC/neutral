@@ -3,8 +3,8 @@ KERNELS  					 = omp3
 COMPILER 					 = INTEL
 MPI      					 = no
 OPTIONS  					+= -DTILES #-DENABLE_PROFILING 
-ARCH_COMPILER_CC   = mpicc
-ARCH_COMPILER_CPP  = mpic++
+ARCH_COMPILER_CC   = icc
+ARCH_COMPILER_CPP  = icpc
 
 # Compiler-specific flags
 CFLAGS_INTEL			 = -qopenmp -no-prec-div -std=gnu99 -DINTEL \

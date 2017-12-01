@@ -64,9 +64,9 @@ void handle_particles(
     const int nparticles_to_process, int* nparticles, Particle* particles_start,
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table,
     double* energy_deposition_tally) {
+
   // Have to maintain a master key, so that particles don't keep seeing
   // the same random number streams.
-  // TODO: THIS IS NOT GOING TO WORK WITH MPI...
   (*master_key)++;
 
   uint64_t nfacets = 0;
@@ -111,6 +111,7 @@ int handle_particle(const int global_nx, const int global_ny, const int nx,
                     uint64_t* facets, uint64_t* collisions, Particle* particle,
                     double* energy_deposition_tally,
                     const uint64_t master_key) {
+
   // (1) particle can stream and reach census
   // (2) particle can collide and either
   //      - the particle will be absorbed
@@ -420,21 +421,6 @@ int handle_facet_encounter(const int global_nx, const int global_ny,
 
 // Sends a particle to a neighbour and replaces in the particle list
 void send_and_mark_particle(const int destination, Particle* particle) {
-#if 0
-#ifdef MPI
-  if(destination == EDGE) {
-    return;
-  }
-
-  particle->dead = 1;
-
-  // Send the particle
-  MPI_Send(
-      particle, 1, particle_type, destination, TAG_PARTICLE, MPI_COMM_WORLD);
-#else
-  TERMINATE("Unreachable - shouldn't send particles unless MPI enabled.\n");
-#endif
-#endif // if 0
 }
 
 // Calculate the distance to the next facet
@@ -472,12 +458,6 @@ void calc_distance_to_facet(const int global_nx, const double x, const double y,
   double mag_u0 = speed;
 
   if (*x_facet) {
-    // cos(theta) = ||(x, 0)||/||(u_x', u_y')|| - u' is u at boundary
-    // cos(theta) = (x.u)/(||x||.||u||)
-    // x_x/||u'|| = (x_x, 0)*(u_x, u_y) / (x_x.||u||)
-    // x_x/||u'|| = (x_x.u_x / x_x.||u||)
-    // x_x/||u'|| = u_x/||u||
-    // ||u'|| = (x_x.||u||)/u_x
     // We are centered on the origin, so the y component is 0 after travelling
     // aint the x axis to the edge (ax, 0).(x, y)
     *distance_to_facet =
