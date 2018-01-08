@@ -241,6 +241,11 @@ int handle_particle(const int global_nx, const int global_ny, const int nx,
 
     } else { // Census
 
+      census_event(global_nx, nx, x_off, y_off, inv_ntotal_particles,
+                   distance_to_census, cell_mfp, particle, &energy_deposition,
+                   &number_density, &microscopic_cs_scatter,
+                   &microscopic_cs_absorb, energy_deposition_tally);
+
       break;
     }
   }
