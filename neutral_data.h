@@ -32,7 +32,7 @@
 #define ARCH_ROOT_PARAMS "../arch.params"
 #define NEUTRAL_TESTS "problems/neutral.tests"
 
-enum { PARTICLE_SENT, PARTICLE_DEAD, PARTICLE_CENSUS };
+enum { PARTICLE_SENT, PARTICLE_DEAD, PARTICLE_CENSUS, PARTICLE_CONTINUE };
 
 // Represents a cross sectional table for resonance data
 typedef struct {

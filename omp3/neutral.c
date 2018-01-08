@@ -200,7 +200,7 @@ int handle_particle(const int global_nx, const int global_ny, const int nx,
       (*collisions)++;
 
       // Handles a collision event
-      collision_event(global_nx, nx, x_off, y_off, inv_ntotal_particles,
+      int res = collision_event(global_nx, nx, x_off, y_off, inv_ntotal_particles,
                       distance_to_collision, local_density, cs_scatter_table,
                       cs_absorb_table, particle, &counter, &master_key,
                       &energy_deposition, &number_density,
@@ -209,6 +209,9 @@ int handle_particle(const int global_nx, const int global_ny, const int nx,
                       energy_deposition_tally, &scatter_cs_index,
                       &absorb_cs_index, rn, &speed);
 
+      if(res != PARTICLE_CONTINUE) {
+        return res;
+      }
     }
     // Check if we have reached facet
     else if (distance_to_facet < distance_to_census) { // Facet
@@ -216,13 +219,17 @@ int handle_particle(const int global_nx, const int global_ny, const int nx,
       // Track the number of fact encounters
       (*facets)++;
 
-      facet_event(global_nx, global_ny, nx, ny, x_off, y_off,
+      int res = facet_event(global_nx, global_ny, nx, ny, x_off, y_off,
                   inv_ntotal_particles, distance_to_facet, speed, cell_mfp,
                   x_facet, density, neighbours, particle, &energy_deposition,
                   &number_density, &microscopic_cs_scatter,
                   &microscopic_cs_absorb, &macroscopic_cs_scatter,
                   &macroscopic_cs_absorb, energy_deposition_tally,
                   nparticles_sent, &cellx, &celly, &local_density);
+
+      if(res != PARTICLE_CONTINUE) {
+        return res;
+      }
 
     } else { // Census
 
@@ -294,6 +301,8 @@ int collision_event(
   particle->mfp_to_collision = -log(rn[0]) / *macroscopic_cs_scatter;
   particle->dt_to_census -= distance_to_collision / *speed;
   *speed = sqrt((2.0 * particle->energy * eV_TO_J) / PARTICLE_MASS);
+
+  return PARTICLE_CONTINUE;
 }
 
 // Handle facet event
@@ -337,6 +346,8 @@ int facet_event(const int global_nx, const int global_ny, const int nx,
   *number_density = (*local_density * AVOGADROS / MOLAR_MASS);
   *macroscopic_cs_scatter = *number_density * *microscopic_cs_scatter * BARNS;
   *macroscopic_cs_absorb = *number_density * *microscopic_cs_absorb * BARNS;
+
+  return PARTICLE_CONTINUE;
 }
 
 // Tallies the energy deposition in the cell
