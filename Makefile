@@ -19,7 +19,7 @@ CFLAGS_GCC_POWER   = -O3 -mcpu=power8 -mtune=power8 -fopenmp -std=gnu99
 CFLAGS_CRAY				 = -lrt -hlist=a
 CFLAGS_XL					 = -O3 -qsmp=omp
 CFLAGS_XL_OMP4		 = -qsmp -qoffload
-CFLAGS_CLANG			 = -std=gnu99 -fopenmp -march=native -Wall
+CFLAGS_CLANG			 = -std=gnu99 -fopenmp=libiomp5 -march=native -Wall
 CFLAGS_CLANG_OMP4  = -O3 -Wall -fopenmp-targets=nvptx64-nvidia-cuda -fopenmp-nonaliased-maps \
 										 -fopenmp=libomp --cuda-path=$(CUDA_PATH) -DCLANG
 										 #-I/home/projects/pwr8-rhel73-lsf/gcc/6.3.0/lib/gcc/powerpc64le-unknown-linux-gnu/6.3.0/include
