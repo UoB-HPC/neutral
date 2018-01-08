@@ -11,6 +11,7 @@ __device__ double atomicAdd(double* address, double val) {
     assumed = old;
     old = atomicCAS(address_as_ull, assumed,
                     __double_as_longlong(val + __longlong_as_double(assumed)));
+
     // Note: uses integer comparison to avoid hang in case of NaN (since NaN !=
     // NaN)
   } while (assumed != old);
@@ -24,10 +25,6 @@ __device__ double microscopic_cs_for_energy(const double* key,
                                             const int nentries,
                                             const double energy,
                                             int* cs_index) {
-  /* Attempt an optimisation of the search by performing a linear operation
-   * if there is an existing location. We assume that the energy has
-   * reduced rather than increased, which seems to be a legitimate
-   * approximation in this particular case */
 
   int ind = 0;
 
@@ -73,6 +70,7 @@ __device__ double calculate_energy_deposition(
     const double path_length, const double e, const double weight,
     const double number_density, const double microscopic_cs_absorb,
     const double microscopic_cs_total, const double pabsorb) {
+
   // Calculate the energy deposition based on the path length
   const double average_exit_energy_absorb = 0.0;
   const double absorption_heating = pabsorb * average_exit_energy_absorb;
@@ -117,10 +115,12 @@ __global__ void inject_particles_kernel(
     const double* edgey, double* x, double* y, int* particle_cellx,
     int* particle_celly, double* omega_x, double* omega_y, double* e,
     double* weight, double* dt_to_census, double* mfp_to_collision) {
+
   const int gid = blockIdx.x * blockDim.x + threadIdx.x;
   if (gid >= nparticles)
     return;
 
+  // Generate a pool of random numbers
   double rn[NRANDOM_NUMBERS];
   generate_random_numbers(master_key, 4, gid, &rn[0], &rn[1]);
 
@@ -180,12 +180,12 @@ __global__ void handle_particles_kernel(
     double* particle_weight, double* particle_omega_x, double* particle_omega_y,
     double* particle_x, double* particle_y, uint64_t master_key,
     uint64_t* reduce_array0, uint64_t* reduce_array1) {
+
   // (1) particle can stream and reach census
   // (2) particle can collide and either
   //      - the particle will be absorbed
   //      - the particle will scatter (this presumably means the energy changes)
-  // (3) particle hits a boundary region and needs transferring to another
-  // process
+  // (3) particle encounters boundary region, transports to another cell
 
   uint64_t nfacets = 0;
   uint64_t ncollisions = 0;
@@ -202,10 +202,11 @@ __global__ void handle_particles_kernel(
     double cell_mfp = 0.0;
     uint64_t local_key = 0;
 
-    // Update the cross sections, referencing into the padded mesh
+    // Determine the current cell
     int cellx = particle_cellx[pindex] - x_off + pad;
     int celly = particle_celly[pindex] - y_off + pad;
 
+    // Fetch particle data
     double x = particle_x[pindex];
     double y = particle_y[pindex];
     double weight = particle_weight[pindex];
@@ -215,8 +216,7 @@ __global__ void handle_particles_kernel(
     double dt_to_census = particle_dt_to_census[pindex];
     double mfp_to_collision = particle_mfp_to_collision[pindex];
 
-    // This makes some assumption about the units of the data stored globally.
-    // Might be worth making this more explicit somewhere.
+    // Fetch the cross sections and prepare related quantities
     double microscopic_cs_scatter =
         microscopic_cs_for_energy(cs_scatter_keys, cs_scatter_values,
                                   cs_scatter_nentries, e, &scatter_cs_index);
@@ -257,11 +257,9 @@ __global__ void handle_particles_kernel(
       double y1 = edgey[celly + 1];
 
       // The bound is open on the left and bottom so we have to correct for this
-      // and
-      // required the movement to the facet to go slightly further than the edge
-      // in the calculated values, using OPEN_BOUND_CORRECTION, which is the
-      // smallest
-      // possible distance we can be from the closed bound e.g. 1.0e-14.
+      // and required the movement to the facet to go slightly further than the 
+      // edge in the calculated values, using OPEN_BOUND_CORRECTION, which is the
+      // smallest possible distance we can be from the closed bound e.g. 1.0e-14.
       double dt_x = (omega_x >= 0.0)
                         ? (x1 - x) * u_x_inv
                         : ((x0 - OPEN_BOUND_CORRECTION) - x) * u_x_inv;
@@ -279,29 +277,22 @@ __global__ void handle_particles_kernel(
 
       x_facet = (dt_x < dt_y) ? 1 : 0;
       if (x_facet) {
-        // cos(theta) = ||(x, 0)||/||(u_x', u_y')|| - u' is u at boundary
-        // cos(theta) = (x.u)/(||x||.||u||)
-        // x_x/||u'|| = (x_x, 0)*(u_x, u_y) / (x_x.||u||)
-        // x_x/||u'|| = (x_x.u_x / x_x.||u||)
-        // x_x/||u'|| = u_x/||u||
-        // ||u'|| = (x_x.||u||)/u_x
         // We are centered on the origin, so the y component is 0 after
-        // travelling
-        // aint the x axis to the edge (ax, 0).(x, y)
+        // travelling along the x axis to the edge (ax, 0).(x, y)
         distance_to_facet =
             (omega_x >= 0.0)
                 ? (x1 - x) * mag_u0 * u_x_inv
                 : ((x0 - OPEN_BOUND_CORRECTION) - x) * mag_u0 * u_x_inv;
       } else {
         // We are centered on the origin, so the x component is 0 after
-        // travelling
-        // along the y axis to the edge (0, ay).(x, y)
+        // travelling along the y axis to the edge (0, ay).(x, y)
         distance_to_facet =
             (omega_y >= 0.0)
                 ? (y1 - y) * mag_u0 * u_y_inv
                 : ((y0 - OPEN_BOUND_CORRECTION) - y) * mag_u0 * u_y_inv;
       }
 
+      // Calculate the distances to next events
       const double distance_to_collision = mfp_to_collision * cell_mfp;
       const double distance_to_census = speed * dt_to_census;
       const double pabsorb = macroscopic_cs_absorb * cell_mfp;
@@ -309,6 +300,10 @@ __global__ void handle_particles_kernel(
       // Check if our next event is a collision
       if (distance_to_collision < distance_to_facet &&
           distance_to_collision < distance_to_census) {
+
+        /* Collision */
+
+        // Tally the number of collisions
         ncollisions++;
 
         // Moves the particle to the collision site
@@ -325,11 +320,13 @@ __global__ void handle_particles_kernel(
         generate_random_numbers(master_key, local_key++, gid, &rn[0], &rn[1]);
 
         if (rn[0] < pabsorb) {
+
           /* Model particle absorption */
 
           // Find the new particle weight after absorption
           weight *= (1.0 - pabsorb);
         } else {
+
           /* Model elastic particle scattering */
 
           // Choose a random scattering angle between -1 and 1
@@ -384,6 +381,10 @@ __global__ void handle_particles_kernel(
       }
       // Check if we have reached facet
       else if (distance_to_facet < distance_to_census) {
+
+        /* Facet */
+
+        // Tally the number of facets
         nfacets++;
 
         // Moves the particle to the facet
@@ -395,7 +396,6 @@ __global__ void handle_particles_kernel(
                              (macroscopic_cs_scatter + macroscopic_cs_absorb));
         dt_to_census -= (distance_to_facet / speed);
 
-        // Don't need to tally into mesh on collision
         energy_deposition += calculate_energy_deposition(
             distance_to_facet, e, weight, number_density, microscopic_cs_absorb,
             microscopic_cs_scatter + microscopic_cs_absorb, pabsorb);
@@ -405,15 +405,13 @@ __global__ void handle_particles_kernel(
                   energy_deposition * inv_ntotal_particles);
         energy_deposition = 0.0;
 
-        // This use of x_facet is a slight misnoma, as it is really a facet
-        // along the y dimensions
         if (x_facet) {
           if (omega_x > 0.0) {
             // Reflect at the boundary
             if (cellx >= (global_nx - 1)) {
               omega_x = -(omega_x);
             } else {
-              // Definitely moving to right cell
+              // Moving to right cell
               cellx++;
             }
           } else if (omega_x < 0.0) {
@@ -421,7 +419,7 @@ __global__ void handle_particles_kernel(
               // Reflect at the boundary
               omega_x = -(omega_x);
             } else {
-              // Definitely moving to left cell
+              // Moving to left cell
               cellx--;
             }
           }
@@ -431,7 +429,7 @@ __global__ void handle_particles_kernel(
             if (celly >= (global_ny - 1)) {
               omega_y = -(omega_y);
             } else {
-              // Definitely moving to north cell
+              // Moving to north cell
               celly++;
             }
           } else if (omega_y < 0.0) {
@@ -439,7 +437,7 @@ __global__ void handle_particles_kernel(
             if (celly <= 0) {
               omega_y = -(omega_y);
             } else {
-              // Definitely moving to south cell
+              // Moving to south cell
               celly--;
             }
           }
@@ -452,8 +450,10 @@ __global__ void handle_particles_kernel(
             number_density * microscopic_cs_scatter * BARNS;
         macroscopic_cs_absorb = number_density * microscopic_cs_absorb * BARNS;
       }
-      // Check if we have reached census
       else {
+
+        /* Census */
+
         // We have not changed cell or energy level at this stage
         x += distance_to_census * omega_x;
         y += distance_to_census * omega_y;
@@ -474,6 +474,7 @@ __global__ void handle_particles_kernel(
       }
     }
 
+    // Store the final particle data
     particle_e[pindex] = e;
     particle_x[pindex] = x;
     particle_y[pindex] = y;
@@ -486,6 +487,7 @@ __global__ void handle_particles_kernel(
     particle_celly[pindex] = celly;
   }
 
+  // Finalise the balance tally reductions
   __shared__ uint64_t nfacets_shared[NTHREADS];
   __shared__ uint64_t ncollisions_shared[NTHREADS];
 
@@ -494,6 +496,7 @@ __global__ void handle_particles_kernel(
   ncollisions_shared[tid] = ncollisions;
 
   __syncthreads();
+
   sum_reduce_in_shared<uint64_t, NTHREADS>(tid, nfacets_shared);
   sum_reduce_in_shared<uint64_t, NTHREADS>(tid, ncollisions_shared);
   if (tid == 0) {

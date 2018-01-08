@@ -30,7 +30,7 @@
 #define CS_SCATTER_FILENAME "elastic_scatter.cs" // Elastic scattering cs file
 #define CS_CAPTURE_FILENAME "capture.cs"         // Capture cs file
 #define ARCH_ROOT_PARAMS "../arch.params"
-#define NEUTRAL_TESTS "neutral.tests"
+#define NEUTRAL_TESTS "problems/neutral.tests"
 
 enum { PARTICLE_SENT, PARTICLE_DEAD, PARTICLE_CENSUS };
 

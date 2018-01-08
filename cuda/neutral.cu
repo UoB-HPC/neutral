@@ -13,12 +13,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#if 0
-#ifdef MPI
-#include "mpi.h"
-#endif
-#endif // if 0
-
 // Performs a solve of dependent variables for particle transport.
 void solve_transport_2d(
     const int nx, const int ny, const int global_nx, const int global_ny,
@@ -30,14 +24,10 @@ void solve_transport_2d(
     CrossSection* cs_absorb_table, double* energy_deposition_tally,
     uint64_t* reduce_array0, uint64_t* reduce_array1) {
 
-  // Initial idea is to use a kind of queue for handling the particles.
-  // Presumably
-  // this doesn't have to be a carefully ordered queue but lets see how that
-  // goes.
-
-  // This is the known starting number of particles
   uint64_t facets = 0;
   uint64_t collisions = 0;
+
+  // This is the known starting number of particles
   int nparticles = *nlocal_particles;
   int nparticles_sent[NNEIGHBOURS];
 
@@ -46,7 +36,6 @@ void solve_transport_2d(
     return;
   }
 
-  // Communication isn't required for edges
   for (int ii = 0; ii < NNEIGHBOURS; ++ii) {
     nparticles_sent[ii] = 0;
   }
@@ -58,85 +47,9 @@ void solve_transport_2d(
                    cs_absorb_table, energy_deposition_tally, reduce_array0,
                    reduce_array1);
 
-#if 0
-#ifdef MPI
-  while(1) {
-    int nneighbours = 0;
-    int nparticles_recv[NNEIGHBOURS];
-    MPI_Request recv_req[NNEIGHBOURS];
-    MPI_Request send_req[NNEIGHBOURS];
-    for(int ii = 0; ii < NNEIGHBOURS; ++ii) {
-      // Initialise received particles
-      nparticles_recv[ii] = 0;
-
-      // No communication required at edge
-      if(neighbours[ii] == EDGE) {
-        continue;
-      }
-
-      // Check which neighbours are sending some particles
-      MPI_Irecv(
-          &nparticles_recv[ii], 1, MPI_INT, neighbours[ii],
-          TAG_SEND_RECV, MPI_COMM_WORLD, &recv_req[nneighbours]);
-      MPI_Isend(
-          &nparticles_sent[ii], 1, MPI_INT, neighbours[ii],
-          TAG_SEND_RECV, MPI_COMM_WORLD, &send_req[nneighbours++]);
-    }
-
-    MPI_Waitall(
-        nneighbours, recv_req, MPI_STATUSES_IGNORE);
-    nneighbours = 0;
-
-    // Manage all of the received particles
-    int nunprocessed_particles = 0;
-    const int unprocessed_start = nparticles;
-    for(int ii = 0; ii < NNEIGHBOURS; ++ii) {
-      if(neighbours[ii] == EDGE) {
-        continue;
-      }
-
-      // Receive the particles from this neighbour
-      for(int jj = 0; jj < nparticles_recv[ii]; ++jj) {
-        MPI_Recv(
-            &particles[unprocessed_start+nunprocessed_particles], 
-            1, particle_type, neighbours[ii], TAG_PARTICLE, 
-            MPI_COMM_WORLD, MPI_STATUSES_IGNORE);
-        nunprocessed_particles++;
-      }
-
-      nparticles_recv[ii] = 0;
-      nparticles_sent[ii] = 0;
-    }
-
-    nparticles += nunprocessed_particles;
-    if(nunprocessed_particles) {
-      handle_particles(
-          global_nx, global_ny, nx, ny, x_off, y_off, 0, dt, neighbours,
-          density, edgex, edgey, edgedx, edgedy, &facets, &collisions, 
-          nparticles_sent, nparticles_total, nunprocessed_particles, &nparticles, 
-          &particles[unprocessed_start], particles_out, cs_scatter_table, 
-          cs_absorb_table, energy_deposition_tally, rn_pools);
-    }
-
-    // Check if any of the ranks had unprocessed particles
-    int particles_to_process;
-    MPI_Allreduce(
-        &nunprocessed_particles, &particles_to_process, 
-        1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-
-    // All ranks have reached census
-    if(!particles_to_process) {
-      break;
-    }
-  }
-#endif
-
-  barrier();
-#endif // if 0
-
   *nlocal_particles = nparticles;
 
-  printf("facets %llu collisions %llu\n", facets, collisions);
+  printf("Facets %llu\nCollisions %llu\n", facets, collisions);
 }
 
 // Handles the current active batch of particles
@@ -166,6 +79,7 @@ void handle_particles(
       particles->omega_y, particles->x, particles->y, (*master_key)++,
       reduce_array0, reduce_array1);
 
+  // Finalise the reduction of the balance tallies
   uint64_t nfacets = 0;
   uint64_t ncollisions = 0;
   finish_sum_uint64_reduce(nblocks, reduce_array0, &nfacets);
@@ -173,7 +87,7 @@ void handle_particles(
   *facets = nfacets;
   *collisions = ncollisions;
 
-  printf("handled %d particles, with %d particles deleted\n",
+  printf("Handled %d particles, with %d particles deleted\n",
          nparticles_to_process, nparticles_deleted);
 }
 
@@ -187,11 +101,14 @@ size_t inject_particles(const int nparticles, const int global_nx,
                         const int y_off, const double dt, const double* edgex,
                         const double* edgey, const double initial_energy,
                         const uint64_t master_key, Particle** particles) {
+
+  // Allocate a Particle structure
   *particles = (Particle*)malloc(sizeof(Particle));
   if (!*particles) {
     TERMINATE("Could not allocate particle array.\n");
   }
 
+  // Allocate all of the Particle data arrays
   Particle* particle = *particles;
   size_t allocation = 0;
   allocation += allocate_data(&particle->x, nparticles * 1.5);
@@ -205,6 +122,7 @@ size_t inject_particles(const int nparticles, const int global_nx,
   allocation += allocate_int_data(&particle->cellx, nparticles * 1.5);
   allocation += allocate_int_data(&particle->celly, nparticles * 1.5);
 
+  // Initialise all of the particle data
   const int nthreads = NTHREADS;
   const int nblocks = ceil(nparticles / (double)NTHREADS);
   inject_particles_kernel<<<nblocks, nthreads>>>(
@@ -221,36 +139,24 @@ size_t inject_particles(const int nparticles, const int global_nx,
 
 // Sends a particle to a neighbour and replaces in the particle list
 void send_and_mark_particle(const int destination, Particle* particle) {
-#if 0
-#ifdef MPI
-  if(destination == EDGE) {
-    return;
-  }
-
-  particle->dead = 1;
-
-  // Send the particle
-  MPI_Send(
-      particle, 1, particle_type, destination, TAG_PARTICLE, MPI_COMM_WORLD);
-#else
-  TERMINATE("Unreachable - shouldn't send particles unless MPI enabled.\n");
-#endif
-#endif // if 0
 }
 
 // Validates the results of the simulation
 void validate(const int nx, const int ny, const char* params_filename,
               const int rank, double* energy_deposition_tally) {
+
   double* h_energy_deposition_tally;
   allocate_host_data(&h_energy_deposition_tally, nx * ny);
   copy_buffer(nx * ny, &energy_deposition_tally, &h_energy_deposition_tally,
               RECV);
 
+  // Reduce the energy deposition tally locally
   double local_energy_tally = 0.0;
   for (int ii = 0; ii < nx * ny; ++ii) {
     local_energy_tally += h_energy_deposition_tally[ii];
   }
 
+  // Finalise the reduction globally
   double global_energy_tally = reduce_all_sum(local_energy_tally);
 
   if (rank != MASTER) {
@@ -268,6 +174,7 @@ void validate(const int nx, const int ny, const char* params_filename,
     return;
   }
 
+  // Check the value is within tolerance
   printf("Expected %.12e, result was %.12e.\n", values[0], global_energy_tally);
   if (within_tolerance(values[0], global_energy_tally, VALIDATE_TOLERANCE)) {
     printf("PASSED validation.\n");
