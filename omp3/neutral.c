@@ -34,7 +34,7 @@ void solve_transport_2d(
   int nparticles_sent[NNEIGHBOURS];
 
   if (!nparticles) {
-    printf("out of particles\n");
+    printf("Out of particles\n");
     return;
   }
 
@@ -46,7 +46,7 @@ void solve_transport_2d(
 
   *nlocal_particles = nparticles;
 
-  printf("Facets %llu\nCollisions %llu\n", facets, collisions);
+  printf("Facets     %llu\nCollisions %llu\n", facets, collisions);
 }
 
 // Handles the current active batch of particles
@@ -216,8 +216,8 @@ void handle_particles(
   *facets += nfacets;
   *collisions += ncollisions;
 
-  printf("Handled %llu particles, with %llu particles deleted\n", nparticles,
-         ndeleted);
+  printf("Particles  %llu\n", nparticles);
+  printf("Deleted    %llu\n", ndeleted);
 }
 
 // Handles a collision event

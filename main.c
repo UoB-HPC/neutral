@@ -105,7 +105,11 @@ int main(int argc, char** argv) {
 
     barrier();
 
-    wallclock += omp_get_wtime() - w0;
+    double step_time = omp_get_wtime() - w0;
+    wallclock += step_time;
+    printf("Step time  %.4fs\n", step_time);
+    printf("Wallclock  %.4fs\n", wallclock);
+
     elapsed_sim_time += mesh.dt;
 
     if (visit_dump) {
@@ -123,7 +127,7 @@ int main(int argc, char** argv) {
     // Leave the simulation if we have reached the simulation end time
     if (elapsed_sim_time >= mesh.sim_end) {
       if (mesh.rank == MASTER)
-        printf("reached end of simulation time\n");
+        printf("Reached end of simulation time\n");
       break;
     }
   }
@@ -140,8 +144,8 @@ int main(int argc, char** argv) {
   if (mesh.rank == MASTER) {
     PRINT_PROFILING_RESULTS(&p);
 
-    printf("Wallclock %.9fs, Elapsed Simulation Time %.6fs\n", wallclock,
-           elapsed_sim_time);
+    printf("Final Wallclock %.9fs\n", wallclock);
+    printf("Elapsed Simulation Time %.6fs\n", elapsed_sim_time);
   }
 
   return 0;
