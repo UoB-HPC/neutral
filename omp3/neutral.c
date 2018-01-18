@@ -88,8 +88,6 @@ void handle_particles(
     int result = PARTICLE_CONTINUE;
 
     for (int pp = 0; pp < np_per_thread + rem; ++pp) {
-      nparticles++;
-
       // (1) particle can stream and reach census
       // (2) particle can collide and either
       //      - the particle will be absorbed
@@ -102,6 +100,8 @@ void handle_particles(
       if (particle->dead) {
         continue;
       }
+
+      nparticles++;
 
       // Hybrid approach
       // (1) choose subset of particles from static chunk
