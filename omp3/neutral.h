@@ -13,7 +13,7 @@ void handle_particles(
     double* energy_deposition_tally);
 
 // Handle facet event
-int facet_event(const int global_nx, const int global_ny, const int nx,
+void facet_event(const int global_nx, const int global_ny, const int nx,
                 const int ny, const int x_off, const int y_off,
                 const double inv_ntotal_particles,
                 const double distance_to_facet, const double speed,
@@ -26,7 +26,7 @@ int facet_event(const int global_nx, const int global_ny, const int nx,
                 int* cellx, int* celly, double* local_density);
 
 // Handles a collision event
-int collision_event(
+void collision_event(
     const int global_nx, const int nx, const int x_off, const int y_off,
     const double inv_ntotal_particles, const double distance_to_collision,
     const double local_density, const CrossSection* cs_scatter_table,
