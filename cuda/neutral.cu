@@ -22,34 +22,30 @@ void solve_transport_2d(
     const double* edgex, const double* edgey, const double* edgedx,
     const double* edgedy, CrossSection* cs_scatter_table,
     CrossSection* cs_absorb_table, double* energy_deposition_tally,
-    uint64_t* reduce_array0, uint64_t* reduce_array1) {
+    uint64_t* nfacets_reduce_array, uint64_t* ncollisions_reduce_array,
+    uint64_t* nprocessed_reduce_array) {
 
-  uint64_t facets = 0;
-  uint64_t collisions = 0;
+  uint64_t nfacets = 0;
+  uint64_t ncollisions = 0;
 
   // This is the known starting number of particles
   int nparticles = *nlocal_particles;
   int nparticles_sent[NNEIGHBOURS];
 
   if (!nparticles) {
-    printf("out of particles\n");
+    printf("Out of particles\n");
     return;
   }
 
-  for (int ii = 0; ii < NNEIGHBOURS; ++ii) {
-    nparticles_sent[ii] = 0;
-  }
-
   handle_particles(global_nx, global_ny, nx, ny, pad, x_off, y_off, 1, dt,
-                   neighbours, density, edgex, edgey, edgedx, edgedy, &facets,
-                   &collisions, nparticles_sent, master_key, nparticles_total,
-                   nparticles, &nparticles, particles, cs_scatter_table,
-                   cs_absorb_table, energy_deposition_tally, reduce_array0,
-                   reduce_array1);
+                   neighbours, density, edgex, edgey, edgedx, edgedy, &nfacets,
+                   &ncollisions, nparticles_sent, master_key, nparticles_total,
+                   nparticles, particles, cs_scatter_table, cs_absorb_table, 
+                   energy_deposition_tally, nfacets_reduce_array,
+                   ncollisions_reduce_array, nprocessed_reduce_array);
 
-  *nlocal_particles = nparticles;
-
-  printf("Facets %llu\nCollisions %llu\n", facets, collisions);
+  printf("Facets     %llu\n", nfacets);
+  printf("Collisions %llu\n", ncollisions);
 }
 
 // Handles the current active batch of particles
@@ -60,11 +56,10 @@ void handle_particles(
     const double* edgex, const double* edgey, const double* edgedx,
     const double* edgedy, uint64_t* facets, uint64_t* collisions,
     int* nparticles_sent, uint64_t* master_key, const int nparticles_total,
-    const int nparticles_to_process, int* nparticles, Particle* particles,
+    const int nparticles_to_process, Particle* particles,
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table,
-    double* energy_deposition_tally, uint64_t* reduce_array0, uint64_t* reduce_array1) {
-
-  int nparticles_deleted = 0;
+    double* energy_deposition_tally, uint64_t* nfacets_reduce_array, 
+    uint64_t* ncollisions_reduce_array, uint64_t* nprocessed_reduce_array) {
 
   const int nthreads = NTHREADS;
   const int nblocks = ceil(nparticles_total / (double)NTHREADS);
@@ -77,18 +72,20 @@ void handle_particles(
       cs_absorb_table->values, particles->energy, particles->dt_to_census,
       particles->mfp_to_collision, particles->weight, particles->omega_x,
       particles->omega_y, particles->x, particles->y, (*master_key)++,
-      reduce_array0, reduce_array1);
+      nfacets_reduce_array, ncollisions_reduce_array, nprocessed_reduce_array);
 
   // Finalise the reduction of the balance tallies
   uint64_t nfacets = 0;
   uint64_t ncollisions = 0;
-  finish_sum_uint64_reduce(nblocks, reduce_array0, &nfacets);
-  finish_sum_uint64_reduce(nblocks, reduce_array1, &ncollisions);
+  uint64_t nprocessed = 0;
+  finish_sum_uint64_reduce(nblocks, nfacets_reduce_array, &nfacets);
+  finish_sum_uint64_reduce(nblocks, ncollisions_reduce_array, &ncollisions);
+  finish_sum_uint64_reduce(nblocks, nprocessed_reduce_array, &nprocessed);
+
   *facets = nfacets;
   *collisions = ncollisions;
 
-  printf("Handled %d particles, with %d particles deleted\n",
-         nparticles_to_process, nparticles_deleted);
+  printf("Particles  %llu\n", nprocessed);
 }
 
 // Initialises a new particle ready for tracking

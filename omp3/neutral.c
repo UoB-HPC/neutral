@@ -24,7 +24,7 @@ void solve_transport_2d(
     const double* edgex, const double* edgey, const double* edgedx,
     const double* edgedy, CrossSection* cs_scatter_table,
     CrossSection* cs_absorb_table, double* energy_deposition_tally,
-    uint64_t* reduce_array0, uint64_t* reduce_array1) {
+    uint64_t* reduce_array0, uint64_t* reduce_array1, uint64_t* reduce_array2) {
 
   uint64_t facets = 0;
   uint64_t collisions = 0;
@@ -70,14 +70,13 @@ void handle_particles(
 
   uint64_t nfacets = 0;
   uint64_t ncollisions = 0;
-  uint64_t ndeleted = 0;
   uint64_t nparticles = 0;
 
   const int np_per_thread = nparticles_to_process / nthreads;
   const int np_remainder = nparticles_to_process % nthreads;
 
 // The main particle loop
-#pragma omp parallel reduction(+ : nfacets, ncollisions, ndeleted, nparticles)
+#pragma omp parallel reduction(+ : nfacets, ncollisions, nparticles)
   {
     const int tid = omp_get_thread_num();
 
@@ -206,9 +205,6 @@ void handle_particles(
           break;
         }
       }
-
-      // Track how many particles are deleted
-      ndeleted += (result == PARTICLE_SENT || result == PARTICLE_DEAD);
     }
   }
 
@@ -217,7 +213,6 @@ void handle_particles(
   *collisions += ncollisions;
 
   printf("Particles  %llu\n", nparticles);
-  printf("Deleted    %llu\n", ndeleted);
 }
 
 // Handles a collision event

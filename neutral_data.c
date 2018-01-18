@@ -97,9 +97,11 @@ void initialise_neutral_data(NeutralData* neutral_data, Mesh* mesh,
                                     local_nx * local_ny);
 
   allocation +=
-      allocate_uint64_data(&neutral_data->reduce_array0, neutral_data->nparticles);
+      allocate_uint64_data(&neutral_data->nfacets_reduce_array, neutral_data->nparticles);
   allocation +=
-      allocate_uint64_data(&neutral_data->reduce_array1, neutral_data->nparticles);
+      allocate_uint64_data(&neutral_data->ncollisions_reduce_array, neutral_data->nparticles);
+  allocation +=
+      allocate_uint64_data(&neutral_data->nprocessed_reduce_array, neutral_data->nparticles);
 
   // Inject some particles into the mesh if we need to
   if (neutral_data->nlocal_particles) {

@@ -82,7 +82,7 @@ int main(int argc, char** argv) {
   for (tt = 1; tt <= mesh.niters; ++tt) {
 
     if (mesh.rank == MASTER) {
-      printf("\nIteration %d\n", tt);
+      printf("\nIteration  %d\n", tt);
     }
 
     if (visit_dump) {
@@ -100,8 +100,8 @@ int main(int argc, char** argv) {
         &master_key, mesh.neighbours, neutral_data.local_particles,
         shared_data.density, mesh.edgex, mesh.edgey, mesh.edgedx, mesh.edgedy,
         neutral_data.cs_scatter_table, neutral_data.cs_absorb_table,
-        neutral_data.energy_deposition_tally, neutral_data.reduce_array0,
-        neutral_data.reduce_array1);
+        neutral_data.energy_deposition_tally, neutral_data.nfacets_reduce_array,
+        neutral_data.ncollisions_reduce_array, neutral_data.nprocessed_reduce_array);
 
     barrier();
 
