@@ -78,6 +78,12 @@ void handle_particles(
 // The main particle loop
 #pragma omp parallel reduction(+ : nfacets, ncollisions, nparticles)
   {
+    // (1) particle can stream and reach census
+    // (2) particle can collide and either
+    //      - the particle will be absorbed
+    //      - the particle will scatter (this means the energy changes)
+    // (3) particle encounters boundary region, transports to another cell
+
     const int tid = omp_get_thread_num();
 
     // Calculate the particles offset, accounting for some remainder
@@ -86,12 +92,8 @@ void handle_particles(
 
     int result = PARTICLE_CONTINUE;
 
-    for (int pp = 0; pp < np_per_thread + rem; ++pp) {
-      // (1) particle can stream and reach census
-      // (2) particle can collide and either
-      //      - the particle will be absorbed
-      //      - the particle will scatter (this means the energy changes)
-      // (3) particle encounters boundary region, transports to another cell
+    const int block_size = 32;
+    for (int pp = 0; pp < np_per_thread + rem; pp += block_size) {
 
       // Current particle
       Particle* particle = &particles_start[particles_off + pp];
@@ -102,10 +104,16 @@ void handle_particles(
 
       nparticles++;
 
-      int x_facet = 0;
-      int absorb_cs_index = -1;
-      int scatter_cs_index = -1;
-      double cell_mfp = 0.0;
+      int x_facet[block_size];
+      int absorb_cs_index[block_size];
+      int scatter_cs_index[block_size];
+      double cell_mfp[block_size];
+
+      for(int ip = 0; ip < block_size; ++ip) {
+        x_facet[ip] = 0;
+        absorb_cs_index[ip] = -1;
+        scatter_cs_index[ip] = -1;
+        cell_mfp[ip] = 0.0;
 
       // Determine the current cell
       int cellx = particle->cellx - x_off + pad;
@@ -130,8 +138,7 @@ void handle_particles(
       uint64_t counter = 0;
       double rn[NRANDOM_NUMBERS];
 
-      // Set time to census and MFPs until collision, unless travelled
-      // particle
+      // Set time to census and MFPs until collision, unless travelled particle
       if (initial) {
         particle->dt_to_census = dt;
         generate_random_numbers(*master_key, particle->key, counter++, &rn[0],
