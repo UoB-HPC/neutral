@@ -103,9 +103,6 @@ void handle_particles(
 
       nparticles++;
 
-      // Hybrid approach
-      // (1) choose subset of particles from static chunk
-
       int x_facet = 0;
       int absorb_cs_index = -1;
       int scatter_cs_index = -1;
