@@ -8,7 +8,7 @@ void handle_particles(
     const double* edgex, const double* edgey, const double* edgedx,
     const double* edgedy, uint64_t* facets, uint64_t* collisions,
     int* nparticles_sent, uint64_t* master_key, const int ntotal_particles,
-    const int nparticles_to_process, int* nparticles, Particle* particles_start,
+    const int nparticles_to_process, Particle* particles_start,
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table,
     double* energy_deposition_tally);
 

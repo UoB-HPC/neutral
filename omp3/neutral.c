@@ -38,15 +38,11 @@ void solve_transport_2d(
     return;
   }
 
-  for (int ii = 0; ii < NNEIGHBOURS; ++ii) {
-    nparticles_sent[ii] = 0;
-  }
-
   handle_particles(global_nx, global_ny, nx, ny, pad, x_off, y_off, 1, dt,
                    neighbours, density, edgex, edgey, edgedx, edgedy, &facets,
                    &collisions, nparticles_sent, master_key, ntotal_particles,
-                   nparticles, &nparticles, particles, cs_scatter_table,
-                   cs_absorb_table, energy_deposition_tally);
+                   nparticles, particles, cs_scatter_table, cs_absorb_table,
+                   energy_deposition_tally);
 
   *nlocal_particles = nparticles;
 
@@ -61,7 +57,7 @@ void handle_particles(
     const double* edgex, const double* edgey, const double* edgedx,
     const double* edgedy, uint64_t* facets, uint64_t* collisions,
     int* nparticles_sent, uint64_t* master_key, const int ntotal_particles,
-    const int nparticles_to_process, int* nparticles, Particle* particles_start,
+    const int nparticles_to_process, Particle* particles_start,
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table,
     double* energy_deposition_tally) {
 
@@ -75,31 +71,40 @@ void handle_particles(
   uint64_t nfacets = 0;
   uint64_t ncollisions = 0;
   uint64_t ndeleted = 0;
+  uint64_t nparticles = 0;
 
   const int np_per_thread = nparticles_to_process / nthreads;
+  const int np_remainder = nparticles_to_process % nthreads;
 
 // The main particle loop
-#pragma omp parallel reduction(+ : nfacets, ncollisions, ndeleted)
+#pragma omp parallel reduction(+ : nfacets, ncollisions, ndeleted, nparticles)
   {
     const int tid = omp_get_thread_num();
-    const int poff = tid * np_per_thread;
+
+    // Calculate the particles offset, accounting for some remainder
+    const int rem = (tid < np_remainder);
+    const int particles_off = tid * np_per_thread + min(tid, np_remainder);
 
     int result = PARTICLE_CONTINUE;
 
-    for (int pp = 0; pp < np_per_thread; ++pp) {
-
-      // Current particle
-      Particle* particle = &particles_start[poff + pp];
-
-      if (particle->dead) {
-        continue;
-      }
+    for (int pp = 0; pp < np_per_thread + rem; ++pp) {
+      nparticles++;
 
       // (1) particle can stream and reach census
       // (2) particle can collide and either
       //      - the particle will be absorbed
       //      - the particle will scatter (this means the energy changes)
       // (3) particle encounters boundary region, transports to another cell
+
+      // Current particle
+      Particle* particle = &particles_start[particles_off + pp];
+
+      if (particle->dead) {
+        continue;
+      }
+
+      // Hybrid approach
+      // (1) choose subset of particles from static chunk
 
       int x_facet = 0;
       int absorb_cs_index = -1;
@@ -214,8 +219,8 @@ void handle_particles(
   *facets += nfacets;
   *collisions += ncollisions;
 
-  printf("Handled %d particles, with %llu particles deleted\n",
-         nparticles_to_process, ndeleted);
+  printf("Handled %llu particles, with %llu particles deleted\n", nparticles,
+         ndeleted);
 }
 
 // Handles a collision event
@@ -435,11 +440,6 @@ void update_tallies(const int nx, const int x_off, const int y_off,
   energy_deposition_tally[celly * nx + cellx] +=
       energy_deposition * inv_ntotal_particles;
 }
-
-// Handle the collision event, including absorption and scattering
-int handle_collision(Particle* particle, const double macroscopic_cs_absorb,
-                     uint64_t* counter, const double macroscopic_cs_total,
-                     const double distance_to_collision, uint64_t master_key) {}
 
 // Sends a particle to a neighbour and replaces in the particle list
 void send_and_mark_particle(const int destination, Particle* particle) {}
