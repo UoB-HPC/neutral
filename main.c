@@ -142,8 +142,6 @@ int main(int argc, char** argv) {
            neutral_data.energy_deposition_tally);
 
   if (mesh.rank == MASTER) {
-    PRINT_PROFILING_RESULTS(&p);
-
     printf("Final Wallclock %.9fs\n", wallclock);
     printf("Elapsed Simulation Time %.6fs\n", elapsed_sim_time);
   }

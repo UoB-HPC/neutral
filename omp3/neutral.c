@@ -79,6 +79,8 @@ void handle_particles(
 // The main particle loop
 #pragma omp parallel reduction(+ : nfacets, ncollisions, nparticles)
   {
+    struct Profile tp;
+
     // (1) particle can stream and reach census
     // (2) particle can collide and either
     //      - the particle will be absorbed
@@ -90,7 +92,7 @@ void handle_particles(
     // Calculate the particles offset, accounting for some remainder
     const int rem = (tid < np_remainder);
     const int particles_off = tid * np_per_thread + min(tid, np_remainder);
-    const int block_size = 2;
+    const int block_size = 256;
 
     double rn[NRANDOM_NUMBERS];
     int x_facet[block_size];
@@ -120,7 +122,10 @@ void handle_particles(
       const int diff = (np_per_thread+rem)-pp;
       const int np = (diff > block_size) ? block_size : diff;
 
+      START_PROFILING(&tp);
+
       // Initialise cached particle data
+#pragma omp simd reduction(+: nparticles)
       for (int ip = 0; ip < np; ++ip) {
         if (particles[ip].dead) {
           continue;
@@ -162,10 +167,14 @@ void handle_particles(
         }
       }
 
+      STOP_PROFILING(&tp, "cache_init");
+
       // Loop until we have reached census
       while (1) {
         uint64_t ncompleted = 0;
 
+        START_PROFILING(&tp);
+#pragma omp simd reduction(+: ncompleted, ncollisions, nfacets)
         for (int ip = 0; ip < np; ++ip) {
           if (particles[ip].dead) {
             next_event[ip] = PARTICLE_DEAD;
@@ -199,11 +208,14 @@ void handle_particles(
             ncompleted++;
           }
         }
+        STOP_PROFILING(&tp, "calc_events");
 
         if (ncompleted == np) {
           break;
         }
 
+        START_PROFILING(&tp);
+#pragma omp simd //reduction(+: counter)
         for (int ip = 0; ip < np; ++ip) {
           if (next_event[ip] != PARTICLE_COLLISION) {
             continue;
@@ -221,7 +233,31 @@ void handle_particles(
               energy_deposition_tally, &scatter_cs_index[ip],
               &absorb_cs_index[ip], rn, &speed[ip]);
         }
+        STOP_PROFILING(&tp, "collision");
 
+#ifdef TALLY_OUT
+        START_PROFILING(&tp);
+        for(int ip = 0; ip < np; ++ip) {
+          // Store tallies before we perform facet encounter
+          if (next_event[ip] != PARTICLE_FACET || 
+              (particles[ip].dead && next_event[ip] == PARTICLE_COLLISION)) {
+            continue;
+          }
+
+          // Update the tallies for all particles leaving cells
+          energy_deposition[ip] += calculate_energy_deposition(
+              global_nx, nx, x_off, y_off, &particles[ip], inv_ntotal_particles,
+              distance_to_facet[ip], number_density[ip], microscopic_cs_absorb[ip],
+              microscopic_cs_scatter[ip] + microscopic_cs_absorb[ip]);
+          update_tallies(nx, x_off, y_off, &particles[ip], inv_ntotal_particles,
+              energy_deposition[ip], energy_deposition_tally);
+          energy_deposition[ip] = 0.0;
+        }
+        STOP_PROFILING(&tp, "energy_deposition");
+#endif
+
+        START_PROFILING(&tp);
+#pragma omp simd
         for (int ip = 0; ip < np; ++ip) {
           if (next_event[ip] != PARTICLE_FACET) {
             continue;
@@ -236,8 +272,11 @@ void handle_particles(
               &macroscopic_cs_absorb[ip], energy_deposition_tally,
               nparticles_sent, &cellx[ip], &celly[ip], &local_density[ip]);
         }
+        STOP_PROFILING(&tp, "facet");
       }
 
+      START_PROFILING(&tp);
+#pragma omp simd
       for (int ip = 0; ip < np; ++ip) {
         if (next_event[ip] != PARTICLE_CENSUS) {
           continue;
@@ -250,17 +289,21 @@ void handle_particles(
                      &microscopic_cs_scatter[ip], &microscopic_cs_absorb[ip],
                      energy_deposition_tally);
       }
+      STOP_PROFILING(&tp, "census");
     }
+    PRINT_PROFILING_RESULTS(&tp);
   }
 
   // Store a total number of facets and collisions
   *facets += nfacets;
   *collisions += ncollisions;
 
+
   printf("Particles  %llu\n", nparticles);
 }
 
 // Handles a collision event
+#pragma omp declare simd
 void collision_event(
     const int global_nx, const int nx, const int x_off, const int y_off,
     const double inv_ntotal_particles, const double distance_to_collision,
@@ -299,6 +342,14 @@ void collision_event(
     if (particle->energy < MIN_ENERGY_OF_INTEREST) {
       // Energy is too low, so mark the particle for deletion
       particle->dead = 1;
+
+#ifndef TALLY_OUT
+      // Update the tallies for all particles leaving cells
+      update_tallies(nx, x_off, y_off, particle, inv_ntotal_particles,
+          *energy_deposition, energy_deposition_tally);
+      *energy_deposition = 0.0;
+#endif
+
     }
   } else {
 
@@ -331,11 +382,7 @@ void collision_event(
     particle->energy = e_new;
   }
 
-  // Need to store tally information as finished with particle
-  update_tallies(nx, x_off, y_off, particle, inv_ntotal_particles,
-                 *energy_deposition, energy_deposition_tally);
-
-  // No changes required if particle is dead
+  // Leave if particle is dead
   if (particle->dead) {
     return;
   }
@@ -358,6 +405,7 @@ void collision_event(
 }
 
 // Handle facet event
+#pragma omp declare simd
 void facet_event(const int global_nx, const int global_ny, const int nx,
                 const int ny, const int x_off, const int y_off,
                 const double inv_ntotal_particles,
@@ -370,19 +418,20 @@ void facet_event(const int global_nx, const int global_ny, const int nx,
                 double* energy_deposition_tally, int* nparticles_sent,
                 int* cellx, int* celly, double* local_density) {
 
-  // Update the mean free paths until collision
-  particle->mfp_to_collision -= (distance_to_facet / cell_mfp);
-  particle->dt_to_census -= (distance_to_facet / speed);
-
+#ifndef TALLY_OUT
+  // Update the tallies for all particles leaving cells
   *energy_deposition += calculate_energy_deposition(
       global_nx, nx, x_off, y_off, particle, inv_ntotal_particles,
       distance_to_facet, *number_density, *microscopic_cs_absorb,
       *microscopic_cs_scatter + *microscopic_cs_absorb);
-
-  // Update tallies as we leave a cell
   update_tallies(nx, x_off, y_off, particle, inv_ntotal_particles,
-                 *energy_deposition, energy_deposition_tally);
+      *energy_deposition, energy_deposition_tally);
   *energy_deposition = 0.0;
+#endif
+
+  // Update the mean free paths until collision
+  particle->mfp_to_collision -= (distance_to_facet / cell_mfp);
+  particle->dt_to_census -= (distance_to_facet / speed);
 
   // Move the particle to the facet
   particle->x += distance_to_facet * particle->omega_x;
@@ -436,6 +485,7 @@ void facet_event(const int global_nx, const int global_ny, const int nx,
 }
 
 // Handles the census event
+#pragma omp declare simd
 void census_event(const int global_nx, const int nx, const int x_off,
                   const int y_off, const double inv_ntotal_particles,
                   const double distance_to_census, const double cell_mfp,
@@ -448,15 +498,14 @@ void census_event(const int global_nx, const int nx, const int x_off,
   particle->x += distance_to_census * particle->omega_x;
   particle->y += distance_to_census * particle->omega_y;
   particle->mfp_to_collision -= (distance_to_census / cell_mfp);
+
+  // Need to store tally information as finished with particle
   *energy_deposition += calculate_energy_deposition(
       global_nx, nx, x_off, y_off, particle, inv_ntotal_particles,
       distance_to_census, *number_density, *microscopic_cs_absorb,
       *microscopic_cs_scatter + *microscopic_cs_absorb);
-
-  // Need to store tally information as finished with particle
   update_tallies(nx, x_off, y_off, particle, inv_ntotal_particles,
                  *energy_deposition, energy_deposition_tally);
-
   particle->dt_to_census = 0.0;
 }
 
@@ -478,6 +527,7 @@ void update_tallies(const int nx, const int x_off, const int y_off,
 void send_and_mark_particle(const int destination, Particle* particle) {}
 
 // Calculate the distance to the next facet
+#pragma omp declare simd
 void calc_distance_to_facet(const int global_nx, const double x, const double y,
                             const int pad, const int x_off, const int y_off,
                             const double omega_x, const double omega_y,
@@ -530,6 +580,7 @@ void calc_distance_to_facet(const int global_nx, const double x, const double y,
 }
 
 // Calculate the energy deposition in the cell
+#pragma omp declare simd
 double calculate_energy_deposition(
     const int global_nx, const int nx, const int x_off, const int y_off,
     Particle* particle, const double inv_ntotal_particles,
@@ -654,7 +705,6 @@ size_t inject_particles(const int nparticles, const int global_nx,
     TERMINATE("Could not allocate particle array.\n");
   }
 
-  START_PROFILING(&compute_profile);
 #pragma omp parallel for
   for (int ii = 0; ii < nparticles; ++ii) {
     Particle* particle = &(*particles)[ii];
@@ -706,8 +756,6 @@ size_t inject_particles(const int nparticles, const int global_nx,
     particle->dead = 0;
     particle->key = ii;
   }
-
-  STOP_PROFILING(&compute_profile, "initialising particles");
 
   return (sizeof(Particle) * nparticles * 2);
 }
