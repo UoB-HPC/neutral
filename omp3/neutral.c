@@ -254,6 +254,12 @@ int collision_event(
     if (particle->energy < MIN_ENERGY_OF_INTEREST) {
       // Energy is too low, so mark the particle for deletion
       particle->dead = 1;
+
+      // Need to store tally information as finished with particle
+      update_tallies(nx, x_off, y_off, particle, inv_ntotal_particles,
+                     *energy_deposition, energy_deposition_tally);
+      *energy_deposition = 0.0;
+      return PARTICLE_DEAD;
     }
   } else {
 
@@ -284,15 +290,6 @@ int collision_event(
     particle->omega_x = omega_x_new;
     particle->omega_y = omega_y_new;
     particle->energy = e_new;
-  }
-
-  // Need to store tally information as finished with particle
-  update_tallies(nx, x_off, y_off, particle, inv_ntotal_particles,
-                 *energy_deposition, energy_deposition_tally);
-
-  // No changes required if particle is dead
-  if (particle->dead) {
-    return PARTICLE_DEAD;
   }
 
   // Energy has changed so update the cross-sections
