@@ -92,9 +92,9 @@ void handle_particles(
     // Calculate the particles offset, accounting for some remainder
     const int rem = (tid < np_remainder);
     const int particles_off = tid * np_per_thread + min(tid, np_remainder);
-    const int block_size = 256;
+    const int block_size = 32;
 
-    double rn[NRANDOM_NUMBERS];
+    double rn[block_size][NRANDOM_NUMBERS];
     int x_facet[block_size];
     int absorb_cs_index[block_size];
     int scatter_cs_index[block_size];
@@ -112,7 +112,6 @@ void handle_particles(
     double distance_to_facet[block_size];
     int next_event[block_size];
 
-    // TODO: This potentially misses off some iterations
     for (int pp = 0; pp < np_per_thread + rem; pp += block_size) {
 
       // Current particle
@@ -125,7 +124,7 @@ void handle_particles(
       START_PROFILING(&tp);
 
       // Initialise cached particle data
-#pragma omp simd reduction(+: nparticles)
+#pragma omp simd reduction(+: nparticles, counter)
       for (int ip = 0; ip < np; ++ip) {
         if (particles[ip].dead) {
           continue;
@@ -161,9 +160,9 @@ void handle_particles(
         if (initial) {
           particles[ip].dt_to_census = dt;
           generate_random_numbers(*master_key, particles[ip].key, counter++,
-                                  &rn[0], &rn[1]);
+                                  &rn[ip][0], &rn[ip][1]);
           particles[ip].mfp_to_collision =
-              -log(rn[0]) / macroscopic_cs_scatter[ip];
+              -log(rn[ip][0]) / macroscopic_cs_scatter[ip];
         }
       }
 
@@ -215,7 +214,7 @@ void handle_particles(
         }
 
         START_PROFILING(&tp);
-#pragma omp simd //reduction(+: counter)
+#pragma omp simd 
         for (int ip = 0; ip < np; ++ip) {
           if (next_event[ip] != PARTICLE_COLLISION) {
             continue;
@@ -231,7 +230,7 @@ void handle_particles(
               &microscopic_cs_scatter[ip], &microscopic_cs_absorb[ip],
               &macroscopic_cs_scatter[ip], &macroscopic_cs_absorb[ip],
               energy_deposition_tally, &scatter_cs_index[ip],
-              &absorb_cs_index[ip], rn, &speed[ip]);
+              &absorb_cs_index[ip], rn[ip], &speed[ip]);
         }
         STOP_PROFILING(&tp, "collision");
 
