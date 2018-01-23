@@ -92,7 +92,13 @@ void handle_particles(
     // Calculate the particles offset, accounting for some remainder
     const int rem = (tid < np_remainder);
     const int particles_off = tid * np_per_thread + min(tid, np_remainder);
-    const int block_size = 32;
+
+    const int block_size = 64;
+    int counter_off[block_size];
+    // Populate the counter offset
+    for(int cc = 0; cc < block_size; ++cc) {
+      counter_off[cc] = 2*cc;
+    }
 
     double rn[block_size][NRANDOM_NUMBERS];
     int x_facet[block_size];
@@ -214,7 +220,7 @@ void handle_particles(
         }
 
         START_PROFILING(&tp);
-#pragma omp simd 
+#pragma omp simd
         for (int ip = 0; ip < np; ++ip) {
           if (next_event[ip] != PARTICLE_COLLISION) {
             continue;
@@ -225,7 +231,7 @@ void handle_particles(
           collision_event(
               global_nx, nx, x_off, y_off, inv_ntotal_particles,
               distance_to_collision, local_density[ip], cs_scatter_table,
-              cs_absorb_table, &particles[ip], &counter, master_key,
+              cs_absorb_table, &particles[ip], counter_off[ip] + counter, master_key,
               &energy_deposition[ip], &number_density[ip],
               &microscopic_cs_scatter[ip], &microscopic_cs_absorb[ip],
               &macroscopic_cs_scatter[ip], &macroscopic_cs_absorb[ip],
@@ -233,6 +239,9 @@ void handle_particles(
               &absorb_cs_index[ip], rn[ip], &speed[ip]);
         }
         STOP_PROFILING(&tp, "collision");
+
+        // Have to adjust the counter for next usage
+        counter += 2*block_size;
 
 #ifdef TALLY_OUT
         START_PROFILING(&tp);
@@ -275,7 +284,6 @@ void handle_particles(
       }
 
       START_PROFILING(&tp);
-#pragma omp simd
       for (int ip = 0; ip < np; ++ip) {
         if (next_event[ip] != PARTICLE_CENSUS) {
           continue;
@@ -307,7 +315,7 @@ void collision_event(
     const int global_nx, const int nx, const int x_off, const int y_off,
     const double inv_ntotal_particles, const double distance_to_collision,
     const double local_density, const CrossSection* cs_scatter_table,
-    const CrossSection* cs_absorb_table, Particle* particle, uint64_t* counter,
+    const CrossSection* cs_absorb_table, Particle* particle, uint64_t counter_off,
     const uint64_t* master_key, double* energy_deposition,
     double* number_density, double* microscopic_cs_scatter,
     double* microscopic_cs_absorb, double* macroscopic_cs_scatter,
@@ -329,7 +337,7 @@ void collision_event(
                           (*macroscopic_cs_scatter + *macroscopic_cs_absorb);
 
   double rn1[NRANDOM_NUMBERS];
-  generate_random_numbers(*master_key, particle->key, (*counter)++, &rn1[0],
+  generate_random_numbers(*master_key, particle->key, counter_off, &rn1[0],
                           &rn1[1]);
 
   if (rn1[0] < p_absorb) {
@@ -396,7 +404,7 @@ void collision_event(
   *macroscopic_cs_absorb = *number_density * (*microscopic_cs_absorb) * BARNS;
 
   // Re-sample number of mean free paths to collision
-  generate_random_numbers(*master_key, particle->key, (*counter)++, &rn[0],
+  generate_random_numbers(*master_key, particle->key, counter_off+1, &rn[0],
                           &rn[1]);
   particle->mfp_to_collision = -log(rn[0]) / *macroscopic_cs_scatter;
   particle->dt_to_census -= distance_to_collision / *speed;
@@ -484,7 +492,6 @@ void facet_event(const int global_nx, const int global_ny, const int nx,
 }
 
 // Handles the census event
-#pragma omp declare simd
 void census_event(const int global_nx, const int nx, const int x_off,
                   const int y_off, const double inv_ntotal_particles,
                   const double distance_to_census, const double cell_mfp,
@@ -628,7 +635,9 @@ double microscopic_cs_for_energy(const CrossSection* cs, const double energy,
     }
 
     if (!found) {
+#if 0
       TERMINATE("No key for energy %.12e in cross sectional lookup.\n", energy);
+#endif // if 0
     }
   } else {
     // Use a simple binary search to find the energy group
