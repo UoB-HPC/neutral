@@ -16,7 +16,8 @@ void solve_transport_2d(
     const double* edgex, const double* edgey, const double* edgedx,
     const double* edgedy, CrossSection* cs_scatter_table,
     CrossSection* cs_absorb_table, double* energy_deposition_tally,
-    uint64_t* reduce_array0, uint64_t* reduce_array1, uint64_t* reduce_array2);
+    uint64_t* reduce_array0, uint64_t* reduce_array1, uint64_t* reduce_array2,
+    uint64_t* facet_events, uint64_t* collision_events);
 
 // Initialises a new particle ready for tracking
 size_t inject_particles(const int nparticles, const int global_nx,

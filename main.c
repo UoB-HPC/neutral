@@ -90,6 +90,9 @@ int main(int argc, char** argv) {
                             elapsed_sim_time);
     }
 
+    uint64_t facet_events = 0;
+    uint64_t collision_events = 0;
+
     double w0 = omp_get_wtime();
 
     // Begin the main solve step
@@ -101,7 +104,8 @@ int main(int argc, char** argv) {
         shared_data.density, mesh.edgex, mesh.edgey, mesh.edgedx, mesh.edgedy,
         neutral_data.cs_scatter_table, neutral_data.cs_absorb_table,
         neutral_data.energy_deposition_tally, neutral_data.nfacets_reduce_array,
-        neutral_data.ncollisions_reduce_array, neutral_data.nprocessed_reduce_array);
+        neutral_data.ncollisions_reduce_array, neutral_data.nprocessed_reduce_array,
+        &facet_events, &collision_events);
 
     barrier();
 
@@ -109,6 +113,11 @@ int main(int argc, char** argv) {
     wallclock += step_time;
     printf("Step time  %.4fs\n", step_time);
     printf("Wallclock  %.4fs\n", wallclock);
+    printf("Facets     %llu\n", facet_events);
+    printf("Collisions %llu\n", collision_events);
+
+    printf("Facet Events / s %.2e\n", facet_events / step_time);
+    printf("Collision Events / s %.2e\n", collision_events / step_time);
 
     elapsed_sim_time += mesh.dt;
 
