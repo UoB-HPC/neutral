@@ -93,7 +93,7 @@ void handle_particles(
     const int rem = (tid < np_remainder);
     const int particles_off = tid * np_per_thread + min(tid, np_remainder);
 
-    const int block_size = 64;
+    const int block_size = 32;
     int counter_off[block_size];
     // Populate the counter offset
     for(int cc = 0; cc < block_size; ++cc) {
@@ -524,9 +524,28 @@ void update_tallies(const int nx, const int x_off, const int y_off,
   const int cellx = particle->cellx - x_off;
   const int celly = particle->celly - y_off;
 
+#ifdef MANUAL_ATOMIC
+
+  uint64_t* ptr = (uint64_t*)&energy_deposition_tally[celly * nx + cellx];  
+  double tally = energy_deposition * inv_ntotal_particles;
+
+  uint64_t old0;
+  uint64_t old1 = *ptr;
+
+  do {
+    old0 = old1;
+    double new = *((double*)&old0) + tally;
+    old1 = __sync_val_compare_and_swap(ptr, old0, *((uint64_t*)&new));
+  }
+  while(old0 != old1);
+
+#else
+
 #pragma omp atomic update
-  energy_deposition_tally[celly * nx + cellx] +=
-      energy_deposition * inv_ntotal_particles;
+    energy_deposition_tally[celly * nx + cellx] +=
+            energy_deposition * inv_ntotal_particles;
+
+#endif
 }
 
 // Sends a particle to a neighbour and replaces in the particle list
