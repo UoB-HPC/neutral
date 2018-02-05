@@ -90,6 +90,9 @@ int main(int argc, char** argv) {
                             elapsed_sim_time);
     }
 
+    uint64_t facet_events = 0;
+    uint64_t collision_events = 0;
+
     double w0 = omp_get_wtime();
 
     // Begin the main solve step
@@ -101,14 +104,20 @@ int main(int argc, char** argv) {
         shared_data.density, mesh.edgex, mesh.edgey, mesh.edgedx, mesh.edgedy,
         neutral_data.cs_scatter_table, neutral_data.cs_absorb_table,
         neutral_data.energy_deposition_tally, neutral_data.nfacets_reduce_array,
-        neutral_data.ncollisions_reduce_array, neutral_data.nprocessed_reduce_array);
+        neutral_data.ncollisions_reduce_array, neutral_data.nprocessed_reduce_array,
+        &facet_events, &collision_events);
 
     barrier();
 
     double step_time = omp_get_wtime() - w0;
     wallclock += step_time;
+    printf("Facets     %llu\n", facet_events);
+    printf("Collisions %llu\n",  collision_events);
     printf("Step time  %.4fs\n", step_time);
     printf("Wallclock  %.4fs\n", wallclock);
+
+    printf("Collision Events / s = %.2e\n", (collision_events / step_time));
+    printf("Facet Events / s = %.2e\n", (facet_events / step_time));
 
     elapsed_sim_time += mesh.dt;
 
@@ -134,12 +143,12 @@ int main(int argc, char** argv) {
 
   if (visit_dump) {
     plot_particle_density(&neutral_data, &mesh, tt, neutral_data.nparticles,
-                          elapsed_sim_time);
+        elapsed_sim_time);
   }
 
   validate(mesh.local_nx - 2 * mesh.pad, mesh.local_ny - 2 * mesh.pad,
-           neutral_data.neutral_params_filename, mesh.rank,
-           neutral_data.energy_deposition_tally);
+      neutral_data.neutral_params_filename, mesh.rank,
+      neutral_data.energy_deposition_tally);
 
   if (mesh.rank == MASTER) {
     printf("Final Wallclock %.9fs\n", wallclock);

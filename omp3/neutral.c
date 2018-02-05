@@ -24,10 +24,8 @@ void solve_transport_2d(
     const double* edgex, const double* edgey, const double* edgedx,
     const double* edgedy, CrossSection* cs_scatter_table,
     CrossSection* cs_absorb_table, double* energy_deposition_tally,
-    uint64_t* reduce_array0, uint64_t* reduce_array1, uint64_t* reduce_array2) {
-
-  uint64_t facets = 0;
-  uint64_t collisions = 0;
+    uint64_t* reduce_array0, uint64_t* reduce_array1, uint64_t* reduce_array2,
+    uint64_t* facet_events, uint64_t* collision_events) {
 
   // This is the known starting number of particles
   int nparticles = *nlocal_particles;
@@ -39,14 +37,12 @@ void solve_transport_2d(
   }
 
   handle_particles(global_nx, global_ny, nx, ny, pad, x_off, y_off, 1, dt,
-                   neighbours, density, edgex, edgey, edgedx, edgedy, &facets,
-                   &collisions, nparticles_sent, master_key, ntotal_particles,
+                   neighbours, density, edgex, edgey, edgedx, edgedy, facet_events,
+                   collision_events, nparticles_sent, master_key, ntotal_particles,
                    nparticles, particles, cs_scatter_table, cs_absorb_table,
                    energy_deposition_tally);
 
   *nlocal_particles = nparticles;
-
-  printf("Facets     %llu\nCollisions %llu\n", facets, collisions);
 }
 
 // Handles the current active batch of particles
