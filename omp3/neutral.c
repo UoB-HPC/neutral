@@ -19,7 +19,7 @@
 void solve_transport_2d(
     const int nx, const int ny, const int global_nx, const int global_ny,
     const int pad, const int x_off, const int y_off, const double dt,
-    const int ntotal_particles, int* nlocal_particles, uint64_t* master_key,
+    const int ntotal_particles, int* nparticles, uint64_t* master_key,
     const int* neighbours, Particle* particles, const double* density,
     const double* edgex, const double* edgey, const double* edgedx,
     const double* edgedy, CrossSection* cs_scatter_table,
@@ -27,22 +27,16 @@ void solve_transport_2d(
     uint64_t* reduce_array0, uint64_t* reduce_array1, uint64_t* reduce_array2,
     uint64_t* facet_events, uint64_t* collision_events) {
 
-  // This is the known starting number of particles
-  int nparticles = *nlocal_particles;
-  int nparticles_sent[NNEIGHBOURS];
-
-  if (!nparticles) {
+  if (!(*nparticles)) {
     printf("Out of particles\n");
     return;
   }
 
   handle_particles(global_nx, global_ny, nx, ny, pad, x_off, y_off, 1, dt,
                    neighbours, density, edgex, edgey, edgedx, edgedy, facet_events,
-                   collision_events, nparticles_sent, master_key, ntotal_particles,
-                   nparticles, particles, cs_scatter_table, cs_absorb_table,
+                   collision_events, master_key, ntotal_particles,
+                   *nparticles, particles, cs_scatter_table, cs_absorb_table,
                    energy_deposition_tally);
-
-  *nlocal_particles = nparticles;
 }
 
 // Handles the current active batch of particles
@@ -52,7 +46,7 @@ void handle_particles(
     const double dt, const int* neighbours, const double* density,
     const double* edgex, const double* edgey, const double* edgedx,
     const double* edgedy, uint64_t* facets, uint64_t* collisions,
-    int* nparticles_sent, uint64_t* master_key, const int ntotal_particles,
+    uint64_t* master_key, const int ntotal_particles,
     const int nparticles_to_process, Particle* particles,
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table,
     double* energy_deposition_tally) {
@@ -124,7 +118,7 @@ void handle_particles(
       START_PROFILING(&tp);
 
       // Initialise cached particle data
-#pragma omp simd reduction(+: nparticles, counter)
+//#pragma omp simd reduction(+: nparticles, counter)
       for (int ip = 0; ip < np; ++ip) {
         if (particles->dead[p_off+ip]) {
           continue;
@@ -173,7 +167,7 @@ void handle_particles(
         uint64_t ncompleted = 0;
 
         START_PROFILING(&tp);
-#pragma omp simd reduction(+: ncompleted, ncollisions, nfacets)
+//#pragma omp simd reduction(+: ncompleted, ncollisions, nfacets)
         for (int ip = 0; ip < np; ++ip) {
           if (particles->dead[p_off+ip]) {
             next_event[ip] = PARTICLE_DEAD;
@@ -214,7 +208,7 @@ void handle_particles(
         }
 
         START_PROFILING(&tp);
-#pragma omp simd
+//#pragma omp simd
         for (int ip = 0; ip < np; ++ip) {
           if (next_event[ip] != PARTICLE_COLLISION) {
             continue;
@@ -259,7 +253,7 @@ void handle_particles(
 #endif
 
         START_PROFILING(&tp);
-#pragma omp simd
+//#pragma omp simd
         for (int ip = 0; ip < np; ++ip) {
           if (next_event[ip] != PARTICLE_FACET) {
             continue;
@@ -272,7 +266,7 @@ void handle_particles(
               &number_density[ip], &microscopic_cs_scatter[ip],
               &microscopic_cs_absorb[ip], &macroscopic_cs_scatter[ip],
               &macroscopic_cs_absorb[ip], energy_deposition_tally,
-              nparticles_sent, &cellx[ip], &celly[ip], &local_density[ip]);
+              &cellx[ip], &celly[ip], &local_density[ip]);
         }
         STOP_PROFILING(&tp, "facet");
       }
@@ -414,7 +408,7 @@ static inline void facet_event(const int global_nx, const int global_ny, const i
                 double* energy_deposition, double* number_density,
                 double* microscopic_cs_scatter, double* microscopic_cs_absorb,
                 double* macroscopic_cs_scatter, double* macroscopic_cs_absorb,
-                double* energy_deposition_tally, int* nparticles_sent,
+                double* energy_deposition_tally, 
                 int* cellx, int* celly, double* local_density) {
 
 #ifndef TALLY_OUT
