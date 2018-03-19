@@ -18,7 +18,7 @@ void facet_event(const int global_nx, const int global_ny, const int nx,
                 const double inv_ntotal_particles,
                 const double distance_to_facet, const double speed,
                 const double cell_mfp, const int x_facet, const double* density,
-                const int* neighbours, Particle* particle,
+                const int* neighbours, const int ip, Particle* particle,
                 double* energy_deposition, double* number_density,
                 double* microscopic_cs_scatter, double* microscopic_cs_absorb,
                 double* macroscopic_cs_scatter, double* macroscopic_cs_absorb,
@@ -30,7 +30,7 @@ void collision_event(
     const int global_nx, const int nx, const int x_off, const int y_off,
     const double inv_ntotal_particles, const double distance_to_collision,
     const double local_density, const CrossSection* cs_scatter_table,
-    const CrossSection* cs_absorb_table, Particle* particle, uint64_t counter_off,
+    const CrossSection* cs_absorb_table, const int ip, Particle* particle, uint64_t counter_off,
     const uint64_t* master_key, double* energy_deposition,
     double* number_density, double* microscopic_cs_scatter,
     double* microscopic_cs_absorb, double* macroscopic_cs_scatter,
@@ -41,14 +41,14 @@ void collision_event(
 void census_event(const int global_nx, const int nx, const int x_off,
                   const int y_off, const double inv_ntotal_particles,
                   const double distance_to_census, const double cell_mfp,
-                  Particle* particle, double* energy_deposition,
+                  const int ip, Particle* particle, double* energy_deposition,
                   double* number_density, double* microscopic_cs_scatter,
                   double* microscopic_cs_absorb,
                   double* energy_deposition_tally);
 
 // Tallies the energy deposition in the cell
 void update_tallies(const int nx, const int x_off, const int y_off,
-                    Particle* particle, const double inv_ntotal_particles,
+                    const int ip, Particle* particle, const double inv_ntotal_particles,
                     const double energy_deposition,
                     double* energy_deposition_tally);
 
@@ -72,7 +72,7 @@ void calc_distance_to_facet(const int global_nx, const double x, const double y,
 // Calculate the energy deposition in the cell
 double calculate_energy_deposition(
     const int global_nx, const int nx, const int x_off, const int y_off,
-    Particle* particle, const double inv_ntotal_particles,
+    const int ip, Particle* particle, const double inv_ntotal_particles,
     const double path_length, const double number_density,
     const double microscopic_cs_absorb, const double microscopic_cs_total);
 
