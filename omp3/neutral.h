@@ -89,8 +89,12 @@ double calculate_energy_deposition(
     double* p_energy, double* p_weight);
 
 // Fetch the cross section for a particular energy value
-double microscopic_cs_for_energy(const CrossSection* cs, const double energy,
-                                 int* cs_index);
+double microscopic_cs_for_energy_binary(
+    const CrossSection* cs, const double energy, int* cs_index);
+
+// Fetch the cross section for a particular energy value
+double microscopic_cs_for_energy_linear(
+    const CrossSection* cs, const double energy, int* cs_index);
 
 // Generates a pair of random numbers
 void generate_random_numbers(const uint64_t master_key,

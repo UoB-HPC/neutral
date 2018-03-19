@@ -153,9 +153,9 @@ void handle_particles(
         local_density[ip] = density[celly[ip] * (nx + 2 * pad) + cellx[ip]];
 
         // Fetch the cross sections and prepare related quantities
-        microscopic_cs_scatter[ip] = microscopic_cs_for_energy(
+        microscopic_cs_scatter[ip] = microscopic_cs_for_energy_binary(
             cs_scatter_table, p_energy[ip], &scatter_cs_index[ip]);
-        microscopic_cs_absorb[ip] = microscopic_cs_for_energy(
+        microscopic_cs_absorb[ip] = microscopic_cs_for_energy_binary(
             cs_absorb_table, p_energy[ip], &absorb_cs_index[ip]);
         number_density[ip] = (local_density[ip] * AVOGADROS / MOLAR_MASS);
         macroscopic_cs_scatter[ip] =
@@ -163,6 +163,8 @@ void handle_particles(
         macroscopic_cs_absorb[ip] =
           number_density[ip] * microscopic_cs_absorb[ip] * BARNS;
         speed[ip] = sqrt((2.0 * p_energy[ip] * eV_TO_J) / PARTICLE_MASS);
+
+
 
         // Set time to census and MFPs until collision, unless travelled
         // particle
@@ -407,9 +409,9 @@ static inline void collision_event(
   }
 
   // Energy has changed so update the cross-sections
-  *microscopic_cs_scatter = microscopic_cs_for_energy(
+  *microscopic_cs_scatter = microscopic_cs_for_energy_linear(
       cs_scatter_table, p_energy[ip], scatter_cs_index);
-  *microscopic_cs_absorb = microscopic_cs_for_energy(
+  *microscopic_cs_absorb = microscopic_cs_for_energy_linear(
       cs_absorb_table, p_energy[ip], absorb_cs_index);
   *number_density = (local_density * AVOGADROS / MOLAR_MASS);
   *macroscopic_cs_scatter = *number_density * (*microscopic_cs_scatter) * BARNS;
@@ -646,42 +648,53 @@ static inline double calculate_energy_deposition(
 }
 
 // Fetch the cross section for a particular energy value
-static inline double microscopic_cs_for_energy(const CrossSection* cs, const double energy,
-    int* cs_index) {
+static inline double microscopic_cs_for_energy_linear(
+    const CrossSection* cs, const double energy, int* cs_index) {
 
   int ind = 0;
   double* keys = cs->keys;
   double* values = cs->values;
 
-  if (*cs_index > -1) {
-    // Determine the correct search direction required to move towards the
-    // new energy
-    const int direction = (energy > keys[*cs_index]) ? 1 : -1;
+  // Determine the correct search direction required to move towards the
+  // new energy
+  const int direction = (energy > keys[*cs_index]) ? 1 : -1;
 
-    // This search will move in the correct direction towards the new energy
-    // group
-    int found = 0;
-    for (ind = *cs_index; ind >= 0 && ind < cs->nentries; ind += direction) {
-      // Check if we have found the new energy group index
-      if (energy >= keys[ind] && energy < keys[ind + 1]) {
-        found = 1;
-        break;
-      }
+  // This search will move in the correct direction towards the new energy
+  // group
+  int found = 0;
+  for (ind = *cs_index; ind >= 0 && ind < cs->nentries; ind += direction) {
+    // Check if we have found the new energy group index
+    if (energy >= keys[ind] && energy < keys[ind + 1]) {
+      found = 1;
+      break;
     }
+  }
 
-    if (!found) {
-#if 0
-      TERMINATE("No key for energy %.12e in cross sectional lookup.\n", energy);
-#endif // if 0
-    }
-  } else {
-    // Use a simple binary search to find the energy group
-    ind = cs->nentries / 2;
-    int width = ind / 2;
-    while (energy < keys[ind] || energy >= keys[ind + 1]) {
-      ind += (energy < keys[ind]) ? -width : width;
-      width = max(1, width / 2); // To handle odd cases, allows one extra walk
-    }
+  if (!found) {
+    TERMINATE("No key for energy %.12e in cross sectional lookup.\n", energy);
+  }
+
+  *cs_index = ind;
+
+  // Return the value linearly interpolated
+  return values[ind] +
+    ((energy - keys[ind]) / (keys[ind + 1] - keys[ind])) *
+    (values[ind + 1] - values[ind]);
+}
+
+// Fetch the cross section for a particular energy value
+static inline double microscopic_cs_for_energy_binary(
+    const CrossSection* cs, const double energy, int* cs_index) {
+
+  double* keys = cs->keys;
+  double* values = cs->values;
+
+  // Use a simple binary search to find the energy group
+  int ind = cs->nentries / 2;
+  int width = ind / 2;
+  while (energy < keys[ind] || energy >= keys[ind + 1]) {
+    ind += (energy < keys[ind]) ? -width : width;
+    width = max(1, width / 2); // To handle odd cases, allows one extra walk
   }
 
   *cs_index = ind;
