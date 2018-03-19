@@ -62,8 +62,9 @@ void handle_particles(
   uint64_t ncollisions = 0;
   uint64_t nparticles = 0;
 
-  const int np_per_thread = nparticles_to_process / nthreads;
-  const int np_remainder = nparticles_to_process % nthreads;
+  const int nb = nparticles_to_process / BLOCK_SIZE;
+  const int nb_per_thread = nb / nthreads;
+  const int nb_remainder = nb % nthreads;
   const double inv_ntotal_particles = 1.0 / (double)ntotal_particles;
 
   // The main particle loop
@@ -79,9 +80,9 @@ void handle_particles(
 
     const int tid = omp_get_thread_num();
 
-    // Calculate the particles offset, accounting for some remainder
-    const int rem = (tid < np_remainder);
-    const int particles_off = tid * np_per_thread + min(tid, np_remainder);
+    // Calculate the particles block offset, accounting for some remainder
+    const int rem = (tid < nb_remainder);
+    const int block_off = tid * nb_per_thread + min(tid, nb_remainder);
 
     int counter_off[BLOCK_SIZE];
     // Populate the counter offset
@@ -107,24 +108,24 @@ void handle_particles(
     double distance_to_facet[BLOCK_SIZE];
     int next_event[BLOCK_SIZE];
 
-    for (int pp = 0; pp < np_per_thread + rem; pp += BLOCK_SIZE) {
-      const int p_off = particles_off + pp;
+    for (int b = 0; b <  nb_per_thread + rem; ++b) {
+      Particle particle_block = particles[block_off + b];
 
-      uint64_t* p_key = &particles->key[p_off];
-      int* p_dead = &particles->dead[p_off];
-      int* p_cellx = &particles->cellx[p_off];
-      int* p_celly = &particles->celly[p_off];
-      double* p_energy = &particles->energy[p_off];
-      double* p_dt_to_census = &particles->dt_to_census[p_off];
-      double* p_mfp_to_collision = &particles->mfp_to_collision[p_off];
-      double* p_x = &particles->x[p_off];
-      double* p_y = &particles->y[p_off];
-      double* p_omega_x = &particles->omega_x[p_off];
-      double* p_omega_y = &particles->omega_y[p_off];
-      double* p_weight = &particles->weight[p_off];
+      uint64_t* p_key = &particle_block.key;
+      int* p_dead = &particles_block.dead;
+      int* p_cellx = &particles_block.cellx;
+      int* p_celly = &particles_block.celly;
+      double* p_energy = &particles_block.energy;
+      double* p_dt_to_census = &particles_block.dt_to_census;
+      double* p_mfp_to_collision = &particles_block.mfp_to_collision;
+      double* p_x = &particles_block.x;
+      double* p_y = &particles_block.y;
+      double* p_omega_x = &particles_block.omega_x;
+      double* p_omega_y = &particles_block.omega_y;
+      double* p_weight = &particles_block.weight;
 
       uint64_t counter = 0;
-      const int diff = (np_per_thread+rem)-pp;
+      const int diff = (np_per_thread+rem)-b;
       const int np = (diff > BLOCK_SIZE) ? BLOCK_SIZE : diff;
 
       START_PROFILING(&tp);
@@ -261,7 +262,7 @@ void handle_particles(
               global_nx, nx, x_off, y_off, ip, inv_ntotal_particles,
               distance_to_facet[ip], number_density[ip], microscopic_cs_absorb[ip],
               microscopic_cs_scatter[ip] + microscopic_cs_absorb[ip], p_energy, p_weight);
-          update_tallies(nx, x_off, y_off, particles, inv_ntotal_particles,
+          update_tallies(nx, x_off, y_off, inv_ntotal_particles,
               energy_deposition[ip], energy_deposition_tally, p_cellx, p_celly);
           energy_deposition[ip] = 0.0;
         }
@@ -298,7 +299,7 @@ void handle_particles(
 
         const double distance_to_census = speed[ip] * p_dt_to_census[ip];
         census_event(global_nx, nx, x_off, y_off, inv_ntotal_particles,
-            distance_to_census, cell_mfp[ip], ip, particles,
+            distance_to_census, cell_mfp[ip], ip, 
             &energy_deposition[ip], &number_density[ip],
             &microscopic_cs_scatter[ip], &microscopic_cs_absorb[ip],
             energy_deposition_tally, p_x, p_y, p_omega_x, p_omega_y, 
@@ -507,7 +508,7 @@ static inline void facet_event(const int global_nx, const int global_ny, const i
 static inline void census_event(const int global_nx, const int nx, const int x_off,
     const int y_off, const double inv_ntotal_particles,
     const double distance_to_census, const double cell_mfp,
-    const int ip, Particle* particles, double* energy_deposition,
+    const int ip, double* energy_deposition,
     double* number_density, double* microscopic_cs_scatter,
     double* microscopic_cs_absorb, double* energy_deposition_tally, double* p_x, 
     double* p_y, double* p_omega_x, double* p_omega_y, 
@@ -707,8 +708,8 @@ void validate(const int nx, const int ny, const char* params_filename,
 
   // Reduce the entire energy deposition tally locally
   double local_energy_tally = 0.0;
-  for (int ii = 0; ii < nx * ny; ++ii) {
-    local_energy_tally += energy_deposition_tally[ii];
+  for (int i = 0; i < nx * ny; ++i) {
+    local_energy_tally += energy_deposition_tally[i];
   }
 
   // Finalise the reduction globally
@@ -752,76 +753,68 @@ size_t inject_particles(const int nparticles, const int global_nx,
     const double* edgey, const double initial_energy,
     const uint64_t master_key, Particle** particles) {
 
-  *particles = (Particle*)malloc(sizeof(Particle));
+  if(nparticles % BLOCK_SIZE) {
+    TERMINATE("The number of particles should be a multiple of the BLOCK_SIZE.\n");
+  }
+
+  const int nb = nparticles / BLOCK_SIZE;
+
+  *particles = (Particle*)malloc(sizeof(Particle) * nb);
   if (!*particles) {
     TERMINATE("Could not allocate particle array.\n");
   }
 
-  // Allocate all of the Particle data arrays
-  Particle* particle = *particles;
-  size_t allocation = 0;
-  allocation += allocate_data(&particle->x, nparticles * 1.5);
-  allocation += allocate_data(&particle->y, nparticles * 1.5);
-  allocation += allocate_data(&particle->omega_x, nparticles * 1.5);
-  allocation += allocate_data(&particle->omega_y, nparticles * 1.5);
-  allocation += allocate_data(&particle->energy, nparticles * 1.5);
-  allocation += allocate_data(&particle->weight, nparticles * 1.5);
-  allocation += allocate_data(&particle->dt_to_census, nparticles * 1.5);
-  allocation += allocate_data(&particle->mfp_to_collision, nparticles * 1.5);
-  allocation += allocate_int_data(&particle->cellx, nparticles * 1.5);
-  allocation += allocate_int_data(&particle->celly, nparticles * 1.5);
-  allocation += allocate_int_data(&particle->dead, nparticles * 1.5);
-  allocation += allocate_uint64_data(&particle->key, nparticles * 1.5);
-
 #pragma omp parallel for
-  for (int ii = 0; ii < nparticles; ++ii) {
+  for(int b = 0; b < nb; ++b) {
+    for (int k = 0; k < BLOCK_SIZE; ++k) {
 
-    double rn[NRANDOM_NUMBERS];
-    generate_random_numbers(master_key, 0, ii, &rn[0], &rn[1]);
+      double rn[NRANDOM_NUMBERS];
+      generate_random_numbers(master_key, 0, k, &rn[0], &rn[1]);
 
-    // Set the initial nandom location of the particle inside the source
-    // region
-    particle->x[ii] = local_particle_left_off + rn[0] * local_particle_width;
-    particle->y[ii] = local_particle_bottom_off + rn[1] * local_particle_height;
+      // Set the initial nandom location of the particle inside the source
+      // region
+      particles[b].x[k] = local_particle_left_off + rn[0] * local_particle_width;
+      particles[b].y[k] = local_particle_bottom_off + rn[1] * local_particle_height;
 
-    // Check the location of the specific cell that the particle sits within.
-    // We have to check this explicitly because the mesh might be non-uniform.
-    int cellx = 0;
-    int celly = 0;
-    for (int ii = 0; ii < local_nx; ++ii) {
-      if (particle->x[ii] >= edgex[ii + pad] && particle->x[ii] < edgex[ii + pad + 1]) {
-        cellx = x_off + ii;
-        break;
+      // Check the location of the specific cell that the particle sits within.
+      // We have to check this explicitly because the mesh might be non-uniform.
+      int cellx = 0;
+      int celly = 0;
+      for (int i = 0; i < local_nx; ++i) {
+        if (particles[b].x[k] >= edgex[i + pad] && particles[b].x[k] < edgex[i + pad + 1]) {
+          cellx = x_off + i;
+          break;
+        }
       }
-    }
-    for (int ii = 0; ii < local_ny; ++ii) {
-      if (particle->y[ii] >= edgey[ii + pad] && particle->y[ii] < edgey[ii + pad + 1]) {
-        celly = y_off + ii;
-        break;
+      for (int i = 0; i < local_ny; ++i) {
+        if (particles[b].y[k] >= edgey[i + pad] && particles[b].y[k] < edgey[i + pad + 1]) {
+          celly = y_off + i;
+          break;
+        }
       }
+
+      particles[b].cellx[k] = cellx;
+      particles[b].celly[k] = celly;
+
+      // Generating theta has uniform density, however 0.0 and 1.0 produce the
+      // same
+      // value which introduces very very very small bias...
+      generate_random_numbers(master_key, 1, k, &rn[0], &rn[1]);
+      const double theta = 2.0 * M_PI * rn[0];
+      particles[b].omega_x[k] = cos(theta);
+      particles[b].omega_y[k] = sin(theta);
+
+      // This approximation sets mono-energetic initial state for source
+      // particles
+      particles[b].energy[k] = initial_energy;
+
+      // Set a weight for the particle to track absorption
+      particles[b].weight[k] = 1.0;
+      particles[b].dt_to_census[k] = dt;
+      particles[b].mfp_to_collision[k] = 0.0;
+      particles[b].dead[k] = 0;
+      particles[b].key[k] = k;
     }
-
-    particle->cellx[ii] = cellx;
-    particle->celly[ii] = celly;
-
-    // Generating theta has uniform density, however 0.0 and 1.0 produce the
-    // same
-    // value which introduces very very very small bias...
-    generate_random_numbers(master_key, 1, ii, &rn[0], &rn[1]);
-    const double theta = 2.0 * M_PI * rn[0];
-    particle->omega_x[ii] = cos(theta);
-    particle->omega_y[ii] = sin(theta);
-
-    // This approximation sets mono-energetic initial state for source
-    // particles
-    particle->energy[ii] = initial_energy;
-
-    // Set a weight for the particle to track absorption
-    particle->weight[ii] = 1.0;
-    particle->dt_to_census[ii] = dt;
-    particle->mfp_to_collision[ii] = 0.0;
-    particle->dead[ii] = 0;
-    particle->key[ii] = ii;
   }
 
   return allocation;

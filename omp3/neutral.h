@@ -50,7 +50,7 @@ static inline void collision_event(
 void census_event(const int global_nx, const int nx, const int x_off,
     const int y_off, const double inv_ntotal_particles,
     const double distance_to_census, const double cell_mfp,
-    const int ip, Particle* particles, double* energy_deposition,
+    const int ip, double* energy_deposition,
     double* number_density, double* microscopic_cs_scatter,
     double* microscopic_cs_absorb, double* energy_deposition_tally, double* p_x, 
     double* p_y, double* p_omega_x, double* p_omega_y, 
