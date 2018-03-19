@@ -13,6 +13,8 @@
 #endif
 #endif // if 0
 
+#define BLOCK_SIZE 32
+
 /* Problem-Independent Constants */
 #define eV_TO_J 1.60217646e-19           // 1 eV to Joules
 #define AVOGADROS 6.02214085774e23       // Avogadro's constant
@@ -65,6 +67,25 @@ typedef struct {
   int* cellx;               // x position in mesh
   int* celly;               // y position in mesh
   int* dead;                // particle is dead
+
+} Particle;
+
+#elif defined(AoSoA)
+
+// Represents an individual particle
+typedef struct {
+  double x[BLOCK_SIZE];                // x position in space
+  double y[BLOCK_SIZE];                // y position in space
+  double omega_x[BLOCK_SIZE];          // x direction
+  double omega_y[BLOCK_SIZE];          // y direction
+  double energy[BLOCK_SIZE];           // energy
+  double weight[BLOCK_SIZE];           // weight of the particle
+  double dt_to_census[BLOCK_SIZE];     // the time until census is reached
+  double mfp_to_collision[BLOCK_SIZE]; // the mean free paths until a collision
+  uint64_t key[BLOCK_SIZE];            // key for random number generation
+  int cellx[BLOCK_SIZE];               // x position in mesh
+  int celly[BLOCK_SIZE];               // y position in mesh
+  int dead[BLOCK_SIZE];                // particle is dead
 
 } Particle;
 

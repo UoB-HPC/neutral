@@ -86,32 +86,31 @@ void handle_particles(
     const int rem = (tid < np_remainder);
     const int particles_off = tid * np_per_thread + min(tid, np_remainder);
 
-    const int block_size = 32;
-    int counter_off[block_size];
+    int counter_off[BLOCK_SIZE];
     // Populate the counter offset
-    for(int cc = 0; cc < block_size; ++cc) {
+    for(int cc = 0; cc < BLOCK_SIZE; ++cc) {
       counter_off[cc] = 2*cc;
     }
 
-    double rn[block_size][NRANDOM_NUMBERS];
-    int x_facet[block_size];
-    int absorb_cs_index[block_size];
-    int scatter_cs_index[block_size];
-    double cell_mfp[block_size];
-    int cellx[block_size];
-    int celly[block_size];
-    double local_density[block_size];
-    double microscopic_cs_scatter[block_size];
-    double microscopic_cs_absorb[block_size];
-    double number_density[block_size];
-    double macroscopic_cs_scatter[block_size];
-    double macroscopic_cs_absorb[block_size];
-    double speed[block_size];
-    double energy_deposition[block_size];
-    double distance_to_facet[block_size];
-    int next_event[block_size];
+    double rn[BLOCK_SIZE][NRANDOM_NUMBERS];
+    int x_facet[BLOCK_SIZE];
+    int absorb_cs_index[BLOCK_SIZE];
+    int scatter_cs_index[BLOCK_SIZE];
+    double cell_mfp[BLOCK_SIZE];
+    int cellx[BLOCK_SIZE];
+    int celly[BLOCK_SIZE];
+    double local_density[BLOCK_SIZE];
+    double microscopic_cs_scatter[BLOCK_SIZE];
+    double microscopic_cs_absorb[BLOCK_SIZE];
+    double number_density[BLOCK_SIZE];
+    double macroscopic_cs_scatter[BLOCK_SIZE];
+    double macroscopic_cs_absorb[BLOCK_SIZE];
+    double speed[BLOCK_SIZE];
+    double energy_deposition[BLOCK_SIZE];
+    double distance_to_facet[BLOCK_SIZE];
+    int next_event[BLOCK_SIZE];
 
-    for (int pp = 0; pp < np_per_thread + rem; pp += block_size) {
+    for (int pp = 0; pp < np_per_thread + rem; pp += BLOCK_SIZE) {
       const int p_off = particles_off + pp;
 
       uint64_t* p_key = &particles->key[p_off];
@@ -129,7 +128,7 @@ void handle_particles(
 
       uint64_t counter = 0;
       const int diff = (np_per_thread+rem)-pp;
-      const int np = (diff > block_size) ? block_size : diff;
+      const int np = (diff > BLOCK_SIZE) ? BLOCK_SIZE : diff;
 
       START_PROFILING(&tp);
 
@@ -249,7 +248,7 @@ void handle_particles(
         STOP_PROFILING(&tp, "collision");
 
         // Have to adjust the counter for next usage
-        counter += 2*block_size;
+        counter += 2*BLOCK_SIZE;
 
 #ifdef TALLY_OUT
         START_PROFILING(&tp);
