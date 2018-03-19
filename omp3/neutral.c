@@ -774,54 +774,54 @@ size_t inject_particles(const int nparticles, const int global_nx,
   allocation += allocate_uint64_data(&particle->key, nparticles * 1.5);
 
 #pragma omp parallel for
-  for (int ii = 0; ii < nparticles; ++ii) {
+  for (int kk = 0; kk < nparticles; ++kk) {
 
     double rn[NRANDOM_NUMBERS];
-    generate_random_numbers(master_key, 0, ii, &rn[0], &rn[1]);
+    generate_random_numbers(master_key, 0, kk, &rn[0], &rn[1]);
 
     // Set the initial nandom location of the particle inside the source
     // region
-    particle->x[ii] = local_particle_left_off + rn[0] * local_particle_width;
-    particle->y[ii] = local_particle_bottom_off + rn[1] * local_particle_height;
+    particle->x[kk] = local_particle_left_off + rn[0] * local_particle_width;
+    particle->y[kk] = local_particle_bottom_off + rn[1] * local_particle_height;
 
     // Check the location of the specific cell that the particle sits within.
     // We have to check this explicitly because the mesh might be non-uniform.
     int cellx = 0;
     int celly = 0;
     for (int ii = 0; ii < local_nx; ++ii) {
-      if (particle->x[ii] >= edgex[ii + pad] && particle->x[ii] < edgex[ii + pad + 1]) {
+      if (particle->x[kk] >= edgex[ii + pad] && particle->x[kk] < edgex[ii + pad + 1]) {
         cellx = x_off + ii;
         break;
       }
     }
     for (int ii = 0; ii < local_ny; ++ii) {
-      if (particle->y[ii] >= edgey[ii + pad] && particle->y[ii] < edgey[ii + pad + 1]) {
+      if (particle->y[kk] >= edgey[ii + pad] && particle->y[kk] < edgey[ii + pad + 1]) {
         celly = y_off + ii;
         break;
       }
     }
 
-    particle->cellx[ii] = cellx;
-    particle->celly[ii] = celly;
+    particle->cellx[kk] = cellx;
+    particle->celly[kk] = celly;
 
     // Generating theta has uniform density, however 0.0 and 1.0 produce the
     // same
     // value which introduces very very very small bias...
-    generate_random_numbers(master_key, 1, ii, &rn[0], &rn[1]);
+    generate_random_numbers(master_key, 1, kk, &rn[0], &rn[1]);
     const double theta = 2.0 * M_PI * rn[0];
-    particle->omega_x[ii] = cos(theta);
-    particle->omega_y[ii] = sin(theta);
+    particle->omega_x[kk] = cos(theta);
+    particle->omega_y[kk] = sin(theta);
 
     // This approximation sets mono-energetic initial state for source
     // particles
-    particle->energy[ii] = initial_energy;
+    particle->energy[kk] = initial_energy;
 
     // Set a weight for the particle to track absorption
-    particle->weight[ii] = 1.0;
-    particle->dt_to_census[ii] = dt;
-    particle->mfp_to_collision[ii] = 0.0;
-    particle->dead[ii] = 0;
-    particle->key[ii] = ii;
+    particle->weight[kk] = 1.0;
+    particle->dt_to_census[kk] = dt;
+    particle->mfp_to_collision[kk] = 0.0;
+    particle->dead[kk] = 0;
+    particle->key[kk] = kk;
   }
 
   return allocation;
