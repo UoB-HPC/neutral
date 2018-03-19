@@ -19,7 +19,7 @@
 void solve_transport_2d(
     const int nx, const int ny, const int global_nx, const int global_ny,
     const int pad, const int x_off, const int y_off, const double dt,
-    const int ntotal_particles, int* nlocal_particles, uint64_t* master_key,
+    const int ntotal_particles, int* nparticles, uint64_t* master_key,
     const int* neighbours, Particle* particles, const double* density,
     const double* edgex, const double* edgey, const double* edgedx,
     const double* edgedy, CrossSection* cs_scatter_table,
@@ -28,10 +28,9 @@ void solve_transport_2d(
     uint64_t* facet_events, uint64_t* collision_events) {
 
   // This is the known starting number of particles
-  int nparticles = *nlocal_particles;
   int nparticles_sent[NNEIGHBOURS];
 
-  if (!nparticles) {
+  if (!(*nparticles)) {
     printf("Out of particles\n");
     return;
   }
@@ -39,10 +38,8 @@ void solve_transport_2d(
   handle_particles(global_nx, global_ny, nx, ny, pad, x_off, y_off, 1, dt,
       neighbours, density, edgex, edgey, edgedx, edgedy, facet_events,
       collision_events, nparticles_sent, master_key, ntotal_particles,
-      nparticles, particles, cs_scatter_table, cs_absorb_table,
+      *nparticles, particles, cs_scatter_table, cs_absorb_table,
       energy_deposition_tally);
-
-  *nlocal_particles = nparticles;
 }
 
 // Handles the current active batch of particles
@@ -318,7 +315,6 @@ void handle_particles(
   // Store a total number of facets and collisions
   *facets += nfacets;
   *collisions += ncollisions;
-
 
   printf("Particles  %llu\n", nparticles);
 }
