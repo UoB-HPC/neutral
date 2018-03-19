@@ -89,7 +89,6 @@ typedef struct {
 
 } Particle;
 
-
 #else
 
 // Represents an individual particle

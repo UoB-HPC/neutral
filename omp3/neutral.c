@@ -27,7 +27,7 @@ void solve_transport_2d(
     uint64_t* reduce_array0, uint64_t* reduce_array1, uint64_t* reduce_array2,
     uint64_t* facet_events, uint64_t* collision_events) {
 
-  if (!(*nparticles)) {
+  if ((*nparticles) == 0) {
     printf("Out of particles\n");
     return;
   }
@@ -54,7 +54,7 @@ void handle_particles(
   // Maintain a master key, to not encounter the same random number streams
   (*master_key)++;
 
-  int nthreads = 0;
+  int nthreads = 1;
 #pragma omp parallel
   { nthreads = omp_get_num_threads(); }
 
@@ -85,11 +85,6 @@ void handle_particles(
     const int block_off = tid * nb_per_thread + min(tid, nb_remainder);
 
     int counter_off[BLOCK_SIZE];
-    // Populate the counter offset
-    for(int cc = 0; cc < BLOCK_SIZE; ++cc) {
-      counter_off[cc] = 2*cc;
-    }
-
     double rn[BLOCK_SIZE][NRANDOM_NUMBERS];
     int x_facet[BLOCK_SIZE];
     int absorb_cs_index[BLOCK_SIZE];
@@ -108,32 +103,36 @@ void handle_particles(
     double distance_to_facet[BLOCK_SIZE];
     int next_event[BLOCK_SIZE];
 
-    for (int b = 0; b <  nb_per_thread + rem; ++b) {
+    // Populate the counter offset
+    for(int cc = 0; cc < BLOCK_SIZE; ++cc) {
+      counter_off[cc] = 2*cc;
+    }
+
+    // Loop over the blocks this thread is responsible for
+    for (int b = 0; b < nb_per_thread + rem; ++b) {
       Particle particle_block = particles[block_off + b];
 
-      uint64_t* p_key = &particle_block.key;
-      int* p_dead = &particles_block.dead;
-      int* p_cellx = &particles_block.cellx;
-      int* p_celly = &particles_block.celly;
-      double* p_energy = &particles_block.energy;
-      double* p_dt_to_census = &particles_block.dt_to_census;
-      double* p_mfp_to_collision = &particles_block.mfp_to_collision;
-      double* p_x = &particles_block.x;
-      double* p_y = &particles_block.y;
-      double* p_omega_x = &particles_block.omega_x;
-      double* p_omega_y = &particles_block.omega_y;
-      double* p_weight = &particles_block.weight;
+      uint64_t(* p_key)[BLOCK_SIZE] = &particle_block.key;
+      int(* p_dead)[BLOCK_SIZE] = &particle_block.dead;
+      int(* p_cellx)[BLOCK_SIZE] = &particle_block.cellx;
+      int(* p_celly)[BLOCK_SIZE] = &particle_block.celly;
+      double(* p_energy)[BLOCK_SIZE] = &particle_block.energy;
+      double(* p_dt_to_census)[BLOCK_SIZE] = &particle_block.dt_to_census;
+      double(* p_mfp_to_collision)[BLOCK_SIZE] = &particle_block.mfp_to_collision;
+      double(* p_x)[BLOCK_SIZE] = &particle_block.x;
+      double(* p_y)[BLOCK_SIZE] = &particle_block.y;
+      double(* p_omega_x)[BLOCK_SIZE] = &particle_block.omega_x;
+      double(* p_omega_y)[BLOCK_SIZE] = &particle_block.omega_y;
+      double(* p_weight)[BLOCK_SIZE] = &particle_block.weight;
 
       uint64_t counter = 0;
-      const int diff = (np_per_thread+rem)-b;
-      const int np = (diff > BLOCK_SIZE) ? BLOCK_SIZE : diff;
 
       START_PROFILING(&tp);
 
       // Initialise cached particle data
       //#pragma omp simd reduction(+: nparticles, counter)
-      for (int ip = 0; ip < np; ++ip) {
-        if (p_dead[ip]) {
+      for (int ip = 0; ip < BLOCK_SIZE; ++ip) {
+        if ((*p_dead)[ip]) {
           continue;
         }
         nparticles++;
@@ -145,31 +144,31 @@ void handle_particles(
         energy_deposition[ip] = 0.0;
 
         // Determine the current cell
-        cellx[ip] = p_cellx[ip] - x_off + pad;
-        celly[ip] = p_celly[ip] - y_off + pad;
+        cellx[ip] = (*p_cellx)[ip] - x_off + pad;
+        celly[ip] = (*p_celly)[ip] - y_off + pad;
         local_density[ip] = density[celly[ip] * (nx + 2 * pad) + cellx[ip]];
 
         // Fetch the cross sections and prepare related quantities
         microscopic_cs_scatter[ip] = microscopic_cs_for_energy_binary(
-            cs_scatter_table, p_energy[ip], &scatter_cs_index[ip]);
+            cs_scatter_table, (*p_energy)[ip], &scatter_cs_index[ip]);
         microscopic_cs_absorb[ip] = microscopic_cs_for_energy_binary(
-            cs_absorb_table, p_energy[ip], &absorb_cs_index[ip]);
+            cs_absorb_table, (*p_energy)[ip], &absorb_cs_index[ip]);
         number_density[ip] = (local_density[ip] * AVOGADROS / MOLAR_MASS);
         macroscopic_cs_scatter[ip] =
           number_density[ip] * microscopic_cs_scatter[ip] * BARNS;
         macroscopic_cs_absorb[ip] =
           number_density[ip] * microscopic_cs_absorb[ip] * BARNS;
-        speed[ip] = sqrt((2.0 * p_energy[ip] * eV_TO_J) / PARTICLE_MASS);
+        speed[ip] = sqrt((2.0 * (*p_energy)[ip] * eV_TO_J) / PARTICLE_MASS);
 
 
 
         // Set time to census and MFPs until collision, unless travelled
         // particle
         if (initial) {
-          p_dt_to_census[ip] = dt;
-          generate_random_numbers(*master_key, p_key[ip], counter++,
+          (*p_dt_to_census)[ip] = dt;
+          generate_random_numbers(*master_key, (*p_key)[ip], counter++,
               &rn[ip][0], &rn[ip][1]);
-          p_mfp_to_collision[ip] =
+          (*p_mfp_to_collision)[ip] =
             -log(rn[ip][0]) / macroscopic_cs_scatter[ip];
         }
       }
@@ -182,8 +181,8 @@ void handle_particles(
 
         START_PROFILING(&tp);
         //#pragma omp simd reduction(+: ncompleted, ncollisions, nfacets)
-        for (int ip = 0; ip < np; ++ip) {
-          if (p_dead[ip]) {
+        for (int ip = 0; ip < BLOCK_SIZE; ++ip) {
+          if ((*p_dead)[ip]) {
             next_event[ip] = PARTICLE_DEAD;
             ncompleted++;
             continue;
@@ -194,14 +193,14 @@ void handle_particles(
 
           // Work out the distance until the particle hits a facet
           calc_distance_to_facet(
-              global_nx, p_x[ip], p_y[ip], pad, x_off, y_off,
-              p_omega_x[ip], p_omega_y[ip], speed[ip],
-              p_cellx[ip], p_celly[ip], &distance_to_facet[ip],
+              global_nx, (*p_x)[ip], (*p_y)[ip], pad, x_off, y_off,
+              (*p_omega_x)[ip], (*p_omega_y)[ip], speed[ip],
+              (*p_cellx)[ip], (*p_celly)[ip], &distance_to_facet[ip],
               &x_facet[ip], edgex, edgey);
           const double distance_to_collision =
-            p_mfp_to_collision[ip] * cell_mfp[ip];
+            (*p_mfp_to_collision)[ip] * cell_mfp[ip];
           const double distance_to_census =
-            speed[ip] * p_dt_to_census[ip];
+            speed[ip] * (*p_dt_to_census)[ip];
 
           if (distance_to_collision < distance_to_facet[ip] &&
               distance_to_collision < distance_to_census) {
@@ -217,19 +216,19 @@ void handle_particles(
         }
         STOP_PROFILING(&tp, "calc_events");
 
-        if (ncompleted == np) {
+        if (ncompleted == BLOCK_SIZE) {
           break;
         }
 
         START_PROFILING(&tp);
         //#pragma omp simd
-        for (int ip = 0; ip < np; ++ip) {
+        for (int ip = 0; ip < BLOCK_SIZE; ++ip) {
           if (next_event[ip] != PARTICLE_COLLISION) {
             continue;
           }
 
           const double distance_to_collision =
-            p_mfp_to_collision[ip] * cell_mfp[ip];
+            (*p_mfp_to_collision)[ip] * cell_mfp[ip];
 
           collision_event(
               ip, global_nx, nx, x_off, y_off, inv_ntotal_particles,
@@ -239,9 +238,9 @@ void handle_particles(
               &microscopic_cs_scatter[ip], &microscopic_cs_absorb[ip],
               &macroscopic_cs_scatter[ip], &macroscopic_cs_absorb[ip],
               energy_deposition_tally, &scatter_cs_index[ip],
-              &absorb_cs_index[ip], rn[ip], &speed[ip],p_x, p_y, p_dead, p_energy, 
-              p_omega_x, p_omega_y, p_key, p_mfp_to_collision, p_dt_to_census, 
-              p_weight, p_cellx, p_celly);
+              &absorb_cs_index[ip], rn[ip], &speed[ip],*p_x, *p_y, *p_dead, *p_energy, 
+              *p_omega_x, *p_omega_y, *p_key, *p_mfp_to_collision, *p_dt_to_census, 
+              *p_weight, *p_cellx, *p_celly);
         }
         STOP_PROFILING(&tp, "collision");
 
@@ -250,10 +249,10 @@ void handle_particles(
 
 #ifdef TALLY_OUT
         START_PROFILING(&tp);
-        for(int ip = 0; ip < np; ++ip) {
+        for(int ip = 0; ip < BLOCK_SIZE; ++ip) {
           // Store tallies before we perform facet encounter
           if (next_event[ip] != PARTICLE_FACET || 
-              (p_dead[ip] && next_event[ip] == PARTICLE_COLLISION)) {
+              ((*p_dead)[ip] && next_event[ip] == PARTICLE_COLLISION)) {
             continue;
           }
 
@@ -261,9 +260,9 @@ void handle_particles(
           energy_deposition[ip] += calculate_energy_deposition(
               global_nx, nx, x_off, y_off, ip, inv_ntotal_particles,
               distance_to_facet[ip], number_density[ip], microscopic_cs_absorb[ip],
-              microscopic_cs_scatter[ip] + microscopic_cs_absorb[ip], p_energy, p_weight);
+              microscopic_cs_scatter[ip] + microscopic_cs_absorb[ip], *p_energy, *p_weight);
           update_tallies(nx, x_off, y_off, inv_ntotal_particles,
-              energy_deposition[ip], energy_deposition_tally, p_cellx, p_celly);
+              energy_deposition[ip], energy_deposition_tally, *p_cellx, *p_celly);
           energy_deposition[ip] = 0.0;
         }
         STOP_PROFILING(&tp, "energy_deposition");
@@ -271,7 +270,7 @@ void handle_particles(
 
         START_PROFILING(&tp);
 //#pragma omp simd
-        for (int ip = 0; ip < np; ++ip) {
+        for (int ip = 0; ip < BLOCK_SIZE; ++ip) {
           if (next_event[ip] != PARTICLE_FACET) {
             continue;
           }
@@ -284,27 +283,27 @@ void handle_particles(
               microscopic_cs_absorb, macroscopic_cs_scatter,
               macroscopic_cs_absorb, energy_deposition_tally,
               cellx, celly, local_density, 
-              p_energy, p_weight, p_cellx, p_celly, p_mfp_to_collision, 
-              p_dt_to_census, p_x, p_y, p_omega_x, p_omega_y);
+              *p_energy, *p_weight, *p_cellx, *p_celly, *p_mfp_to_collision, 
+              *p_dt_to_census, *p_x, *p_y, *p_omega_x, *p_omega_y);
         }
         STOP_PROFILING(&tp, "facet");
       }
 
       START_PROFILING(&tp);
       //#pragma omp simd
-      for (int ip = 0; ip < np; ++ip) {
+      for (int ip = 0; ip < BLOCK_SIZE; ++ip) {
         if (next_event[ip] != PARTICLE_CENSUS) {
           continue;
         }
 
-        const double distance_to_census = speed[ip] * p_dt_to_census[ip];
+        const double distance_to_census = speed[ip] * (*p_dt_to_census)[ip];
         census_event(global_nx, nx, x_off, y_off, inv_ntotal_particles,
             distance_to_census, cell_mfp[ip], ip, 
             &energy_deposition[ip], &number_density[ip],
             &microscopic_cs_scatter[ip], &microscopic_cs_absorb[ip],
-            energy_deposition_tally, p_x, p_y, p_omega_x, p_omega_y, 
-            p_mfp_to_collision, p_dt_to_census, p_energy, p_weight, 
-            p_cellx, p_celly);
+            energy_deposition_tally, *p_x, *p_y, *p_omega_x, *p_omega_y, 
+            *p_mfp_to_collision, *p_dt_to_census, *p_energy, *p_weight, 
+            *p_cellx, *p_celly);
       }
       STOP_PROFILING(&tp, "census");
     }
@@ -759,65 +758,67 @@ size_t inject_particles(const int nparticles, const int global_nx,
 
   const int nb = nparticles / BLOCK_SIZE;
 
-  *particles = (Particle*)malloc(sizeof(Particle) * nb);
+  const int allocation_in_bytes = sizeof(Particle)*nb;
+  *particles = (Particle*)malloc(allocation_in_bytes);
   if (!*particles) {
     TERMINATE("Could not allocate particle array.\n");
   }
 
 #pragma omp parallel for
   for(int b = 0; b < nb; ++b) {
-    for (int k = 0; k < BLOCK_SIZE; ++k) {
+    Particle p = (*particles)[b];
 
+    for (int k = 0; k < BLOCK_SIZE; ++k) {
       double rn[NRANDOM_NUMBERS];
       generate_random_numbers(master_key, 0, k, &rn[0], &rn[1]);
 
       // Set the initial nandom location of the particle inside the source
       // region
-      particles[b].x[k] = local_particle_left_off + rn[0] * local_particle_width;
-      particles[b].y[k] = local_particle_bottom_off + rn[1] * local_particle_height;
+      p.x[k] = local_particle_left_off + rn[0] * local_particle_width;
+      p.y[k] = local_particle_bottom_off + rn[1] * local_particle_height;
 
       // Check the location of the specific cell that the particle sits within.
       // We have to check this explicitly because the mesh might be non-uniform.
       int cellx = 0;
       int celly = 0;
       for (int i = 0; i < local_nx; ++i) {
-        if (particles[b].x[k] >= edgex[i + pad] && particles[b].x[k] < edgex[i + pad + 1]) {
+        if (p.x[k] >= edgex[i + pad] && p.x[k] < edgex[i + pad + 1]) {
           cellx = x_off + i;
           break;
         }
       }
       for (int i = 0; i < local_ny; ++i) {
-        if (particles[b].y[k] >= edgey[i + pad] && particles[b].y[k] < edgey[i + pad + 1]) {
+        if (p.y[k] >= edgey[i + pad] && p.y[k] < edgey[i + pad + 1]) {
           celly = y_off + i;
           break;
         }
       }
 
-      particles[b].cellx[k] = cellx;
-      particles[b].celly[k] = celly;
+      p.cellx[k] = cellx;
+      p.celly[k] = celly;
 
       // Generating theta has uniform density, however 0.0 and 1.0 produce the
       // same
       // value which introduces very very very small bias...
       generate_random_numbers(master_key, 1, k, &rn[0], &rn[1]);
       const double theta = 2.0 * M_PI * rn[0];
-      particles[b].omega_x[k] = cos(theta);
-      particles[b].omega_y[k] = sin(theta);
+      p.omega_x[k] = cos(theta);
+      p.omega_y[k] = sin(theta);
 
       // This approximation sets mono-energetic initial state for source
       // particles
-      particles[b].energy[k] = initial_energy;
+      p.energy[k] = initial_energy;
 
       // Set a weight for the particle to track absorption
-      particles[b].weight[k] = 1.0;
-      particles[b].dt_to_census[k] = dt;
-      particles[b].mfp_to_collision[k] = 0.0;
-      particles[b].dead[k] = 0;
-      particles[b].key[k] = k;
+      p.weight[k] = 1.0;
+      p.dt_to_census[k] = dt;
+      p.mfp_to_collision[k] = 0.0;
+      p.dead[k] = 0;
+      p.key[k] = k;
     }
   }
 
-  return allocation;
+  return allocation_in_bytes;
 }
 
 // Generates a pair of random numbers

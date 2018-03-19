@@ -116,7 +116,7 @@ int main(int argc, char** argv) {
     printf("Step time  %.4fs\n", step_time);
     printf("Wallclock  %.4fs\n", wallclock);
 
-    printf("Collision Events / s = %.2e\n", (collision_events / step_time));
+    printf("Collision Events / s = %.2e\n", collision_events * (collision_events / step_time));
     printf("Facet Events / s = %.2e\n", (facet_events / step_time));
 
     elapsed_sim_time += mesh.dt;
@@ -173,6 +173,11 @@ void plot_particle_density(NeutralData* neutral_data, Mesh* mesh, const int tt,
 #ifdef SoA
     const int cellx = particle->cellx[ii] - mesh->x_off;
     const int celly = particle->celly[ii] - mesh->y_off;
+#elif defined(AoSoA)
+    const int b = ii / BLOCK_SIZE;
+    const int i = ii % BLOCK_SIZE;
+    const int cellx = particle[b].cellx[i];
+    const int celly = particle[b].celly[i];
 #else
     const int cellx = particle->cellx - mesh->x_off;
     const int celly = particle->celly - mesh->y_off;
