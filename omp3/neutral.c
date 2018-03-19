@@ -271,7 +271,7 @@ void handle_particles(
 #endif
 
         START_PROFILING(&tp);
-#pragma omp simd
+//#pragma omp simd
         for (int ip = 0; ip < np; ++ip) {
           if (next_event[ip] != PARTICLE_FACET) {
             continue;
