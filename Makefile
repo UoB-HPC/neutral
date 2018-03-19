@@ -2,13 +2,13 @@
 KERNELS  					 = omp3
 COMPILER 					 = INTEL
 MPI      					 = no
-OPTIONS  					+= -DTILES #-DMANUAL_ATOMIC #-DTALLY_OUT #-DENABLE_PROFILING 
+OPTIONS  					+= -DTILES -DMANUAL_ATOMIC #-DTALLY_OUT #-DENABLE_PROFILING -qopt-zmm-usage=high 
 ARCH_COMPILER_CC   = icc
 ARCH_COMPILER_CPP  = icpc
 
 # Compiler-specific flags
-CFLAGS_INTEL			 = -O3 -qopenmp -qopt-zmm-usage=high -no-prec-div -std=gnu99 \
-											-DINTEL -Wall -qopt-report=5 -xcore-avx512
+CFLAGS_INTEL			 = -O3 -qopenmp -no-prec-div -std=gnu99 \
+											-DINTEL -Wall -qopt-report=5 -xhost
 CFLAGS_INTEL_KNL	 = -O3 -qopenmp -no-prec-div -std=gnu99 -DINTEL \
 										 -xMIC-AVX512 -Wall -qopt-report=5
 CFLAGS_GCC				 = -std=gnu99 -fopenmp -march=native -Wall
