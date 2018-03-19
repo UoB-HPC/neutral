@@ -600,11 +600,11 @@ size_t inject_particles(const int nparticles, const int global_nx,
 
   START_PROFILING(&compute_profile);
 #pragma omp parallel for
-  for (int ii = 0; ii < nparticles; ++ii) {
-    Particle* particle = &(*particles)[ii];
+  for (int kk = 0; kk < nparticles; ++kk) {
+    Particle* particle = &(*particles)[kk];
 
     double rn[NRANDOM_NUMBERS];
-    generate_random_numbers(master_key, 0, ii, &rn[0], &rn[1]);
+    generate_random_numbers(master_key, 0, kk, &rn[0], &rn[1]);
 
     // Set the initial nandom location of the particle inside the source
     // region
@@ -634,7 +634,7 @@ size_t inject_particles(const int nparticles, const int global_nx,
     // Generating theta has uniform density, however 0.0 and 1.0 produce the
     // same
     // value which introduces very very very small bias...
-    generate_random_numbers(master_key, 1, ii, &rn[0], &rn[1]);
+    generate_random_numbers(master_key, 1, kk, &rn[0], &rn[1]);
     const double theta = 2.0 * M_PI * rn[0];
     particle->omega_x = cos(theta);
     particle->omega_y = sin(theta);
@@ -648,7 +648,7 @@ size_t inject_particles(const int nparticles, const int global_nx,
     particle->dt_to_census = dt;
     particle->mfp_to_collision = 0.0;
     particle->dead = 0;
-    particle->key = ii;
+    particle->key = kk;
   }
 
   STOP_PROFILING(&compute_profile, "initialising particles");
