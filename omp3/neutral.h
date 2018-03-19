@@ -7,7 +7,7 @@ void handle_particles(
     const double dt, const int* neighbours, const double* density,
     const double* edgex, const double* edgey, const double* edgedx,
     const double* edgedy, uint64_t* facets, uint64_t* collisions,
-    int* nparticles_sent, uint64_t* master_key, const int ntotal_particles,
+    uint64_t* master_key, const int ntotal_particles,
     const int nparticles_to_process, Particle* particles_start,
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table,
     double* energy_deposition_tally);
@@ -22,8 +22,8 @@ int facet_event(const int global_nx, const int global_ny, const int nx,
                 double* energy_deposition, double* number_density,
                 double* microscopic_cs_scatter, double* microscopic_cs_absorb,
                 double* macroscopic_cs_scatter, double* macroscopic_cs_absorb,
-                double* energy_deposition_tally, int* nparticles_sent,
-                int* cellx, int* celly, double* local_density);
+                double* energy_deposition_tally, int* cellx, int* celly, 
+                double* local_density);
 
 // Handles a collision event
 int collision_event(

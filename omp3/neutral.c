@@ -19,7 +19,7 @@
 void solve_transport_2d(
     const int nx, const int ny, const int global_nx, const int global_ny,
     const int pad, const int x_off, const int y_off, const double dt,
-    const int ntotal_particles, int* nlocal_particles, uint64_t* master_key,
+    const int ntotal_particles, int* nparticles, uint64_t* master_key,
     const int* neighbours, Particle* particles, const double* density,
     const double* edgex, const double* edgey, const double* edgedx,
     const double* edgedy, CrossSection* cs_scatter_table,
@@ -27,22 +27,16 @@ void solve_transport_2d(
     uint64_t* reduce_array0, uint64_t* reduce_array1, uint64_t* reduce_array2,
     uint64_t* facet_events, uint64_t* collision_events) {
 
-  // This is the known starting number of particles
-  int nparticles = *nlocal_particles;
-  int nparticles_sent[NNEIGHBOURS];
-
-  if (!nparticles) {
+  if (!(*nparticles)) {
     printf("Out of particles\n");
     return;
   }
 
   handle_particles(global_nx, global_ny, nx, ny, pad, x_off, y_off, 1, dt,
                    neighbours, density, edgex, edgey, edgedx, edgedy, facet_events,
-                   collision_events, nparticles_sent, master_key, ntotal_particles,
-                   nparticles, particles, cs_scatter_table, cs_absorb_table,
+                   collision_events, master_key, ntotal_particles,
+                   *nparticles, particles, cs_scatter_table, cs_absorb_table,
                    energy_deposition_tally);
-
-  *nlocal_particles = nparticles;
 }
 
 // Handles the current active batch of particles
@@ -52,7 +46,7 @@ void handle_particles(
     const double dt, const int* neighbours, const double* density,
     const double* edgex, const double* edgey, const double* edgedx,
     const double* edgedy, uint64_t* facets, uint64_t* collisions,
-    int* nparticles_sent, uint64_t* master_key, const int ntotal_particles,
+    uint64_t* master_key, const int ntotal_particles,
     const int nparticles_to_process, Particle* particles_start,
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table,
     double* energy_deposition_tally) {
@@ -183,8 +177,7 @@ void handle_particles(
                                &energy_deposition, &number_density,
                                &microscopic_cs_scatter, &microscopic_cs_absorb,
                                &macroscopic_cs_scatter, &macroscopic_cs_absorb,
-                               energy_deposition_tally, nparticles_sent, &cellx,
-                               &celly, &local_density);
+                               energy_deposition_tally, &cellx, &celly, &local_density);
 
           if (result != PARTICLE_CONTINUE) {
             break;
@@ -317,7 +310,7 @@ int facet_event(const int global_nx, const int global_ny, const int nx,
                 double* energy_deposition, double* number_density,
                 double* microscopic_cs_scatter, double* microscopic_cs_absorb,
                 double* macroscopic_cs_scatter, double* macroscopic_cs_absorb,
-                double* energy_deposition_tally, int* nparticles_sent,
+                double* energy_deposition_tally, 
                 int* cellx, int* celly, double* local_density) {
 
   // Update the mean free paths until collision
