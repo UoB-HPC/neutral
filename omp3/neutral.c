@@ -304,8 +304,7 @@ void handle_particles(
 }
 
 // Handles a collision event
-#pragma omp declare simd
-void collision_event(
+static inline void collision_event(
     const int global_nx, const int nx, const int x_off, const int y_off,
     const double inv_ntotal_particles, const double distance_to_collision,
     const double local_density, const CrossSection* cs_scatter_table,
@@ -406,8 +405,7 @@ void collision_event(
 }
 
 // Handle facet event
-#pragma omp declare simd
-void facet_event(const int global_nx, const int global_ny, const int nx,
+static inline void facet_event(const int global_nx, const int global_ny, const int nx,
                 const int ny, const int x_off, const int y_off,
                 const double inv_ntotal_particles,
                 const double distance_to_facet, const double speed,
@@ -486,7 +484,7 @@ void facet_event(const int global_nx, const int global_ny, const int nx,
 }
 
 // Handles the census event
-void census_event(const int global_nx, const int nx, const int x_off,
+static inline void census_event(const int global_nx, const int nx, const int x_off,
                   const int y_off, const double inv_ntotal_particles,
                   const double distance_to_census, const double cell_mfp,
                   const int ip, Particle* particles, double* energy_deposition,
@@ -510,7 +508,7 @@ void census_event(const int global_nx, const int nx, const int x_off,
 }
 
 // Tallies the energy deposition in the cell
-void update_tallies(const int nx, const int x_off, const int y_off,
+static inline void update_tallies(const int nx, const int x_off, const int y_off,
                     const int ip, Particle* particles, const double inv_ntotal_particles,
                     const double energy_deposition,
                     double* energy_deposition_tally) {
@@ -546,8 +544,7 @@ void update_tallies(const int nx, const int x_off, const int y_off,
 void send_and_mark_particle(const int destination, Particle* particle) {}
 
 // Calculate the distance to the next facet
-#pragma omp declare simd
-void calc_distance_to_facet(const int global_nx, const double x, const double y,
+static inline void calc_distance_to_facet(const int global_nx, const double x, const double y,
                             const int pad, const int x_off, const int y_off,
                             const double omega_x, const double omega_y,
                             const double speed, const int particle_cellx,
@@ -599,8 +596,7 @@ void calc_distance_to_facet(const int global_nx, const double x, const double y,
 }
 
 // Calculate the energy deposition in the cell
-#pragma omp declare simd
-double calculate_energy_deposition(
+static inline double calculate_energy_deposition(
     const int global_nx, const int nx, const int x_off, const int y_off,
     const int ip, Particle* particles, const double inv_ntotal_particles,
     const double path_length, const double number_density,
@@ -624,8 +620,7 @@ double calculate_energy_deposition(
 }
 
 // Fetch the cross section for a particular energy value
-#pragma omp declare simd
-double microscopic_cs_for_energy(const CrossSection* cs, const double energy,
+static inline double microscopic_cs_for_energy(const CrossSection* cs, const double energy,
                                  int* cs_index) {
 
   int ind = 0;
