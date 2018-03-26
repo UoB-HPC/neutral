@@ -130,7 +130,7 @@ void handle_particles(
       START_PROFILING(&tp);
 
       // Initialise cached particle data
-      //#pragma omp simd reduction(+: nparticles, counter)
+      #pragma omp simd reduction(+: nparticles, counter)
       for (int ip = 0; ip < np; ++ip) {
         if (p_dead[ip]) {
           continue;
@@ -160,8 +160,6 @@ void handle_particles(
           number_density[ip] * microscopic_cs_absorb[ip] * BARNS;
         speed[ip] = sqrt((2.0 * p_energy[ip] * eV_TO_J) / PARTICLE_MASS);
 
-
-
         // Set time to census and MFPs until collision, unless travelled
         // particle
         if (initial) {
@@ -180,7 +178,7 @@ void handle_particles(
         uint64_t ncompleted = 0;
 
         START_PROFILING(&tp);
-        //#pragma omp simd reduction(+: ncompleted, ncollisions, nfacets)
+        #pragma omp simd reduction(+: ncompleted, ncollisions, nfacets)
         for (int ip = 0; ip < np; ++ip) {
           if (p_dead[ip]) {
             next_event[ip] = PARTICLE_DEAD;
@@ -221,7 +219,7 @@ void handle_particles(
         }
 
         START_PROFILING(&tp);
-        //#pragma omp simd
+        #pragma omp simd
         for (int ip = 0; ip < np; ++ip) {
           if (next_event[ip] != PARTICLE_COLLISION) {
             continue;
@@ -269,7 +267,7 @@ void handle_particles(
 #endif
 
         START_PROFILING(&tp);
-//#pragma omp simd
+#pragma omp simd
         for (int ip = 0; ip < np; ++ip) {
           if (next_event[ip] != PARTICLE_FACET) {
             continue;
@@ -290,7 +288,7 @@ void handle_particles(
       }
 
       START_PROFILING(&tp);
-      //#pragma omp simd
+      #pragma omp simd
       for (int ip = 0; ip < np; ++ip) {
         if (next_event[ip] != PARTICLE_CENSUS) {
           continue;

@@ -8,7 +8,8 @@ ARCH_COMPILER_CPP  = icpc
 
 # Compiler-specific flags
 CFLAGS_INTEL			 = -O3 -qopenmp -no-prec-div -std=gnu99 \
-											-DINTEL -Wall -qopt-report=5 -xhost
+										 -DINTEL -Wall -qopt-report=5 -xhost \
+										 -ipo -inline-forceinline -g -debug inline-debug-info
 CFLAGS_INTEL_KNL	 = -O3 -qopenmp -no-prec-div -std=gnu99 -DINTEL \
 										 -xMIC-AVX512 -Wall -qopt-report=5
 CFLAGS_GCC				 = -std=gnu99 -fopenmp -march=native -Wall
@@ -22,30 +23,30 @@ CFLAGS_XL_OMP4		 = -qsmp -qoffload
 CFLAGS_CLANG			 = -std=gnu99 -fopenmp=libiomp5 -march=native -Wall
 CFLAGS_CLANG_OMP4  = -O3 -Wall -fopenmp-targets=nvptx64-nvidia-cuda -fopenmp-nonaliased-maps \
 										 -fopenmp=libomp --cuda-path=$(CUDA_PATH) -DCLANG
-										 #-I/home/projects/pwr8-rhel73-lsf/gcc/6.3.0/lib/gcc/powerpc64le-unknown-linux-gnu/6.3.0/include
+#-I/home/projects/pwr8-rhel73-lsf/gcc/6.3.0/lib/gcc/powerpc64le-unknown-linux-gnu/6.3.0/include
 CFLAGS_PGI				 = -O3 -fast -mp -Minfo
 
 OPTIONS  					+= -D__STDC_CONSTANT_MACROS
 
 ifeq ($(KERNELS), cuda)
-  CHECK_CUDA_ROOT = yes
+	CHECK_CUDA_ROOT = yes
 endif
 ifeq ($(COMPILER), CLANG_OMP4)
-  CHECK_CUDA_ROOT = yes
+	CHECK_CUDA_ROOT = yes
 endif
 
 ifeq ($(CHECK_CUDA_ROOT), yes)
-ifeq ("${CUDA_PATH}", "")
-$(error "$$CUDA_PATH is not set, please set this to the root of your CUDA install.")
+	ifeq ("${CUDA_PATH}", "")
+	$(error "$$CUDA_PATH is not set, please set this to the root of your CUDA install.")
 endif
 endif
 
 ifeq ($(DEBUG), yes)
-  OPTIONS += -O0 -DDEBUG -g
+	OPTIONS += -O0 -DDEBUG -g
 endif
 
 ifeq ($(MPI), yes)
-  OPTIONS += -DMPI
+	OPTIONS += -DMPI
 endif
 
 # Default compiler
@@ -56,12 +57,12 @@ ARCH_BUILD_DIR 		= ../obj/neutral/
 ARCH_DIR       		= ..
 
 ifeq ($(KERNELS), cuda)
-  include Makefile.cuda
-  OPTIONS += -DSoA
+	include Makefile.cuda
+	OPTIONS += -DSoA
 endif
 
 ifeq ($(KERNELS), omp4)
-  OPTIONS += -DSoA
+	OPTIONS += -DSoA
 endif
 
 # Get specialised kernels
