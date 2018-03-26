@@ -2,7 +2,7 @@
 KERNELS  					 = omp3
 COMPILER 					 = INTEL
 MPI      					 = no
-OPTIONS  					+= -g -O0 -DTILES -DAoSoA -DMANUAL_ATOMIC #-DTALLY_OUT #-DENABLE_PROFILING -qopt-zmm-usage=high 
+OPTIONS  					+= -DTILES -DAoSoA -DMANUAL_ATOMIC #-DTALLY_OUT #-DENABLE_PROFILING -qopt-zmm-usage=high 
 ARCH_COMPILER_CC   = icc
 ARCH_COMPILER_CPP  = icpc
 
