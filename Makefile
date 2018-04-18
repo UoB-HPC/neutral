@@ -2,13 +2,13 @@
 KERNELS  					 = omp3
 COMPILER 					 = INTEL
 MPI      					 = no
-OPTIONS  					+= -DTILES #-DENABLE_PROFILING 
+OPTIONS  					+= -DTILES -I/opt/cray/pe/papi/5.5.1.4/include/ -qopt-zmm-usage=high#-DENABLE_PROFILING 
 ARCH_COMPILER_CC   = icc
 ARCH_COMPILER_CPP  = icpc
 
 # Compiler-specific flags
 CFLAGS_INTEL			 = -O3 -qopenmp -no-prec-div -std=gnu99 -DINTEL \
-										 -Wall -qopt-report=5 -xhost
+										 -Wall -qopt-report=5 -xCORE-AVX512
 CFLAGS_INTEL_KNL	 = -O3 -qopenmp -no-prec-div -std=gnu99 -DINTEL \
 										 -xMIC-AVX512 -Wall -qopt-report=5
 CFLAGS_GCC				 = -std=gnu99 -fopenmp -march=native -Wall
@@ -51,7 +51,7 @@ endif
 # Default compiler
 ARCH_LINKER    		= $(ARCH_COMPILER_CC)
 ARCH_FLAGS     		= $(CFLAGS_$(COMPILER))
-ARCH_LDFLAGS   		= $(ARCH_FLAGS) -lm
+ARCH_LDFLAGS   		= $(ARCH_FLAGS) -lm /opt/cray/pe/papi/5.5.1.4/lib64/libpapi.a 
 ARCH_BUILD_DIR 		= ../obj/neutral/
 ARCH_DIR       		= ..
 

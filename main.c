@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "papi.h"
 
 #ifdef MPI
 #include "mpi.h"
@@ -18,7 +19,121 @@ void plot_particle_density(NeutralData* neutral_data, Mesh* mesh, const int tt,
                            const int nparticles, const double elapsed_sim_time);
 
 int main(int argc, char** argv) {
-  if (argc != 2) {
+  PAPI_library_init(PAPI_VER_CURRENT);
+  PAPI_thread_init((unsigned long (*)(void))(omp_get_thread_num));
+
+#define NTHREADS 1
+#define VWIDTH 8
+#define NTIMES 30
+#define NEVENTS 3
+  long_long results[NTIMES][NEVENTS];
+  int events[NEVENTS] = { PAPI_L1_DCM, PAPI_L2_DCM, PAPI_L3_TCM };
+
+  for(int t = 0; t < NTIMES; ++t) {
+    for(int j = 0; j < NEVENTS; ++j) {
+      results[t][j] = 0;
+    }
+  }
+
+  for(int i = 0; i < 20; ++i) {
+    const int n = pow(2, i) * 32 * NTHREADS; 
+    double* data = (double*)malloc(sizeof(double)*n);
+
+    for(int t = 0; t < NTIMES; ++t) {
+#pragma omp parallel for
+      for(int j = 0; j < n; ++j) {
+        data[j] = 1.0;
+      }
+
+      double r_v[NTHREADS][VWIDTH];
+#pragma omp parallel for
+      for(int j = 0; j < NTHREADS; ++j) {
+#pragma omp simd
+        for(int k = 0; k < VWIDTH; ++k) {
+          r_v[j][k] = 0.0;
+        }
+      }
+
+#pragma omp parallel
+      {
+        PAPI_start_counters(events, NEVENTS);
+      }
+
+#pragma omp parallel
+      {
+        double* r_v_t = r_v[omp_get_thread_num()];
+        double* t_thread = &data[omp_get_thread_num()*(n/NTHREADS/VWIDTH)];
+        for(int j = 0; j < n/VWIDTH/NTHREADS; ++j) {
+#pragma omp simd
+          for(int k = 0; k < VWIDTH; ++k) {
+            r_v_t[k] += t_thread[j*VWIDTH+k];
+          }
+        }
+      }
+
+#pragma omp parallel
+      {
+        long long results_t[NEVENTS];
+        PAPI_stop_counters(results_t, NEVENTS);
+
+#pragma omp atomic update
+        results[t][0] += results_t[0];
+#pragma omp atomic update
+        results[t][1] += results_t[1];
+#pragma omp atomic update
+        results[t][2] += results_t[2];
+      }
+
+      double r = 0.0;
+      for(int j = 0; j < NTHREADS; ++j) {
+        for(int k = 0; k < VWIDTH; ++k) {
+          r += r_v[j][k];
+        }
+      }
+      printf("n=%d,r=%llu\n", n, (size_t)r);
+    }
+
+    const unsigned long b = (n*sizeof(double)/NTHREADS);
+    for(int l = 0; l < 3; ++l) {
+      char buf[1024];
+      sprintf(buf, "cache_misses_l%d.csv", l+1);
+      FILE* fp = fopen(buf, "a");
+      if(b < 1024) {
+      }
+      else if(b < 1024*1024) {
+        fprintf(fp, "%llu KB,", b/1024);
+      }
+      else if(b < 1024*1024*1024) {
+        fprintf(fp, "%llu MB,", b/1024/1024);
+      }
+      else {
+        fprintf(fp, "%llu GB,", b/1024/1024/1024);
+      }
+      for(int t = 0; t < NTIMES; ++t) {
+        fprintf(fp, "%llu,", results[t][l]);
+      }
+      fprintf(fp, "\n");
+      fclose(fp);
+    }
+  }
+
+#if 0
+  double t_local[NTHREADS];
+#pragma omp parallel for
+  for(int j = 0; j < NTHREADS; ++j) {
+    t_local[j] = 0.0;
+  }
+
+#pragma omp parallel for
+  for(int j = 0; j < n; ++j) {
+    t_local[omp_get_thread_num()] += cos((double)j);
+  }
+#endif // if 0
+
+  PAPI_shutdown();
+  TERMINATE("");
+
+  if (argc != 3) {
     TERMINATE("usage: ./neutral.exe <param_file>\n");
   }
 
@@ -26,26 +141,24 @@ int main(int argc, char** argv) {
   Mesh mesh;
   NeutralData neutral_data;
   neutral_data.neutral_params_filename = argv[1];
-  mesh.global_nx =
-      get_int_parameter("nx", neutral_data.neutral_params_filename);
-  mesh.global_ny =
-      get_int_parameter("ny", neutral_data.neutral_params_filename);
+  mesh.global_nx = atoi(argv[2]);
+  mesh.global_ny = atoi(argv[2]);
   mesh.pad = 0;
   mesh.local_nx = mesh.global_nx + 2 * mesh.pad;
   mesh.local_ny = mesh.global_ny + 2 * mesh.pad;
-  mesh.width = get_double_parameter("width", ARCH_ROOT_PARAMS);
-  mesh.height = get_double_parameter("height", ARCH_ROOT_PARAMS);
+  mesh.width = (double)mesh.global_nx / 128.0;
+  mesh.height = (double)mesh.global_ny / 128.0;
   mesh.dt = get_double_parameter("dt", neutral_data.neutral_params_filename);
   mesh.sim_end = get_double_parameter("sim_end", ARCH_ROOT_PARAMS);
   mesh.niters =
-      get_int_parameter("iterations", neutral_data.neutral_params_filename);
+    get_int_parameter("iterations", neutral_data.neutral_params_filename);
   mesh.rank = MASTER;
   mesh.nranks = 1;
   mesh.ndims = 2;
   const int visit_dump =
-      get_int_parameter("visit_dump", neutral_data.neutral_params_filename);
+    get_int_parameter("visit_dump", neutral_data.neutral_params_filename);
 
-// Get the number of threads and initialise the random number pool
+  // Get the number of threads and initialise the random number pool
 #pragma omp parallel
   { neutral_data.nthreads = omp_get_num_threads(); }
 
@@ -55,7 +168,7 @@ int main(int argc, char** argv) {
   /* The timing code has to be called so many times that the API calls
    * actually begin to influence the performance dramatically. */
   fprintf(stderr,
-          "Warning. Profiling is enabled and will increase the runtime.\n\n");
+      "Warning. Profiling is enabled and will increase the runtime.\n\n");
 #endif
 
   // Perform the general initialisation steps for the mesh etc
@@ -69,7 +182,7 @@ int main(int argc, char** argv) {
       mesh.height, neutral_data.neutral_params_filename, mesh.edgex, mesh.edgey, &shared_data);
 
   handle_boundary_2d(mesh.local_nx, mesh.local_ny, &mesh, shared_data.density,
-                     NO_INVERT, PACK);
+      NO_INVERT, PACK);
   initialise_neutral_data(&neutral_data, &mesh, master_key++);
 
   // Make sure initialisation phase is complete
@@ -87,7 +200,7 @@ int main(int argc, char** argv) {
 
     if (visit_dump) {
       plot_particle_density(&neutral_data, &mesh, tt, neutral_data.nparticles,
-                            elapsed_sim_time);
+          elapsed_sim_time);
     }
 
     uint64_t facet_events = 0;
@@ -143,12 +256,12 @@ int main(int argc, char** argv) {
 
   if (visit_dump) {
     plot_particle_density(&neutral_data, &mesh, tt, neutral_data.nparticles,
-                          elapsed_sim_time);
+        elapsed_sim_time);
   }
 
   validate(mesh.local_nx - 2 * mesh.pad, mesh.local_ny - 2 * mesh.pad,
-           neutral_data.neutral_params_filename, mesh.rank,
-           neutral_data.energy_deposition_tally);
+      neutral_data.neutral_params_filename, mesh.rank,
+      neutral_data.energy_deposition_tally);
 
   if (mesh.rank == MASTER) {
     PRINT_PROFILING_RESULTS(&p);
@@ -162,10 +275,10 @@ int main(int argc, char** argv) {
 
 // This is a bit hacky and temporary for now
 void plot_particle_density(NeutralData* neutral_data, Mesh* mesh, const int tt,
-                           const int nparticles,
-                           const double elapsed_sim_time) {
+    const int nparticles,
+    const double elapsed_sim_time) {
   double* temp =
-      (double*)malloc(sizeof(double) * mesh->local_nx * mesh->local_ny);
+    (double*)malloc(sizeof(double) * mesh->local_nx * mesh->local_ny);
   if (!temp) {
     TERMINATE("Could not allocate data for printing.\n");
   }

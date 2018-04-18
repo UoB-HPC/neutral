@@ -113,8 +113,6 @@ void initialise_neutral_data(NeutralData* neutral_data, Mesh* mesh,
         master_key, &neutral_data->local_particles);
   }
 
-  printf("Allocated %.4fGB of data.\n", allocation / GB);
-
   initialise_cross_sections(neutral_data, mesh);
 
 #if 0
