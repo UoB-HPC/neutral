@@ -1,14 +1,14 @@
 # User defined parameters
-KERNELS  					 = cuda
-COMPILER 					 = XL
+KERNELS  					 = omp3
+COMPILER 					 = INTEL
 MPI      					 = no
 OPTIONS  					+= -DTILES #-DENABLE_PROFILING 
-ARCH_COMPILER_CC   = xlc
-ARCH_COMPILER_CPP  = xlc++
+ARCH_COMPILER_CC   = icc
+ARCH_COMPILER_CPP  = icpc
 
 # Compiler-specific flags
-CFLAGS_INTEL			 = -qopenmp -no-prec-div -std=gnu99 -DINTEL \
-										 -Wall -qopt-report=5 #-xhost
+CFLAGS_INTEL			 = -O3 -qopenmp -no-prec-div -std=gnu99 -DINTEL \
+										 -Wall -qopt-report=5 -xCORE-AVX512 -qopt-zmm-usage=high
 CFLAGS_INTEL_KNL	 = -O3 -qopenmp -no-prec-div -std=gnu99 -DINTEL \
 										 -xMIC-AVX512 -Wall -qopt-report=5
 CFLAGS_GCC				 = -std=gnu99 -fopenmp -march=native -Wall

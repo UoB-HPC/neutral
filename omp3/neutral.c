@@ -249,7 +249,6 @@ void event_initialisation(
 
   // Initialise all of the particles with their starting state
 #pragma omp parallel for simd
-#pragma vector aligned
   for(int ii = 0; ii < nparticles; ++ii) {
     const int pindex = particles_offset+ii;
     particles->dt_to_census[pindex] = dt;
@@ -266,9 +265,9 @@ void event_initialisation(
     particles->speed[pindex] =
       sqrt(2.0*particles->e[pindex]*eV_TO_J/PARTICLE_MASS);
 
-    int cellx = particles->cellx[pindex]-x_off+PAD;
-    int celly = particles->celly[pindex]-y_off+PAD;
-    particles->local_density[pindex] = density[celly*(nx+2*PAD)+cellx];
+    int cellx = particles->cellx[pindex]-x_off;
+    int celly = particles->celly[pindex]-y_off;
+    particles->local_density[pindex] = density[celly*(nx)+cellx];
     double number_density = (particles->local_density[pindex]*AVOGADROS/MOLAR_MASS);
     double macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
     double macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
@@ -289,7 +288,6 @@ int calc_next_event(
   uint64_t nfacets = 0;
   uint64_t ncollisions = 0;
 #pragma omp parallel for simd reduction(+: ncollisions, nfacets)
-#pragma vector aligned
   for(int ii = 0; ii < nparticles; ++ii) {
     const int pindex = particles_offset+ii;
     if(particles->next_event[pindex] == DEAD || particles->next_event[pindex] == CENSUS) {
@@ -298,8 +296,8 @@ int calc_next_event(
 
     // Check the timestep required to move the particles along a single axis
     // If the velocity is positive then the top or right boundary will be hit
-    const int cellx = particles->cellx[pindex]-x_off+PAD;
-    const int celly = particles->celly[pindex]-y_off+PAD;
+    const int cellx = particles->cellx[pindex]-x_off;
+    const int celly = particles->celly[pindex]-y_off;
     double u_x_inv = 1.0/(particles->omega_x[pindex]*particles->speed[pindex]);
     double u_y_inv = 1.0/(particles->omega_y[pindex]*particles->speed[pindex]);
 
@@ -392,7 +390,6 @@ void handle_facets(
 
   /* HANDLE FACET ENCOUNTERS */
 #pragma omp parallel for simd reduction(+:nnew_collisions, nnew_facets)
-#pragma vector aligned
   for(int ii = 0; ii < nparticles; ++ii) {
     const int pindex = particles_offset+ii;
 
@@ -400,8 +397,8 @@ void handle_facets(
       continue;
     }
 
-    int cellx = particles->cellx[pindex]-x_off+PAD;
-    int celly = particles->celly[pindex]-y_off+PAD;
+    int cellx = particles->cellx[pindex]-x_off;
+    int celly = particles->celly[pindex]-y_off;
     double number_density = (particles->local_density[pindex]*AVOGADROS/MOLAR_MASS);
 
     double microscopic_cs_scatter = microscopic_cs_for_energy(
@@ -473,7 +470,7 @@ void handle_facets(
       }
     }
 
-    particles->local_density[pindex] = density[celly*(nx+2*PAD)+cellx];
+    particles->local_density[pindex] = density[celly*(nx)+cellx];
     number_density = (particles->local_density[pindex]*AVOGADROS/MOLAR_MASS);
     macroscopic_cs_scatter = number_density*microscopic_cs_scatter*BARNS;
     macroscopic_cs_absorb = number_density*microscopic_cs_absorb*BARNS;
@@ -482,8 +479,8 @@ void handle_facets(
 #if 0
     // Check the timestep required to move the particles along a single axis
     // If the velocity is positive then the top or right boundary will be hit
-    cellx = particles->cellx[pindex]-x_off+PAD;
-    celly = particles->celly[pindex]-y_off+PAD;
+    cellx = particles->cellx[pindex]-x_off;
+    celly = particles->celly[pindex]-y_off;
     double u_x_inv = 1.0/(particles->omega_x[pindex]*particles->speed[pindex]);
     double u_y_inv = 1.0/(particles->omega_y[pindex]*particles->speed[pindex]);
 
@@ -571,7 +568,6 @@ void handle_collisions(
 
   /* HANDLE COLLISIONS */
 #pragma omp parallel for simd reduction(+:ndead, nnew_collisions, nnew_facets)
-#pragma vector aligned
   for(int ii = 0; ii < nparticles; ++ii) {
     const int pindex = particles_offset+ii;
 
@@ -651,8 +647,8 @@ void handle_collisions(
 #if 0
     // Check the timestep required to move the particles along a single axis
     // If the velocity is positive then the top or right boundary will be hit
-    const int cellx = particles->cellx[pindex]-x_off+PAD;
-    const int celly = particles->celly[pindex]-y_off+PAD;
+    const int cellx = particles->cellx[pindex]-x_off;
+    const int celly = particles->celly[pindex]-y_off;
     double u_x_inv = 1.0/(particles->omega_x[pindex]*particles->speed[pindex]);
     double u_y_inv = 1.0/(particles->omega_y[pindex]*particles->speed[pindex]);
 
@@ -756,7 +752,6 @@ void handle_census(
 {
   /* HANDLE THE CENSUS EVENTS */
 #pragma omp parallel for simd
-#pragma vector aligned
   for(int ii = 0; ii < nparticles; ++ii) {
     const int pindex = particles_offset+ii;
 
@@ -766,9 +761,9 @@ void handle_census(
 
     const double distance_to_census = 
       particles->speed[pindex]*particles->dt_to_census[pindex];
-    int cellx = particles->cellx[pindex]-x_off+PAD;
-    int celly = particles->celly[pindex]-y_off+PAD;
-    particles->local_density[pindex] = density[celly*(nx+2*PAD)+cellx];
+    int cellx = particles->cellx[pindex]-x_off;
+    int celly = particles->celly[pindex]-y_off;
+    particles->local_density[pindex] = density[celly*(nx)+cellx];
     double number_density = (particles->local_density[pindex]*AVOGADROS/MOLAR_MASS);
     double microscopic_cs_scatter = microscopic_cs_for_energy(
         cs_scatter_table, particles->e[pindex], &particles->scatter_cs_index[pindex]);
@@ -845,8 +840,7 @@ void send_and_mark_particle(
 }
 
 // Calculate the energy deposition in the cell
-#pragma omp declare simd
-double calculate_energy_deposition(
+static inline double calculate_energy_deposition(
     const int pindex, Particles* particles, const double path_length, 
     const double number_density, const double microscopic_cs_absorb, 
     const double microscopic_cs_total)
@@ -866,8 +860,7 @@ double calculate_energy_deposition(
 }
 
 // Fetch the cross section for a particular energy value
-#pragma omp declare simd
-double microscopic_cs_for_energy(
+static inline double microscopic_cs_for_energy(
     const CrossSection* cs, const double energy, int* cs_index)
 {
   /* Attempt an optimisation of the search by performing a linear operation
@@ -932,15 +925,15 @@ void inject_particles(
     int cellx = 0;
     int celly = 0;
     for(int cc = 0; cc < local_nx; ++cc) {
-      if(particles->x[ii] >= mesh->edgex[cc+PAD] && 
-          particles->x[ii] < mesh->edgex[cc+PAD+1]) {
+      if(particles->x[ii] >= mesh->edgex[cc] && 
+          particles->x[ii] < mesh->edgex[cc+1]) {
         cellx = mesh->x_off+cc;
         break;
       }
     }
     for(int cc = 0; cc < local_ny; ++cc) {
-      if(particles->y[ii] >= mesh->edgey[cc+PAD] && 
-          particles->y[ii] < mesh->edgey[cc+PAD+1]) {
+      if(particles->y[ii] >= mesh->edgey[cc] && 
+          particles->y[ii] < mesh->edgey[cc+1]) {
         celly = mesh->y_off+cc;
         break;
       }

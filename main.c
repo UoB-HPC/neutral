@@ -61,10 +61,8 @@ int main(int argc, char** argv)
   initialise_comms(&mesh);
   initialise_mesh_2d(&mesh);
   SharedData shared_data = {0};
-  initialise_shared_data_2d(
-      mesh.global_nx, mesh.global_ny, mesh.local_nx, mesh.local_ny, 
-      0, mesh.x_off, mesh.y_off, mesh.width, mesh.height, 
-      neutral_data.neutral_params_filename, mesh.edgex, mesh.edgey, &shared_data);
+  initialise_shared_data_2d(mesh.local_nx, mesh.local_ny, mesh.pad, mesh.width,
+      mesh.height, neutral_data.neutral_params_filename, mesh.edgex, mesh.edgey, &shared_data);
   initialise_neutral_data(
       &neutral_data, &mesh);
 
@@ -94,7 +92,7 @@ int main(int argc, char** argv)
         mesh.local_nx-2*0, mesh.local_ny-2*0, mesh.global_nx, mesh.global_ny, 
         mesh.x_off, mesh.y_off, mesh.dt, neutral_data.nparticles, 
         &neutral_data.nlocal_particles, &master_key, mesh.neighbours, 
-        neutral_data.local_particles, shared_data.rho, mesh.edgex, mesh.edgey, 
+        neutral_data.local_particles, shared_data.density, mesh.edgex, mesh.edgey, 
         mesh.edgedx, mesh.edgedy, neutral_data.cs_scatter_table, 
         neutral_data.cs_absorb_table, neutral_data.energy_deposition_tally, 
         neutral_data.rn_pools, neutral_data.reduce_array0, neutral_data.reduce_array1);
