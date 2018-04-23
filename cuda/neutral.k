@@ -4,28 +4,55 @@
 
 #if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 600
 #else
-__device__ double atomicAdd(double* address, double val) {
+__device__ float atomicAdd(float* address, float val) {
   unsigned long long int* address_as_ull = (unsigned long long int*)address;
   unsigned long long int old = *address_as_ull, assumed;
 
   do {
     assumed = old;
     old = atomicCAS(address_as_ull, assumed,
-                    __double_as_longlong(val + __longlong_as_double(assumed)));
+                    __float_as_longlong(val + __longlong_as_float(assumed)));
 
     // Note: uses integer comparison to avoid hang in case of NaN (since NaN !=
     // NaN)
   } while (assumed != old);
-  return __longlong_as_double(old);
+  return __longlong_as_float(old);
 }
 #endif
 
+__global__ void initialise_x_mesh(
+  const int x, float* edgex, float* edgedx, double* mesh_edgex, double* mesh_edgedx) {
+  const int i = blockIdx.x*blockDim.x + threadIdx.x;
+  if(i < x) {
+    edgex[i] = (float)mesh_edgex[i];
+    edgedx[i] = (float)mesh_edgedx[i];
+  }
+}
+
+__global__ void initialise_y_mesh(
+  const int y, float* edgey, float* edgedy, double* mesh_edgey, double* mesh_edgedy) {
+  const int i = blockIdx.x*blockDim.x + threadIdx.x;
+  if(i < y) {
+    edgey[i] = (float)mesh_edgey[i];
+    edgedy[i] = (float)mesh_edgedy[i];
+  }
+}
+
+__global__ void initialise_density(
+    const int xy, float* density, double* mesh_density) {
+
+  const int i = blockIdx.x*blockDim.x + threadIdx.x;
+  if(i < xy) {
+    density[i] = (float)mesh_density[i];
+  }
+}
+
 // Fetch the cross section for a particular energy value
-__device__ double microscopic_cs_for_energy_linear(const double* key,
-                                            const double* value,
-                                            const int nentries,
-                                            const double energy,
-                                            int* cs_index) {
+__device__ float microscopic_cs_for_energy_linear(const float* key,
+    const float* value,
+    const int nentries,
+    const float energy,
+    int* cs_index) {
 
   int ind = 0;
 
@@ -50,8 +77,8 @@ __device__ double microscopic_cs_for_energy_linear(const double* key,
     (value[ind + 1] - value[ind]);
 }
 
-__device__ double microscopic_cs_for_energy_binary(
-    const double* key, const double* value, const int nentries, const double energy, int* cs_index) {
+__device__ float microscopic_cs_for_energy_binary(
+    const float* key, const float* value, const int nentries, const float energy, int* cs_index) {
 
   // Use a simple binary search to find the energy group
   int ind = nentries / 2;
@@ -71,19 +98,19 @@ __device__ double microscopic_cs_for_energy_binary(
 
 
 // Calculate the energy deposition in the cell
-__device__ double calculate_energy_deposition(
-    const double path_length, const double e, const double weight,
-    const double number_density, const double microscopic_cs_absorb,
-    const double microscopic_cs_total, const double pabsorb) {
+__device__ float calculate_energy_deposition(
+    const float path_length, const float e, const float weight,
+    const float number_density, const float microscopic_cs_absorb,
+    const float microscopic_cs_total, const float pabsorb) {
 
   // Calculate the energy deposition based on the path length
-  const double average_exit_energy_absorb = 0.0;
-  const double absorption_heating = pabsorb * average_exit_energy_absorb;
-  const double average_exit_energy_scatter =
+  const float average_exit_energy_absorb = 0.0f;
+  const float absorption_heating = pabsorb * average_exit_energy_absorb;
+  const float average_exit_energy_scatter =
     e * ((MASS_NO * MASS_NO + MASS_NO + 1) / ((MASS_NO + 1) * (MASS_NO + 1)));
-  const double scattering_heating =
-    (1.0 - pabsorb) * average_exit_energy_scatter;
-  const double heating_response = (e - scattering_heating - absorption_heating);
+  const float scattering_heating =
+    (1.0f - pabsorb) * average_exit_energy_scatter;
+  const float heating_response = (e - scattering_heating - absorption_heating);
 
   return weight * path_length * (microscopic_cs_total * BARNS) *
     heating_response * number_density;
@@ -91,8 +118,8 @@ __device__ double calculate_energy_deposition(
 
 __device__ void generate_random_numbers(const uint64_t master_key,
     const uint64_t secondary_key,
-    const uint64_t gid, double* rn0,
-    double* rn1, double* rn2, double* rn3) {
+    const uint64_t gid, float* rn0,
+    float* rn1, float* rn2, float* rn3) {
   threefry4x64_ctr_t counter;
   threefry4x64_ctr_t key;
   counter.v[0] = gid;
@@ -107,7 +134,7 @@ __device__ void generate_random_numbers(const uint64_t master_key,
   // Generate the random numbers
   threefry4x64_ctr_t rand = threefry4x64(counter, key);
 
-  // Turn our random numbers from integrals to double precision
+  // Turn our random numbers from integrals to float precision
   *rn0 = rand.v[0] * FACTOR + HALF_FACTOR;
   *rn1 = rand.v[1] * FACTOR + HALF_FACTOR;
   *rn2 = rand.v[2] * FACTOR + HALF_FACTOR;
@@ -116,20 +143,20 @@ __device__ void generate_random_numbers(const uint64_t master_key,
 
 __global__ void inject_particles_kernel(
     const int local_nx, const int local_ny, const int pad, const int x_off,
-    const int y_off, const double local_particle_left_off,
-    const double local_particle_bottom_off, const double local_particle_width,
-    const double local_particle_height, const int nparticles, const double dt,
-    const double initial_energy, const int master_key, const double* edgex,
-    const double* edgey, double* x, double* y, int* particle_cellx,
-    int* particle_celly, double* omega_x, double* omega_y, double* e,
-    double* weight, double* dt_to_census, double* mfp_to_collision) {
+    const int y_off, const float local_particle_left_off,
+    const float local_particle_bottom_off, const float local_particle_width,
+    const float local_particle_height, const int nparticles, const float dt,
+    const float initial_energy, const int master_key, const float* edgex,
+    const float* edgey, float* x, float* y, int* particle_cellx,
+    int* particle_celly, float* omega_x, float* omega_y, float* e,
+    float* weight, float* dt_to_census, float* mfp_to_collision) {
 
   const int gid = blockIdx.x * blockDim.x + threadIdx.x;
   if (gid >= nparticles)
     return;
 
   // Generate a pool of random numbers
-  double rn[NRANDOM_NUMBERS];
+  float rn[NRANDOM_NUMBERS];
   generate_random_numbers(master_key, 4, gid, &rn[0], &rn[1], &rn[2], &rn[3]);
 
   // Set the initial nandom location of the particle inside the source region
@@ -159,7 +186,7 @@ __global__ void inject_particles_kernel(
   // Generating theta has uniform density, however 0.0 and 1.0 produce the same
   // value which introduces very very very small bias...
 
-  const double theta = 2.0 * M_PI * rn[3];
+  const float theta = 2.0f * M_PI * rn[3];
   omega_x[gid] = cos(theta);
   omega_y[gid] = sin(theta);
 
@@ -167,25 +194,25 @@ __global__ void inject_particles_kernel(
   e[gid] = initial_energy;
 
   // Set a weight for the particle to track absorption
-  weight[gid] = 1.0;
+  weight[gid] = 1.0f;
   dt_to_census[gid] = dt;
-  mfp_to_collision[gid] = 0.0;
+  mfp_to_collision[gid] = 0.0f;
 }
 
 // Handles an individual particle.
 __global__ void handle_particles_kernel(
     const int nparticles, const int global_nx, const int global_ny,
     const int nx, const int ny, const int pad, const int x_off, const int y_off,
-    const double dt, const int initial, const int ntotal_particles,
-    const double* density, const double* edgex, const double* edgey,
-    const double* edgedx, const double* edgedy, double* energy_deposition_tally,
+    const float dt, const int initial, const int ntotal_particles,
+    const float* density, const float* edgex, const float* edgey,
+    const float* edgedx, const float* edgedy, float* energy_deposition_tally,
     int* particle_cellx, int* particle_celly, const int cs_scatter_nentries,
-    const int cs_absorb_nentries, const double* cs_scatter_keys,
-    const double* cs_scatter_values, const double* cs_absorb_keys,
-    const double* cs_absorb_values, double* particle_e,
-    double* particle_dt_to_census, double* particle_mfp_to_collision,
-    double* particle_weight, double* particle_omega_x, double* particle_omega_y,
-    double* particle_x, double* particle_y, uint64_t master_key,
+    const int cs_absorb_nentries, const float* cs_scatter_keys,
+    const float* cs_scatter_values, const float* cs_absorb_keys,
+    const float* cs_absorb_values, float* particle_e,
+    float* particle_dt_to_census, float* particle_mfp_to_collision,
+    float* particle_weight, float* particle_omega_x, float* particle_omega_y,
+    float* particle_x, float* particle_y, uint64_t master_key,
     uint64_t* nfacets_reduce_array, uint64_t* ncollisions_reduce_array, 
     uint64_t* nprocessed_reduce_array) {
 
@@ -201,7 +228,7 @@ __global__ void handle_particles_kernel(
 
   const int gid = blockIdx.x * blockDim.x + threadIdx.x;
   const int pindex = gid;
-  double e = particle_e[pindex];
+  float e = particle_e[pindex];
 
   if (gid < nparticles && e >= MIN_ENERGY_OF_INTEREST) {
     nprocessed++;
@@ -209,7 +236,7 @@ __global__ void handle_particles_kernel(
     int x_facet = 0;
     int absorb_cs_index = -1;
     int scatter_cs_index = -1;
-    double cell_mfp = 0.0;
+    float cell_mfp = 0.0f;
     uint64_t local_key = 0;
 
     // Determine the current cell
@@ -217,96 +244,96 @@ __global__ void handle_particles_kernel(
     int celly = particle_celly[pindex] - y_off + pad;
 
     // Fetch particle data
-    double x = particle_x[pindex];
-    double y = particle_y[pindex];
-    double weight = particle_weight[pindex];
-    double omega_x = particle_omega_x[pindex];
-    double omega_y = particle_omega_y[pindex];
-    double local_density = density[celly * (nx + 2 * pad) + cellx];
-    double dt_to_census = particle_dt_to_census[pindex];
-    double mfp_to_collision = particle_mfp_to_collision[pindex];
+    float x = particle_x[pindex];
+    float y = particle_y[pindex];
+    float weight = particle_weight[pindex];
+    float omega_x = particle_omega_x[pindex];
+    float omega_y = particle_omega_y[pindex];
+    float local_density = density[celly * (nx + 2 * pad) + cellx];
+    float dt_to_census = particle_dt_to_census[pindex];
+    float mfp_to_collision = particle_mfp_to_collision[pindex];
 
     // Fetch the cross sections and prepare related quantities
-    double microscopic_cs_scatter =
+    float microscopic_cs_scatter =
       microscopic_cs_for_energy_binary(cs_scatter_keys, cs_scatter_values,
           cs_scatter_nentries, e, &scatter_cs_index);
-    double microscopic_cs_absorb =
+    float microscopic_cs_absorb =
       microscopic_cs_for_energy_binary(cs_absorb_keys, cs_absorb_values,
           cs_absorb_nentries, e, &absorb_cs_index);
-    double number_density = (local_density * AVOGADROS / MOLAR_MASS);
-    double macroscopic_cs_scatter =
+    float number_density = (local_density * AVOGADROS / MOLAR_MASS);
+    float macroscopic_cs_scatter =
       number_density * microscopic_cs_scatter * BARNS;
-    double macroscopic_cs_absorb =
+    float macroscopic_cs_absorb =
       number_density * microscopic_cs_absorb * BARNS;
-    double speed = sqrt(2.0 * e * eV_TO_J / PARTICLE_MASS);
-    double energy_deposition = 0.0;
-    const double inv_ntotal_particles = 1.0 / (double)ntotal_particles;
+    float speed = sqrt(2.0f * e * eV_TO_J / PARTICLE_MASS);
+    float energy_deposition = 0.0f;
+    const float inv_ntotal_particles = 1.0f / (float)ntotal_particles;
 
     // Set time to census and MFPs until collision, unless travelled particle
     if (initial) {
       dt_to_census = dt;
 
-      double rn[NRANDOM_NUMBERS];
+      float rn[NRANDOM_NUMBERS];
       generate_random_numbers(master_key, local_key++, gid, &rn[0], &rn[1], &rn[2], &rn[3]);
 
       mfp_to_collision = -log(rn[0]) / macroscopic_cs_scatter;
     }
 
     // Loop until we have reached census
-    while (dt_to_census > 0.0) {
-      cell_mfp = 1.0 / (macroscopic_cs_scatter + macroscopic_cs_absorb);
+    while (dt_to_census > 0.0f) {
+      cell_mfp = 1.0f / (macroscopic_cs_scatter + macroscopic_cs_absorb);
 
       // Check the timestep required to move the particles along a single axis
       // If the speed is positive then the top or right boundary will be hit
-      double speed = sqrt(2.0 * e * eV_TO_J / PARTICLE_MASS);
-      double u_x_inv = 1.0 / (omega_x * speed);
-      double u_y_inv = 1.0 / (omega_y * speed);
+      float speed = sqrt(2.0f * e * eV_TO_J / PARTICLE_MASS);
+      float u_x_inv = 1.0f / (omega_x * speed);
+      float u_y_inv = 1.0f / (omega_y * speed);
 
-      double x0 = edgex[cellx];
-      double x1 = edgex[cellx + 1];
-      double y0 = edgey[celly];
-      double y1 = edgey[celly + 1];
+      float x0 = edgex[cellx];
+      float x1 = edgex[cellx + 1];
+      float y0 = edgey[celly];
+      float y1 = edgey[celly + 1];
 
       // The bound is open on the left and bottom so we have to correct for this
       // and required the movement to the facet to go slightly further than the 
       // edge in the calculated values, using OPEN_BOUND_CORRECTION, which is the
       // smallest possible distance we can be from the closed bound e.g. 1.0e-14.
-      double dt_x = (omega_x >= 0.0)
+      float dt_x = (omega_x >= 0.0f)
         ? (x1 - x) * u_x_inv
         : ((x0 - OPEN_BOUND_CORRECTION) - x) * u_x_inv;
-      double dt_y = (omega_y >= 0.0)
+      float dt_y = (omega_y >= 0.0f)
         ? (y1 - y) * u_y_inv
         : ((y0 - OPEN_BOUND_CORRECTION) - y) * u_y_inv;
 
       // Calculated the projection to be
       // a = vector on first edge to be hit
       // u = speed vector
-      double mag_u0 = speed;
+      float mag_u0 = speed;
 
       // Work out the distance until the particle hits a facet
-      double distance_to_facet = 0.0;
+      float distance_to_facet = 0.0f;
 
       x_facet = (dt_x < dt_y) ? 1 : 0;
       if (x_facet) {
         // We are centered on the origin, so the y component is 0 after
         // travelling along the x axis to the edge (ax, 0).(x, y)
         distance_to_facet =
-          (omega_x >= 0.0)
+          (omega_x >= 0.0f)
           ? (x1 - x) * mag_u0 * u_x_inv
           : ((x0 - OPEN_BOUND_CORRECTION) - x) * mag_u0 * u_x_inv;
       } else {
         // We are centered on the origin, so the x component is 0 after
         // travelling along the y axis to the edge (0, ay).(x, y)
         distance_to_facet =
-          (omega_y >= 0.0)
+          (omega_y >= 0.0f)
           ? (y1 - y) * mag_u0 * u_y_inv
           : ((y0 - OPEN_BOUND_CORRECTION) - y) * mag_u0 * u_y_inv;
       }
 
       // Calculate the distances to next events
-      const double distance_to_collision = mfp_to_collision * cell_mfp;
-      const double distance_to_census = speed * dt_to_census;
-      const double pabsorb = macroscopic_cs_absorb * cell_mfp;
+      const float distance_to_collision = mfp_to_collision * cell_mfp;
+      const float distance_to_census = speed * dt_to_census;
+      const float pabsorb = macroscopic_cs_absorb * cell_mfp;
 
       // Check if our next event is a collision
       if (distance_to_collision < distance_to_facet &&
@@ -328,7 +355,7 @@ __global__ void handle_particles_kernel(
             microscopic_cs_absorb,
             microscopic_cs_scatter + microscopic_cs_absorb, pabsorb);
 
-        double rn[NRANDOM_NUMBERS];
+        float rn[NRANDOM_NUMBERS];
         generate_random_numbers(master_key, local_key++, gid, &rn[0], &rn[1], &rn[2], &rn[3]);
 
         if (rn[0] < pabsorb) {
@@ -336,34 +363,34 @@ __global__ void handle_particles_kernel(
           /* Model particle absorption */
 
           // Find the new particle weight after absorption
-          weight *= (1.0 - pabsorb);
+          weight *= (1.0f - pabsorb);
         } else {
 
           /* Model elastic particle scattering */
 
           // Choose a random scattering angle between -1 and 1
-          const double mu_cm = 1.0 - 2.0 * rn[1];
+          const float mu_cm = 1.0f - 2.0f * rn[1];
 
           // Calculate the new energy based on the relation to angle of
           // incidence
-          const double e_new =
-            e * (MASS_NO * MASS_NO + 2.0 * MASS_NO * mu_cm + 1.0) /
-            ((MASS_NO + 1.0) * (MASS_NO + 1.0));
+          const float e_new =
+            e * (MASS_NO * MASS_NO + 2.0f * MASS_NO * mu_cm + 1.0f) /
+            ((MASS_NO + 1.0f) * (MASS_NO + 1.0f));
 
           // Convert the angle into the laboratory frame of reference
-          double cos_theta = 0.5 * ((MASS_NO + 1.0) * sqrt(e_new / e) -
-              (MASS_NO - 1.0) * sqrt(e / e_new));
+          float cos_theta = 0.5 * ((MASS_NO + 1.0f) * sqrt(e_new / e) -
+              (MASS_NO - 1.0f) * sqrt(e / e_new));
 
           // Alter the direction of the velocities
-          const double sin_theta = sqrt(1.0 - cos_theta * cos_theta);
-          const double omega_x_new =
+          const float sin_theta = sqrt(1.0f - cos_theta * cos_theta);
+          const float omega_x_new =
             (omega_x * cos_theta - omega_y * sin_theta);
-          const double omega_y_new =
+          const float omega_y_new =
             (omega_x * sin_theta + omega_y * cos_theta);
           omega_x = omega_x_new;
           omega_y = omega_y_new;
           e = e_new;
-          speed = sqrt(2.0 * e * eV_TO_J / PARTICLE_MASS);
+          speed = sqrt(2.0f * e * eV_TO_J / PARTICLE_MASS);
         }
 
         if (e < MIN_ENERGY_OF_INTEREST) {
@@ -372,7 +399,7 @@ __global__ void handle_particles_kernel(
           atomicAdd(
               &energy_deposition_tally[(celly - pad) * nx + (cellx - pad)],
               energy_deposition * inv_ntotal_particles);
-          energy_deposition = 0.0;
+          energy_deposition = 0.0f;
           break;
         }
 
@@ -414,10 +441,10 @@ __global__ void handle_particles_kernel(
         // Update tallies as we leave a cell
         atomicAdd(&energy_deposition_tally[(celly - pad) * nx + (cellx - pad)],
             energy_deposition * inv_ntotal_particles);
-        energy_deposition = 0.0;
+        energy_deposition = 0.0f;
 
         if (x_facet) {
-          if (omega_x > 0.0) {
+          if (omega_x > 0.0f) {
             // Reflect at the boundary
             if (cellx >= (global_nx - 1)) {
               omega_x = -(omega_x);
@@ -425,7 +452,7 @@ __global__ void handle_particles_kernel(
               // Moving to right cell
               cellx++;
             }
-          } else if (omega_x < 0.0) {
+          } else if (omega_x < 0.0f) {
             if (cellx <= 0) {
               // Reflect at the boundary
               omega_x = -(omega_x);
@@ -435,7 +462,7 @@ __global__ void handle_particles_kernel(
             }
           }
         } else {
-          if (omega_y > 0.0) {
+          if (omega_y > 0.0f) {
             // Reflect at the boundary
             if (celly >= (global_ny - 1)) {
               omega_y = -(omega_y);
@@ -443,7 +470,7 @@ __global__ void handle_particles_kernel(
               // Moving to north cell
               celly++;
             }
-          } else if (omega_y < 0.0) {
+          } else if (omega_y < 0.0f) {
             // Reflect at the boundary
             if (celly <= 0) {
               omega_y = -(omega_y);
@@ -468,7 +495,7 @@ __global__ void handle_particles_kernel(
         // We have not changed cell or energy level at this stage
         x += distance_to_census * omega_x;
         y += distance_to_census * omega_y;
-        dt_to_census = 0.0;
+        dt_to_census = 0.0f;
         mfp_to_collision -= (distance_to_facet *
             (macroscopic_cs_scatter + macroscopic_cs_absorb));
 
@@ -479,7 +506,7 @@ __global__ void handle_particles_kernel(
         // Need to store tally information as finished with particle
         atomicAdd(&energy_deposition_tally[(celly - pad) * nx + (cellx - pad)],
             energy_deposition * inv_ntotal_particles);
-        energy_deposition = 0.0;
+        energy_deposition = 0.0f;
         break;
       }
     }

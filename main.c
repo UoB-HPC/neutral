@@ -70,7 +70,7 @@ int main(int argc, char** argv) {
 
   handle_boundary_2d(mesh.local_nx, mesh.local_ny, &mesh, shared_data.density,
                      NO_INVERT, PACK);
-  initialise_neutral_data(&neutral_data, &mesh, master_key++);
+  initialise_neutral_data(&neutral_data, &mesh, &shared_data, master_key++);
 
   // Make sure initialisation phase is complete
   barrier();
@@ -85,13 +85,6 @@ int main(int argc, char** argv) {
       printf("\nIteration  %d\n", tt);
     }
 
-    if (visit_dump) {
-#if 0
-      plot_particle_density(&neutral_data, &mesh, tt, neutral_data.nparticles,
-                            elapsed_sim_time);
-#endif // if 0
-    }
-
     uint64_t facet_events = 0;
     uint64_t collision_events = 0;
 
@@ -101,9 +94,10 @@ int main(int argc, char** argv) {
     solve_transport_2d(
         mesh.local_nx - 2 * mesh.pad, mesh.local_ny - 2 * mesh.pad,
         mesh.global_nx, mesh.global_ny, mesh.pad, mesh.x_off, mesh.y_off,
-        mesh.dt, neutral_data.nparticles, &neutral_data.nlocal_particles,
+        (float)mesh.dt, neutral_data.nparticles, &neutral_data.nlocal_particles,
         &master_key, mesh.neighbours, neutral_data.local_particles,
-        shared_data.density, mesh.edgex, mesh.edgey, mesh.edgedx, mesh.edgedy,
+        neutral_data.density, neutral_data.edgex, neutral_data.edgey, 
+        neutral_data.edgedx, neutral_data.edgedy,
         neutral_data.cs_scatter_table, neutral_data.cs_absorb_table,
         neutral_data.energy_deposition_tally, neutral_data.nfacets_reduce_array,
         neutral_data.ncollisions_reduce_array, neutral_data.nprocessed_reduce_array,
@@ -124,6 +118,7 @@ int main(int argc, char** argv) {
     elapsed_sim_time += mesh.dt;
 
     if (visit_dump) {
+#if 0
       char tally_name[100];
       sprintf(tally_name, "energy%d", tt);
       int dneighbours[NNEIGHBOURS] = {EDGE, EDGE, EDGE, EDGE, EDGE, EDGE};
@@ -133,6 +128,7 @@ int main(int argc, char** argv) {
           mesh.rank, mesh.nranks, dneighbours,
           neutral_data.energy_deposition_tally, tally_name, 0,
           elapsed_sim_time);
+#endif // if 0
     }
 
     // Leave the simulation if we have reached the simulation end time
@@ -141,13 +137,6 @@ int main(int argc, char** argv) {
         printf("Reached end of simulation time\n");
       break;
     }
-  }
-
-  if (visit_dump) {
-#if 0
-    plot_particle_density(&neutral_data, &mesh, tt, neutral_data.nparticles,
-        elapsed_sim_time);
-#endif // if 0
   }
 
   validate(mesh.local_nx - 2 * mesh.pad, mesh.local_ny - 2 * mesh.pad,
@@ -160,43 +149,4 @@ int main(int argc, char** argv) {
   }
 
   return 0;
-}
-
-// This is a bit hacky and temporary for now
-void plot_particle_density(NeutralData* neutral_data, Mesh* mesh, const int tt,
-                           const int nparticles,
-                           const double elapsed_sim_time) {
-  double* temp =
-      (double*)malloc(sizeof(double) * mesh->local_nx * mesh->local_ny);
-  if (!temp) {
-    TERMINATE("Could not allocate data for printing.\n");
-  }
-
-  for (int ii = 0; ii < nparticles; ++ii) {
-    Particle* particle = &neutral_data->local_particles[ii];
-#ifdef SoA
-    const int cellx = particle->cellx[ii] - mesh->x_off;
-    const int celly = particle->celly[ii] - mesh->y_off;
-#elif defined(AoSoA)
-    const int b = ii / BLOCK_SIZE;
-    const int i = ii % BLOCK_SIZE;
-    const int cellx = particle[b].cellx[i];
-    const int celly = particle[b].celly[i];
-#else
-    const int cellx = particle->cellx - mesh->x_off;
-    const int celly = particle->celly - mesh->y_off;
-#endif
-    temp[celly * (mesh->local_nx - 2 * mesh->pad) + cellx] += 1.0;
-  }
-
-  // Dummy neighbours that stops any padding from happening
-  int neighbours[NNEIGHBOURS] = {EDGE, EDGE, EDGE, EDGE, EDGE, EDGE};
-  char particles_name[100];
-  sprintf(particles_name, "particles%d", tt);
-  write_all_ranks_to_visit(
-      mesh->global_nx, mesh->global_ny, mesh->local_nx - 2 * mesh->pad,
-      mesh->local_ny - 2 * mesh->pad, mesh->pad, mesh->x_off, mesh->y_off,
-      mesh->rank, mesh->nranks, neighbours, temp, particles_name, 0,
-      elapsed_sim_time);
-  free(temp);
 }

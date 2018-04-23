@@ -14,16 +14,19 @@ void read_cs_file(const char* filename, CrossSection* cs, Mesh* mesh);
 void initialise_cross_sections(NeutralData* neutral_data, Mesh* mesh);
 
 // Initialises all of the neutral-specific data structures.
-void initialise_neutral_data(NeutralData* neutral_data, Mesh* mesh,
+void initialise_neutral_data(NeutralData* neutral_data, Mesh* mesh, SharedData* shared_data,
                              const uint64_t master_key) {
+
+  initialise_float_mesh(neutral_data, mesh, shared_data);
+
   const int pad = mesh->pad;
   const int local_nx = mesh->local_nx - 2 * pad;
   const int local_ny = mesh->local_ny - 2 * pad;
 
   neutral_data->nparticles =
       get_int_parameter("nparticles", neutral_data->neutral_params_filename);
-  neutral_data->initial_energy = get_double_parameter(
-      "initial_energy", neutral_data->neutral_params_filename);
+  neutral_data->initial_energy = 
+    (float)get_double_parameter("initial_energy", neutral_data->neutral_params_filename);
 
   int nkeys = 0;
   char* keys = (char*)malloc(sizeof(char) * MAX_KEYS * MAX_STR_LEN);
@@ -36,56 +39,47 @@ void initialise_neutral_data(NeutralData* neutral_data, Mesh* mesh,
   }
 
   // The last four keys are the bound specification
-  const double source_xpos = values[nkeys - 4] * mesh->width;
-  const double source_ypos = values[nkeys - 3] * mesh->height;
-  const double source_width = values[nkeys - 2] * mesh->width;
-  const double source_height = values[nkeys - 1] * mesh->height;
+  const float source_xpos = (float)values[nkeys - 4] * mesh->width;
+  const float source_ypos = (float)values[nkeys - 3] * mesh->height;
+  const float source_width = (float)values[nkeys - 2] * mesh->width;
+  const float source_height = (float)values[nkeys - 1] * mesh->height;
 
-  double* mesh_edgex_0 = &mesh->edgex[mesh->x_off + pad];
-  double* mesh_edgey_0 = &mesh->edgey[mesh->y_off + pad];
-  double* mesh_edgex_1 = &mesh->edgex[local_nx + mesh->x_off + pad];
-  double* mesh_edgey_1 = &mesh->edgey[local_ny + mesh->y_off + pad];
+  float* mesh_edgex_0 = &neutral_data->edgex[mesh->x_off + pad];
+  float* mesh_edgey_0 = &neutral_data->edgey[mesh->y_off + pad];
+  float* mesh_edgex_1 = &neutral_data->edgex[local_nx + mesh->x_off + pad];
+  float* mesh_edgey_1 = &neutral_data->edgey[local_ny + mesh->y_off + pad];
 
-  double* rank_xpos_0;
-  double* rank_ypos_0;
-  double* rank_xpos_1;
-  double* rank_ypos_1;
-  allocate_host_data(&rank_xpos_0, 1);
-  allocate_host_data(&rank_ypos_0, 1);
-  allocate_host_data(&rank_xpos_1, 1);
-  allocate_host_data(&rank_ypos_1, 1);
+  float* rank_xpos_0;
+  float* rank_ypos_0;
+  float* rank_xpos_1;
+  float* rank_ypos_1;
+  allocate_host_float_data(&rank_xpos_0, 1);
+  allocate_host_float_data(&rank_ypos_0, 1);
+  allocate_host_float_data(&rank_xpos_1, 1);
+  allocate_host_float_data(&rank_ypos_1, 1);
 
-  copy_buffer(1, &mesh_edgex_0, &rank_xpos_0, RECV);
-  copy_buffer(1, &mesh_edgey_0, &rank_ypos_0, RECV);
-  copy_buffer(1, &mesh_edgex_1, &rank_xpos_1, RECV);
-  copy_buffer(1, &mesh_edgey_1, &rank_ypos_1, RECV);
+  copy_float_buffer(1, &mesh_edgex_0, &rank_xpos_0, RECV);
+  copy_float_buffer(1, &mesh_edgey_0, &rank_ypos_0, RECV);
+  copy_float_buffer(1, &mesh_edgex_1, &rank_xpos_1, RECV);
+  copy_float_buffer(1, &mesh_edgey_1, &rank_ypos_1, RECV);
 
   // Calculate the shaded bounds
-  const double local_particle_left_off = max(0.0, source_xpos - *rank_xpos_0);
-  const double local_particle_bottom_off = max(0.0, source_ypos - *rank_ypos_0);
-  const double local_particle_right_off =
+  const float local_particle_left_off = max(0.0, source_xpos - *rank_xpos_0);
+  const float local_particle_bottom_off = max(0.0, source_ypos - *rank_ypos_0);
+  const float local_particle_right_off =
       max(0.0, *rank_xpos_1 - (source_xpos + source_width));
-  const double local_particle_top_off =
+  const float local_particle_top_off =
       max(0.0, *rank_ypos_1 - (source_ypos + source_height));
-  const double local_particle_width =
+  const float local_particle_width =
       max(0.0, (*rank_xpos_1 - *rank_xpos_0) -
                    (local_particle_right_off + local_particle_left_off));
-  const double local_particle_height =
+  const float local_particle_height =
       max(0.0, (*rank_ypos_1 - *rank_ypos_0) -
                    (local_particle_top_off + local_particle_bottom_off));
 
-#if 0
-  // TODO: breaks due to the copy buffer semantics for OpenMP 4, whole concept
-  // needs readdressing
-  free(rank_xpos_0);
-  free(rank_ypos_0);
-  free(rank_xpos_1);
-  free(rank_ypos_1);
-#endif // if 0
-
   // Calculate the number of particles we need based on the shaded area that
   // is covered by our source
-  const double nlocal_particles_real =
+  const float nlocal_particles_real =
       neutral_data->nparticles *
       (local_particle_width * local_particle_height) /
       (source_width * source_height);
@@ -93,7 +87,7 @@ void initialise_neutral_data(NeutralData* neutral_data, Mesh* mesh,
   // Rounding hack to make sure correct number of particles is selected
   neutral_data->nlocal_particles = nlocal_particles_real + 0.5;
 
-  size_t allocation = allocate_data(&neutral_data->energy_deposition_tally,
+  size_t allocation = allocate_float_data(&neutral_data->energy_deposition_tally,
                                     local_nx * local_ny);
 
   allocation +=
@@ -109,24 +103,13 @@ void initialise_neutral_data(NeutralData* neutral_data, Mesh* mesh,
         neutral_data->nparticles, mesh->global_nx, mesh->local_nx,
         mesh->local_ny, pad, local_particle_left_off, local_particle_bottom_off,
         local_particle_width, local_particle_height, mesh->x_off, mesh->y_off,
-        mesh->dt, mesh->edgex, mesh->edgey, neutral_data->initial_energy,
+        mesh->dt, neutral_data->edgex, neutral_data->edgey, neutral_data->initial_energy,
         master_key, &neutral_data->local_particles);
   }
 
   printf("Allocated %.4fGB of data.\n", allocation / GB);
 
   initialise_cross_sections(neutral_data, mesh);
-
-#if 0
-#ifdef MPI
-  const int blocks[3] = { 8, 1, 1 };
-  MPI_Datatype types[3] = { MPI_DOUBLE, MPI_UINT64_T, MPI_INT };
-  MPI_Aint disp[3] = { 0, blocks[0]*sizeof(double), disp[0]+sizeof(uint64_t) };
-  MPI_Type_create_struct(
-      2, blocks, disp, types, &particle_type);
-  MPI_Type_commit(&particle_type);
-#endif
-#endif // if 0
 }
 
 // Reads in a cross-sectional data file
@@ -151,10 +134,10 @@ void read_cs_file(const char* filename, CrossSection* cs, Mesh* mesh) {
 
   rewind(fp);
 
-  double* h_keys;
-  double* h_values;
-  allocate_host_data(&h_keys, cs->nentries);
-  allocate_host_data(&h_values, cs->nentries);
+  float* h_keys;
+  float* h_values;
+  allocate_host_float_data(&h_keys, cs->nentries);
+  allocate_host_float_data(&h_values, cs->nentries);
 
   for (int ii = 0; ii < cs->nentries; ++ii) {
     // Skip whitespace tokens
@@ -168,15 +151,15 @@ void read_cs_file(const char* filename, CrossSection* cs, Mesh* mesh) {
     }
 
     ungetc(ch, fp);
-    fscanf(fp, "%lf", &h_keys[ii]);
+    fscanf(fp, "%f", &h_keys[ii]);
     while ((ch = fgetc(fp)) == ' ') {
     };
     ungetc(ch, fp);
-    fscanf(fp, "%lf", &h_values[ii]);
+    fscanf(fp, "%f", &h_values[ii]);
   }
 
-  move_host_buffer_to_device(cs->nentries, &h_keys, &cs->keys);
-  move_host_buffer_to_device(cs->nentries, &h_values, &cs->values);
+  move_host_float_buffer_to_device(cs->nentries, &h_keys, &cs->keys);
+  move_host_float_buffer_to_device(cs->nentries, &h_values, &cs->values);
 }
 
 // Initialises the state

@@ -5,6 +5,7 @@
 
 #include "../comms.h"
 #include "../mesh.h"
+#include "../shared_data.h"
 #include "rand.h"
 
 #if 0
@@ -45,8 +46,8 @@ enum {
 
 // Represents a cross sectional table for resonance data
 typedef struct {
-  double* keys;
-  double* values;
+  float* keys;
+  float* values;
   int nentries;
 
 } CrossSection;
@@ -55,14 +56,14 @@ typedef struct {
 
 // Represents an individual particle
 typedef struct {
-  double* x;                // x position in space
-  double* y;                // y position in space
-  double* omega_x;          // x direction
-  double* omega_y;          // y direction
-  double* energy;           // energy
-  double* weight;           // weight of the particle
-  double* dt_to_census;     // the time until census is reached
-  double* mfp_to_collision; // the mean free paths until a collision
+  float* x;                // x position in space
+  float* y;                // y position in space
+  float* omega_x;          // x direction
+  float* omega_y;          // y direction
+  float* energy;           // energy
+  float* weight;           // weight of the particle
+  float* dt_to_census;     // the time until census is reached
+  float* mfp_to_collision; // the mean free paths until a collision
   uint64_t* key;            // key for random number generation
   int* cellx;               // x position in mesh
   int* celly;               // y position in mesh
@@ -74,14 +75,14 @@ typedef struct {
 
 // Represents an individual particle
 typedef struct {
-  double x[BLOCK_SIZE];                // x position in space
-  double y[BLOCK_SIZE];                // y position in space
-  double omega_x[BLOCK_SIZE];          // x direction
-  double omega_y[BLOCK_SIZE];          // y direction
-  double energy[BLOCK_SIZE];           // energy
-  double weight[BLOCK_SIZE];           // weight of the particle
-  double dt_to_census[BLOCK_SIZE];     // the time until census is reached
-  double mfp_to_collision[BLOCK_SIZE]; // the mean free paths until a collision
+  float x[BLOCK_SIZE];                // x position in space
+  float y[BLOCK_SIZE];                // y position in space
+  float omega_x[BLOCK_SIZE];          // x direction
+  float omega_y[BLOCK_SIZE];          // y direction
+  float energy[BLOCK_SIZE];           // energy
+  float weight[BLOCK_SIZE];           // weight of the particle
+  float dt_to_census[BLOCK_SIZE];     // the time until census is reached
+  float mfp_to_collision[BLOCK_SIZE]; // the mean free paths until a collision
   uint64_t key[BLOCK_SIZE];            // key for random number generation
   int cellx[BLOCK_SIZE];               // x position in mesh
   int celly[BLOCK_SIZE];               // y position in mesh
@@ -93,14 +94,14 @@ typedef struct {
 
 // Represents an individual particle
 typedef struct {
-  double x;                // x position in space
-  double y;                // y position in space
-  double omega_x;          // x direction
-  double omega_y;          // y direction
-  double energy;           // energy
-  double weight;           // weight of the particle
-  double dt_to_census;     // the time until census is reached
-  double mfp_to_collision; // the mean free paths until a collision
+  float x;                // x position in space
+  float y;                // y position in space
+  float omega_x;          // x direction
+  float omega_y;          // y direction
+  float energy;           // energy
+  float weight;           // weight of the particle
+  float dt_to_census;     // the time until census is reached
+  float mfp_to_collision; // the mean free paths until a collision
   uint64_t key;            // key for random number generation
   int cellx;               // x position in mesh
   int celly;               // y position in mesh
@@ -116,14 +117,14 @@ typedef struct {
   CrossSection* cs_absorb_table;
   Particle* local_particles;
 
-  double initial_energy;
+  float initial_energy;
 
   int nthreads;
   int nparticles;
   int nlocal_particles;
 
-  double* scalar_flux_tally;
-  double* energy_deposition_tally;
+  float* scalar_flux_tally;
+  float* energy_deposition_tally;
 
   const char* neutral_params_filename;
 
@@ -131,17 +132,17 @@ typedef struct {
   uint64_t* ncollisions_reduce_array;
   uint64_t* nprocessed_reduce_array;
 
+  float* edgex;
+  float* edgey;
+  float* edgedx;
+  float* edgedy;
+
+  float* density;
+
 } NeutralData;
 
-#if 0
-#ifdef MPI
-// Global MPI particle type
-MPI_Datatype particle_type;
-#endif
-#endif // if 0
-
 // Initialises all of the Neutral-specific data structures.
-void initialise_neutral_data(NeutralData* bright_data, Mesh* mesh,
+void initialise_neutral_data(NeutralData* bright_data, Mesh* mesh, SharedData* shared_data,
                              const uint64_t master_key);
 
 #endif
