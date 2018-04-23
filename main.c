@@ -86,8 +86,10 @@ int main(int argc, char** argv) {
     }
 
     if (visit_dump) {
+#if 0
       plot_particle_density(&neutral_data, &mesh, tt, neutral_data.nparticles,
                             elapsed_sim_time);
+#endif // if 0
     }
 
     uint64_t facet_events = 0;
@@ -112,11 +114,11 @@ int main(int argc, char** argv) {
     double step_time = omp_get_wtime() - w0;
     wallclock += step_time;
     printf("Facets     %llu\n", facet_events);
-    printf("Collisions %llu\n",  collision_events);
+    printf("Collisions %llu\n", collision_events);
     printf("Step time  %.4fs\n", step_time);
     printf("Wallclock  %.4fs\n", wallclock);
 
-    printf("Collision Events / s = %.2e\n", collision_events * (collision_events / step_time));
+    printf("Collision Events / s = %.2e\n", (collision_events / step_time));
     printf("Facet Events / s = %.2e\n", (facet_events / step_time));
 
     elapsed_sim_time += mesh.dt;
@@ -142,8 +144,10 @@ int main(int argc, char** argv) {
   }
 
   if (visit_dump) {
+#if 0
     plot_particle_density(&neutral_data, &mesh, tt, neutral_data.nparticles,
         elapsed_sim_time);
+#endif // if 0
   }
 
   validate(mesh.local_nx - 2 * mesh.pad, mesh.local_ny - 2 * mesh.pad,

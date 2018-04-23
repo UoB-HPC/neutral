@@ -84,7 +84,6 @@ void handle_particles(
     const int thread_block_off = tid * nb_per_thread;
 
     int counter_off[BLOCK_SIZE];
-    double rn[BLOCK_SIZE][NRANDOM_NUMBERS];
     int x_facet[BLOCK_SIZE];
     int absorb_cs_index[BLOCK_SIZE];
     int scatter_cs_index[BLOCK_SIZE];
@@ -129,7 +128,7 @@ void handle_particles(
       START_PROFILING(&tp);
 
       // Initialise cached particle data
-      //#pragma omp simd reduction(+: nparticles, counter)
+#pragma omp simd reduction(+: nparticles, counter)
       for (int ip = 0; ip < BLOCK_SIZE; ++ip) {
         if (p_dead[ip]) {
           continue;
@@ -163,10 +162,11 @@ void handle_particles(
         // particle
         if (initial) {
           p_dt_to_census[ip] = dt;
-          generate_random_numbers(*master_key, p_key[ip], counter++,
-              &rn[ip][0], &rn[ip][1]);
+          double rn[4];
+          generate_random_numbers(
+              *master_key, p_key[ip], counter++, &rn[0], &rn[1], &rn[2], &rn[3]);
           p_mfp_to_collision[ip] =
-            -log(rn[ip][0]) / macroscopic_cs_scatter[ip];
+            -log(rn[0]) / macroscopic_cs_scatter[ip];
         }
       }
 
@@ -177,7 +177,7 @@ void handle_particles(
         uint64_t ncompleted = 0;
 
         START_PROFILING(&tp);
-        #pragma omp simd reduction(+: ncompleted, ncollisions, nfacets)
+#pragma omp simd reduction(+: ncompleted, nfacets, ncollisions)
         for (int ip = 0; ip < BLOCK_SIZE; ++ip) {
           if (p_dead[ip]) {
             next_event[ip] = PARTICLE_DEAD;
@@ -218,7 +218,7 @@ void handle_particles(
 
         START_PROFILING(&tp);
         int found[BLOCK_SIZE];
-        #pragma omp simd
+#pragma omp simd
         for (int ip = 0; ip < BLOCK_SIZE; ++ip) {
           if (next_event[ip] != PARTICLE_COLLISION) {
             continue;
@@ -235,7 +235,7 @@ void handle_particles(
               &microscopic_cs_scatter[ip], &microscopic_cs_absorb[ip],
               &macroscopic_cs_scatter[ip], &macroscopic_cs_absorb[ip],
               energy_deposition_tally, &scatter_cs_index[ip],
-              &absorb_cs_index[ip], rn[ip], &speed[ip],p_x, p_y, p_dead, p_energy, 
+              &absorb_cs_index[ip], &speed[ip],p_x, p_y, p_dead, p_energy, 
               p_omega_x, p_omega_y, p_key, p_mfp_to_collision, p_dt_to_census, 
               p_weight, p_cellx, p_celly, &found[ip]);
         }
@@ -331,8 +331,8 @@ static inline void collision_event(
     double* number_density, double* microscopic_cs_scatter,
     double* microscopic_cs_absorb, double* macroscopic_cs_scatter,
     double* macroscopic_cs_absorb, double* energy_deposition_tally,
-    int* scatter_cs_index, int* absorb_cs_index, double rn[NRANDOM_NUMBERS],
-    double* speed, double* p_x, double* p_y, int* p_dead, double* p_energy, 
+    int* scatter_cs_index, int* absorb_cs_index, double* speed, double* p_x, 
+    double* p_y, int* p_dead, double* p_energy, 
     double* p_omega_x, double* p_omega_y, uint64_t* p_key, 
     double* p_mfp_to_collision, double* p_dt_to_census, double* p_weight, 
     int* p_cellx, int* p_celly, int* found) {
@@ -350,9 +350,9 @@ static inline void collision_event(
   const double p_absorb = *macroscopic_cs_absorb /
     (*macroscopic_cs_scatter + *macroscopic_cs_absorb);
 
-  double rn1[NRANDOM_NUMBERS];
-  generate_random_numbers(*master_key, p_key[ip], counter_off, &rn1[0],
-      &rn1[1]);
+  double rn1[4];
+  generate_random_numbers(
+      *master_key, p_key[ip], counter_off, &rn1[0], &rn1[1], &rn1[2], &rn1[3]);
 
   if (rn1[0] < p_absorb) {
     /* Model particles absorption */
@@ -418,9 +418,7 @@ static inline void collision_event(
   *macroscopic_cs_absorb = *number_density * (*microscopic_cs_absorb) * BARNS;
 
   // Re-sample number of mean free paths to collision
-  generate_random_numbers(*master_key, p_key[ip], counter_off+1, &rn[0],
-      &rn[1]);
-  p_mfp_to_collision[ip] = -log(rn[0]) / *macroscopic_cs_scatter;
+  p_mfp_to_collision[ip] = -log(rn1[3]) / *macroscopic_cs_scatter;
   p_dt_to_census[ip] -= distance_to_collision / *speed;
   *speed = sqrt((2.0 * p_energy[ip] * eV_TO_J) / PARTICLE_MASS);
 }
@@ -768,8 +766,9 @@ size_t inject_particles(const int nparticles, const int global_nx,
     Particle* p = &(*particles)[b];
 
     for (int k = 0; k < BLOCK_SIZE; ++k) {
-      double rn[NRANDOM_NUMBERS];
-      generate_random_numbers(master_key, 0, b*BLOCK_SIZE + k, &rn[0], &rn[1]);
+      double rn[4];
+      generate_random_numbers(
+          master_key, 0, b*BLOCK_SIZE + k, &rn[0], &rn[1], &rn[2], &rn[3]);
 
       // Set the initial nandom location of the particle inside the source
       // region
@@ -797,10 +796,8 @@ size_t inject_particles(const int nparticles, const int global_nx,
       p->celly[k] = celly;
 
       // Generating theta has uniform density, however 0.0 and 1.0 produce the
-      // same
-      // value which introduces very very very small bias...
-      generate_random_numbers(master_key, 1, b*BLOCK_SIZE + k, &rn[0], &rn[1]);
-      const double theta = 2.0 * M_PI * rn[0];
+      // same value which introduces very very very small bias...
+      const double theta = 2.0 * M_PI * rn[2];
       p->omega_x[k] = cos(theta);
       p->omega_y[k] = sin(theta);
 
@@ -823,17 +820,21 @@ size_t inject_particles(const int nparticles, const int global_nx,
 // Generates a pair of random numbers
 void generate_random_numbers(const uint64_t master_key,
     const uint64_t secondary_key, const uint64_t gid,
-    double* rn0, double* rn1) {
+    double* rn0, double* rn1, double* rn2, double* rn3) {
 
-  threefry2x64_ctr_t counter;
-  threefry2x64_ctr_t key;
+  threefry4x64_ctr_t counter;
+  threefry4x64_ctr_t key;
   counter.v[0] = gid;
   counter.v[1] = 0;
+  counter.v[2] = 0;
+  counter.v[3] = 0;
   key.v[0] = master_key;
   key.v[1] = secondary_key;
+  key.v[2] = 0;
+  key.v[3] = 0;
 
   // Generate the random numbers
-  threefry2x64_ctr_t rand = threefry2x64(counter, key);
+  threefry4x64_ctr_t rand = threefry4x64(counter, key);
 
   // Turn our random numbers from integrals to double precision
   uint64_t max_uint64 = UINT64_C(0xFFFFFFFFFFFFFFFF);
@@ -841,4 +842,6 @@ void generate_random_numbers(const uint64_t master_key,
   const double half_factor = 0.5 * factor;
   *rn0 = rand.v[0] * factor + half_factor;
   *rn1 = rand.v[1] * factor + half_factor;
+  *rn2 = rand.v[2] * factor + half_factor;
+  *rn3 = rand.v[3] * factor + half_factor;
 }
