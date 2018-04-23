@@ -113,8 +113,8 @@ int main(int argc, char** argv) {
 
     double step_time = omp_get_wtime() - w0;
     wallclock += step_time;
-    printf("Facets     %llu\n", facet_events);
-    printf("Collisions %llu\n", collision_events);
+    printf("Facets     %lu\n", facet_events);
+    printf("Collisions %lu\n", collision_events);
     printf("Step time  %.4fs\n", step_time);
     printf("Wallclock  %.4fs\n", wallclock);
 

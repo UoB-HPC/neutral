@@ -837,9 +837,6 @@ void generate_random_numbers(const uint64_t master_key,
   threefry4x64_ctr_t rand = threefry4x64(counter, key);
 
   // Turn our random numbers from integrals to double precision
-  uint64_t max_uint64 = UINT64_C(0xFFFFFFFFFFFFFFFF);
-  const double factor = 1.0 / (max_uint64 + 1.0);
-  const double half_factor = 0.5 * factor;
   *rn0 = rand.v[0] * factor + half_factor;
   *rn1 = rand.v[1] * factor + half_factor;
   *rn2 = rand.v[2] * factor + half_factor;

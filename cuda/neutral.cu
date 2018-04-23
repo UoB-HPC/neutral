@@ -57,7 +57,7 @@ void handle_particles(
     uint64_t* ncollisions_reduce_array, uint64_t* nprocessed_reduce_array) {
 
   const int nthreads = NTHREADS;
-  const int nblocks = ceil(nparticles_total / (double)NTHREADS);
+  const int nblocks = ceil(nparticles_total / (double)nthreads);
   handle_particles_kernel<<<nblocks, nthreads>>>(
       nparticles_total, global_nx, global_ny, nx, ny, pad, x_off, y_off, dt,
       initial, nparticles_total, density, edgex, edgey, edgedx, edgedy,
