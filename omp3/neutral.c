@@ -217,6 +217,7 @@ void handle_particles(
         }
 
         START_PROFILING(&tp);
+        int found[BLOCK_SIZE];
         #pragma omp simd
         for (int ip = 0; ip < BLOCK_SIZE; ++ip) {
           if (next_event[ip] != PARTICLE_COLLISION) {
@@ -226,7 +227,7 @@ void handle_particles(
           const double distance_to_collision =
             p_mfp_to_collision[ip] * cell_mfp[ip];
 
-          collision_event(
+           collision_event(
               ip, global_nx, nx, x_off, y_off, inv_ntotal_particles,
               distance_to_collision, local_density[ip], cs_scatter_table,
               cs_absorb_table, counter_off[ip] + counter, master_key,
@@ -236,9 +237,16 @@ void handle_particles(
               energy_deposition_tally, &scatter_cs_index[ip],
               &absorb_cs_index[ip], rn[ip], &speed[ip],p_x, p_y, p_dead, p_energy, 
               p_omega_x, p_omega_y, p_key, p_mfp_to_collision, p_dt_to_census, 
-              p_weight, p_cellx, p_celly);
+              p_weight, p_cellx, p_celly, &found[ip]);
         }
         STOP_PROFILING(&tp, "collision");
+
+        // Check if any of the table lookups failed
+        for(int ip = 0; ip < BLOCK_SIZE; ++ip) {
+          if (!found) {
+            TERMINATE("No key for energy %.12e in cross sectional lookup.\n", p_energy[ip]);
+          }
+        }
 
         // Have to adjust the counter for next usage
         counter += 2*BLOCK_SIZE;
@@ -286,7 +294,7 @@ void handle_particles(
       }
 
       START_PROFILING(&tp);
-      #pragma omp simd
+#pragma omp simd
       for (int ip = 0; ip < BLOCK_SIZE; ++ip) {
         if (next_event[ip] != PARTICLE_CENSUS) {
           continue;
@@ -327,7 +335,7 @@ static inline void collision_event(
     double* speed, double* p_x, double* p_y, int* p_dead, double* p_energy, 
     double* p_omega_x, double* p_omega_y, uint64_t* p_key, 
     double* p_mfp_to_collision, double* p_dt_to_census, double* p_weight, 
-    int* p_cellx, int* p_celly) {
+    int* p_cellx, int* p_celly, int* found) {
 
   // Energy deposition stored locally for collision, not in tally mesh
   *energy_deposition += calculate_energy_deposition(
@@ -402,9 +410,9 @@ static inline void collision_event(
 
   // Energy has changed so update the cross-sections
   *microscopic_cs_scatter = microscopic_cs_for_energy_linear(
-      cs_scatter_table, p_energy[ip], scatter_cs_index);
+      cs_scatter_table, p_energy[ip], scatter_cs_index, found);
   *microscopic_cs_absorb = microscopic_cs_for_energy_linear(
-      cs_absorb_table, p_energy[ip], absorb_cs_index);
+      cs_absorb_table, p_energy[ip], absorb_cs_index, found);
   *number_density = (local_density * AVOGADROS / MOLAR_MASS);
   *macroscopic_cs_scatter = *number_density * (*microscopic_cs_scatter) * BARNS;
   *macroscopic_cs_absorb = *number_density * (*microscopic_cs_absorb) * BARNS;
@@ -641,7 +649,7 @@ static inline double calculate_energy_deposition(
 
 // Fetch the cross section for a particular energy value
 static inline double microscopic_cs_for_energy_linear(
-    const CrossSection* cs, const double energy, int* cs_index) {
+    const CrossSection* cs, const double energy, int* cs_index, int* found) {
 
   int ind = 0;
   double* keys = cs->keys;
@@ -653,17 +661,12 @@ static inline double microscopic_cs_for_energy_linear(
 
   // This search will move in the correct direction towards the new energy
   // group
-  int found = 0;
   for (ind = *cs_index; ind >= 0 && ind < cs->nentries; ind += direction) {
     // Check if we have found the new energy group index
     if (energy >= keys[ind] && energy < keys[ind + 1]) {
-      found = 1;
+      *found = 1;
       break;
     }
-  }
-
-  if (!found) {
-    TERMINATE("No key for energy %.12e in cross sectional lookup.\n", energy);
   }
 
   *cs_index = ind;
