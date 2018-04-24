@@ -8,7 +8,7 @@ ARCH_COMPILER_CPP  = icpc
 
 # Compiler-specific flags
 CFLAGS_INTEL			 = -O3 -qopenmp -no-prec-div -std=gnu99 \
-											-DINTEL -Wall -qopt-report=5 -xhost
+											-DINTEL -Wall -qopt-report=5 -xCORE-AVX512 -qopt-zmm-usage=high
 CFLAGS_INTEL_KNL	 = -O3 -qopenmp -no-prec-div -std=gnu99 -DINTEL \
 										 -xMIC-AVX512 -Wall -qopt-report=5
 CFLAGS_GCC				 = -std=gnu99 -fopenmp -march=native -Wall

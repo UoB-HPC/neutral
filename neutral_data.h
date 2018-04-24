@@ -13,6 +13,8 @@
 #endif
 #endif // if 0
 
+#define BLOCK_SIZE 32
+
 /* Problem-Independent Constants */
 #define eV_TO_J 1.60217646e-19           // 1 eV to Joules
 #define AVOGADROS 6.02214085774e23       // Avogadro's constant
