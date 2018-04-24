@@ -4,6 +4,7 @@
 #include "../../shared.h"
 #include "../../shared_data.h"
 #include "../neutral_interface.h"
+#include "../rand.h"
 #include <assert.h>
 #include <float.h>
 #include <math.h>
@@ -88,8 +89,6 @@ void handle_particles(
     int absorb_cs_index[BLOCK_SIZE];
     int scatter_cs_index[BLOCK_SIZE];
     double cell_mfp[BLOCK_SIZE];
-    int cellx[BLOCK_SIZE];
-    int celly[BLOCK_SIZE];
     double local_density[BLOCK_SIZE];
     double microscopic_cs_scatter[BLOCK_SIZE];
     double microscopic_cs_absorb[BLOCK_SIZE];
@@ -142,9 +141,9 @@ void handle_particles(
         energy_deposition[ip] = 0.0;
 
         // Determine the current cell
-        cellx[ip] = p_cellx[ip] - x_off + pad;
-        celly[ip] = p_celly[ip] - y_off + pad;
-        local_density[ip] = density[celly[ip] * (nx + 2 * pad) + cellx[ip]];
+        const int cellx = p_cellx[ip] - x_off + pad;
+        const int celly = p_celly[ip] - y_off + pad;
+        local_density[ip] = density[celly * (nx + 2 * pad) + cellx];
 
         // Fetch the cross sections and prepare related quantities
         microscopic_cs_scatter[ip] = microscopic_cs_for_energy_binary(
@@ -218,7 +217,7 @@ void handle_particles(
 
         START_PROFILING(&tp);
         int found[BLOCK_SIZE];
-#pragma omp simd
+//#pragma omp simd
         for (int ip = 0; ip < BLOCK_SIZE; ++ip) {
           if (next_event[ip] != PARTICLE_COLLISION) {
             continue;
@@ -281,14 +280,12 @@ void handle_particles(
 
           facet_event(
               global_nx, global_ny, nx, ny, x_off, y_off, inv_ntotal_particles,
-              distance_to_facet, speed, cell_mfp, x_facet,
-              density, neighbours, ip, energy_deposition,
-              number_density, microscopic_cs_scatter,
-              microscopic_cs_absorb, macroscopic_cs_scatter,
-              macroscopic_cs_absorb, energy_deposition_tally,
-              cellx, celly, local_density, 
-              p_energy, p_weight, p_cellx, p_celly, p_mfp_to_collision, 
-              p_dt_to_census, p_x, p_y, p_omega_x, p_omega_y);
+              distance_to_facet, speed, cell_mfp, x_facet, density, neighbours, 
+              ip, energy_deposition, number_density, microscopic_cs_scatter,
+              microscopic_cs_absorb, macroscopic_cs_scatter, macroscopic_cs_absorb, 
+              energy_deposition_tally, local_density, p_energy, p_weight, p_cellx, 
+              p_celly, p_mfp_to_collision, p_dt_to_census, p_x, p_y, p_omega_x, 
+              p_omega_y);
         }
         STOP_PROFILING(&tp, "facet");
       }
@@ -424,20 +421,17 @@ static inline void collision_event(
 }
 
 // Handle facet event
-static inline void facet_event(const int global_nx, const int global_ny, const int nx,
-    const int ny, const int x_off, const int y_off,
-    const double inv_ntotal_particles,
-    const double* distance_to_facet, const double* speed,
-    const double* cell_mfp, const int* x_facet, const double* density,
-    const int* neighbours, const int ip, 
-    double* energy_deposition, double* number_density,
-    double* microscopic_cs_scatter, double* microscopic_cs_absorb,
-    double* macroscopic_cs_scatter, double* macroscopic_cs_absorb,
-    double* energy_deposition_tally, 
-    int* cellx, int* celly, double* local_density, double* p_energy, 
-    double* p_weight, int* p_cellx, int* p_celly, double* p_mfp_to_collision, 
-    double* p_dt_to_census, double* p_x, double* p_y, double* p_omega_x, 
-    double* p_omega_y) {
+static inline void facet_event(
+    const int global_nx, const int global_ny, const int nx, const int ny, 
+    const int x_off, const int y_off, const double inv_ntotal_particles, 
+    const double* distance_to_facet, const double* speed, const double* cell_mfp, 
+    const int* x_facet, const double* density, const int* neighbours, const int ip, 
+    double* energy_deposition, double* number_density, double* microscopic_cs_scatter, 
+    double* microscopic_cs_absorb, double* macroscopic_cs_scatter, 
+    double* macroscopic_cs_absorb, double* energy_deposition_tally, 
+    double* local_density, double* p_energy, double* p_weight, int* p_cellx, 
+    int* p_celly, double* p_mfp_to_collision, double* p_dt_to_census, double* p_x, 
+    double* p_y, double* p_omega_x, double* p_omega_y) { 
 
 #ifndef TALLY_OUT
   // Update the tallies for all particles leaving cells
@@ -458,48 +452,21 @@ static inline void facet_event(const int global_nx, const int global_ny, const i
   p_x[ip] += distance_to_facet[ip] * p_omega_x[ip];
   p_y[ip] += distance_to_facet[ip] * p_omega_y[ip];
 
-  if (x_facet[ip]) {
-    if (p_omega_x[ip] > 0.0) {
-      // Reflect at the boundary
-      if (p_cellx[ip] >= (global_nx - 1)) {
-        p_omega_x[ip] = -(p_omega_x[ip]);
-      } else {
-        // Moving to right cell
-        p_cellx[ip]++;
-      }
-    } else if (p_omega_x[ip] < 0.0) {
-      if (p_cellx[ip] <= 0) {
-        // Reflect at the boundary
-        p_omega_x[ip] = -(p_omega_x[ip]);
-      } else {
-        // Moving to left cell
-        p_cellx[ip]--;
-      }
-    }
-  } else {
-    if (p_omega_y[ip] > 0.0) {
-      // Reflect at the boundary
-      if (p_celly[ip] >= (global_ny - 1)) {
-        p_omega_y[ip] = -(p_omega_y[ip]);
-      } else {
-        // Moving to north cell
-        p_celly[ip]++;
-      }
-    } else if (p_omega_y[ip] < 0.0) {
-      // Reflect at the boundary
-      if (p_celly[ip] <= 0) {
-        p_omega_y[ip] = -(p_omega_y[ip]);
-      } else {
-        // Moving to south cell
-        p_celly[ip]--;
-      }
-    }
+  if(x_facet[ip]) {
+    p_omega_x[ip] = ((p_cellx[ip] >= (global_nx - 1) || p_cellx[ip] <= 0)) ? -p_omega_x[ip] : p_omega_x[ip];
+    p_cellx[ip] += ((p_omega_x[ip] > 0.0) && (p_cellx[ip] < (global_nx - 1))) ? 1 : 0;
+    p_cellx[ip] += ((p_omega_x[ip] < 0.0) && (p_cellx[ip] > 0)) ? -1 : 0;
+  }
+  else {
+    p_omega_y[ip] = ((p_celly[ip] >= (global_ny - 1) || p_celly[ip] <= 0)) ? -p_omega_y[ip] : p_omega_y[ip];
+    p_celly[ip] += ((p_omega_y[ip] > 0.0) && (p_celly[ip] < (global_ny - 1))) ? 1 : 0;
+    p_celly[ip] += ((p_omega_y[ip] < 0.0) && (p_celly[ip] > 0)) ? -1 : 0;
   }
 
   // Update the data based on new cell
-  cellx[ip] = p_cellx[ip] - x_off;
-  celly[ip] = p_celly[ip] - y_off;
-  local_density[ip] = density[celly[ip] * nx + cellx[ip]];
+  const int cellx = p_cellx[ip] - x_off;
+  const int celly = p_celly[ip] - y_off;
+  local_density[ip] = density[celly * nx + cellx];
   number_density[ip] = (local_density[ip] * AVOGADROS / MOLAR_MASS);
   macroscopic_cs_scatter[ip] = number_density[ip] * microscopic_cs_scatter[ip] * BARNS;
   macroscopic_cs_absorb[ip] = number_density[ip] * microscopic_cs_absorb[ip] * BARNS;
@@ -600,24 +567,8 @@ static inline void calc_distance_to_facet(
   // Calculated the projection to be
   // a = vector on first edge to be hit
   // u = velocity vector
-
   double mag_u0 = speed;
-
-  if (*x_facet) {
-    // We are centered on the origin, so the y component is 0 after travelling
-    // aint the x axis to the edge (ax, 0).(x, y)
-    *distance_to_facet =
-      (omega_x >= 0.0)
-      ? ((edgex[cellx + 1]) - x) * mag_u0 * u_x_inv
-      : ((edgex[cellx] - OPEN_BOUND_CORRECTION) - x) * mag_u0 * u_x_inv;
-  } else {
-    // We are centered on the origin, so the x component is 0 after travelling
-    // along the y axis to the edge (0, ay).(x, y)
-    *distance_to_facet =
-      (omega_y >= 0.0)
-      ? ((edgey[celly + 1]) - y) * mag_u0 * u_y_inv
-      : ((edgey[celly] - OPEN_BOUND_CORRECTION) - y) * mag_u0 * u_y_inv;
-  }
+  *distance_to_facet = (*x_facet) ? dt_x*mag_u0 : dt_y*mag_u0;
 }
 
 // Calculate the energy deposition in the cell
@@ -649,7 +600,6 @@ static inline double calculate_energy_deposition(
 static inline double microscopic_cs_for_energy_linear(
     const CrossSection* cs, const double energy, int* cs_index, int* found) {
 
-  int ind = 0;
   double* keys = cs->keys;
   double* values = cs->values;
 
@@ -657,8 +607,8 @@ static inline double microscopic_cs_for_energy_linear(
   // new energy
   const int direction = (energy > keys[*cs_index]) ? 1 : -1;
 
-  // This search will move in the correct direction towards the new energy
-  // group
+  // This search will move in the correct direction towards the new energy group
+  int ind = 0;
   for (ind = *cs_index; ind >= 0 && ind < cs->nentries; ind += direction) {
     // Check if we have found the new energy group index
     if (energy >= keys[ind] && energy < keys[ind + 1]) {
@@ -837,8 +787,8 @@ void generate_random_numbers(const uint64_t master_key,
   threefry4x64_ctr_t rand = threefry4x64(counter, key);
 
   // Turn our random numbers from integrals to double precision
-  *rn0 = rand.v[0] * factor + half_factor;
-  *rn1 = rand.v[1] * factor + half_factor;
-  *rn2 = rand.v[2] * factor + half_factor;
-  *rn3 = rand.v[3] * factor + half_factor;
+  *rn0 = rand.v[0] * FACTOR + HALF_FACTOR;
+  *rn1 = rand.v[1] * FACTOR + HALF_FACTOR;
+  *rn2 = rand.v[2] * FACTOR + HALF_FACTOR;
+  *rn3 = rand.v[3] * FACTOR + HALF_FACTOR;
 }

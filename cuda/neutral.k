@@ -206,7 +206,6 @@ __global__ void handle_particles_kernel(
   if (gid < nparticles && e >= MIN_ENERGY_OF_INTEREST) {
     nprocessed++;
 
-    int x_facet = 0;
     int absorb_cs_index = -1;
     int scatter_cs_index = -1;
     double cell_mfp = 0.0;
@@ -284,26 +283,8 @@ __global__ void handle_particles_kernel(
       double mag_u0 = speed;
 
       // Work out the distance until the particle hits a facet
-      double distance_to_facet = 0.0;
-
-      x_facet = (dt_x < dt_y) ? 1 : 0;
-      if (x_facet) {
-        // We are centered on the origin, so the y component is 0 after
-        // travelling along the x axis to the edge (ax, 0).(x, y)
-        distance_to_facet =
-          (omega_x >= 0.0)
-          ? (x1 - x) * mag_u0 * u_x_inv
-          : ((x0 - OPEN_BOUND_CORRECTION) - x) * mag_u0 * u_x_inv;
-      } else {
-        // We are centered on the origin, so the x component is 0 after
-        // travelling along the y axis to the edge (0, ay).(x, y)
-        distance_to_facet =
-          (omega_y >= 0.0)
-          ? (y1 - y) * mag_u0 * u_y_inv
-          : ((y0 - OPEN_BOUND_CORRECTION) - y) * mag_u0 * u_y_inv;
-      }
-
-      // Calculate the distances to next events
+      int x_facet = (dt_x < dt_y) ? 1 : 0;
+      const double distance_to_facet = (x_facet) ? dt_x*mag_u0 : dt_y*mag_u0;
       const double distance_to_collision = mfp_to_collision * cell_mfp;
       const double distance_to_census = speed * dt_to_census;
       const double pabsorb = macroscopic_cs_absorb * cell_mfp;
@@ -416,43 +397,12 @@ __global__ void handle_particles_kernel(
             energy_deposition * inv_ntotal_particles);
         energy_deposition = 0.0;
 
-        if (x_facet) {
-          if (omega_x > 0.0) {
-            // Reflect at the boundary
-            if (cellx >= (global_nx - 1)) {
-              omega_x = -(omega_x);
-            } else {
-              // Moving to right cell
-              cellx++;
-            }
-          } else if (omega_x < 0.0) {
-            if (cellx <= 0) {
-              // Reflect at the boundary
-              omega_x = -(omega_x);
-            } else {
-              // Moving to left cell
-              cellx--;
-            }
-          }
-        } else {
-          if (omega_y > 0.0) {
-            // Reflect at the boundary
-            if (celly >= (global_ny - 1)) {
-              omega_y = -(omega_y);
-            } else {
-              // Moving to north cell
-              celly++;
-            }
-          } else if (omega_y < 0.0) {
-            // Reflect at the boundary
-            if (celly <= 0) {
-              omega_y = -(omega_y);
-            } else {
-              // Moving to south cell
-              celly--;
-            }
-          }
-        }
+        omega_x = ((x_facet) && (cellx >= (global_nx - 1) || cellx <= 0)) ? -omega_x : omega_x;
+        cellx += ((x_facet) && (omega_x > 0.0) && (cellx < (global_nx - 1))) ? 1 : 0;
+        cellx += ((x_facet) && (omega_x < 0.0) && (cellx > 0)) ? -1 : 0;
+        omega_y = ((!x_facet) && (celly >= (global_ny - 1) || celly <= 0)) ? -omega_y : omega_y;
+        celly += ((!x_facet) && (omega_y > 0.0) && (celly < (global_ny - 1))) ? 1 : 0;
+        celly += ((!x_facet) && (omega_y < 0.0) && (celly > 0)) ? -1 : 0;
 
         // Update the data based on new cell
         local_density = density[celly * (nx + 2 * pad) + cellx];

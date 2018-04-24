@@ -14,21 +14,17 @@ void handle_particles(
 
 
 // Handle facet event
-static inline void facet_event(const int global_nx, const int global_ny, const int nx,
-    const int ny, const int x_off, const int y_off,
-    const double inv_ntotal_particles,
-    const double* distance_to_facet, const double* speed,
-    const double* cell_mfp, const int* x_facet, const double* density,
-    const int* neighbours, const int ip, 
-    double* energy_deposition, double* number_density,
-    double* microscopic_cs_scatter, double* microscopic_cs_absorb,
-    double* macroscopic_cs_scatter, double* macroscopic_cs_absorb,
-    double* energy_deposition_tally, 
-    int* cellx, int* celly, double* local_density, double* p_energy, 
-    double* p_weight, int* p_cellx, int* p_celly, double* p_mfp_to_collision, 
-    double* p_dt_to_census, double* p_x, double* p_y, double* p_omega_x, 
-    double* p_omega_y);
-
+static inline void facet_event(
+    const int global_nx, const int global_ny, const int nx, const int ny, 
+    const int x_off, const int y_off, const double inv_ntotal_particles, 
+    const double* distance_to_facet, const double* speed, const double* cell_mfp, 
+    const int* x_facet, const double* density, const int* neighbours, const int ip, 
+    double* energy_deposition, double* number_density, double* microscopic_cs_scatter, 
+    double* microscopic_cs_absorb, double* macroscopic_cs_scatter, 
+    double* macroscopic_cs_absorb, double* energy_deposition_tally, 
+    double* local_density, double* p_energy, double* p_weight, int* p_cellx, 
+    int* p_celly, double* p_mfp_to_collision, double* p_dt_to_census, double* p_x, 
+    double* p_y, double* p_omega_x, double* p_omega_y);
 
 // Handles a collision event
 static inline void collision_event(
