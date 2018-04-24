@@ -24,7 +24,7 @@ static inline void facet_event(const int global_nx, const int global_ny, const i
     double* microscopic_cs_scatter, double* microscopic_cs_absorb,
     double* macroscopic_cs_scatter, double* macroscopic_cs_absorb,
     double* energy_deposition_tally, 
-    int* cellx, int* celly, double* local_density, double* p_energy, 
+    double* local_density, double* p_energy, 
     double* p_weight, int* p_cellx, int* p_celly, double* p_mfp_to_collision, 
     double* p_dt_to_census, double* p_x, double* p_y, double* p_omega_x, 
     double* p_omega_y);
@@ -44,7 +44,7 @@ static inline void collision_event(
     double* speed, double* p_x, double* p_y, int* p_dead, double* p_energy, 
     double* p_omega_x, double* p_omega_y, uint64_t* p_key, 
     double* p_mfp_to_collision, double* p_dt_to_census, double* p_weight,
-    int* p_cellx, int* p_celly);
+    int* p_cellx, int* p_celly, double* failed_energy);
 
 // Handles the census event
 void census_event(const int global_nx, const int nx, const int x_off,
@@ -95,7 +95,7 @@ double microscopic_cs_for_energy_binary(
 
 // Fetch the cross section for a particular energy value
 double microscopic_cs_for_energy_linear(
-    const CrossSection* cs, const double energy, int* cs_index);
+    const CrossSection* cs, const double energy, int* cs_index, double* failed_energy);
 
 // Generates a pair of random numbers
 void generate_random_numbers(const uint64_t master_key,
