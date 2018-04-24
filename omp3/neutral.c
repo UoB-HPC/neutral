@@ -386,8 +386,9 @@ static inline void collision_event(
       ((MASS_NO + 1.0) * (MASS_NO + 1.0));
 
     // Convert the angle into the laboratory frame of reference
-    double cos_theta = 0.5 * ((MASS_NO + 1.0) * sqrt(e_new / p_energy[ip]) -
-        (MASS_NO - 1.0) * sqrt(p_energy[ip] / e_new));
+    const double cos_theta = 
+      0.5*(MASS_NO + 1.0)*sqrt(e_new / p_energy[ip]) - 
+      0.5*(MASS_NO - 1.0)*sqrt(p_energy[ip] / e_new);
 
     // Alter the direction of the velocities
     const double sin_theta = sqrt(1.0 - cos_theta * cos_theta);

@@ -51,7 +51,7 @@ endif
 # Default compiler
 ARCH_LINKER    		= $(ARCH_COMPILER_CC)
 ARCH_FLAGS     		= $(CFLAGS_$(COMPILER))
-ARCH_LDFLAGS   		= $(ARCH_FLAGS) -lm
+ARCH_LDFLAGS   		= $(ARCH_FLAGS) #-lm
 ARCH_BUILD_DIR 		= ../obj/neutral/
 ARCH_DIR       		= ..
 
