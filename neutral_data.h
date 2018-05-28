@@ -54,7 +54,6 @@ typedef struct {
   double* weight;           // weight of the particle
   double* dt_to_census;     // the time until census is reached
   double* mfp_to_collision; // the mean free paths until a collision
-  uint64_t* key;            // key for random number generation
   int* cellx;               // x position in mesh
   int* celly;               // y position in mesh
   int* dead;                // particle is dead
@@ -73,7 +72,6 @@ typedef struct {
   double weight;           // weight of the particle
   double dt_to_census;     // the time until census is reached
   double mfp_to_collision; // the mean free paths until a collision
-  uint64_t key;            // key for random number generation
   int cellx;               // x position in mesh
   int celly;               // y position in mesh
   int dead;                // particle is dead

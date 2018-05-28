@@ -3,8 +3,8 @@
 // Handles the current active batch of particles
 void handle_particles(
     const int global_nx, const int global_ny, const int nx, const int ny,
-    const int pad, const int x_off, const int y_off, const int initial,
-    const double dt, const int* neighbours, const double* density,
+    const uint64_t timestep, const int pad, const int x_off, const int y_off, 
+    const int initial, const double dt, const int* neighbours, const double* density,
     const double* edgex, const double* edgey, const double* edgedx,
     const double* edgedy, uint64_t* facets, uint64_t* collisions,
     const int ntotal_particles,
@@ -28,7 +28,7 @@ int facet_event(const int global_nx, const int global_ny, const int nx,
 // Handles a collision event
 int collision_event(
     const int global_nx, const int nx, const int x_off, const int y_off,
-    const double inv_ntotal_particles, const double distance_to_collision,
+    const uint64_t pkey, const double inv_ntotal_particles, const double distance_to_collision,
     const double local_density, const CrossSection* cs_scatter_table,
     const CrossSection* cs_absorb_table, Particle* particle, uint64_t* counter,
     double* energy_deposition,

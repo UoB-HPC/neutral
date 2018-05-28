@@ -84,19 +84,21 @@ __device__ double calculate_energy_deposition(
          heating_response * number_density;
 }
 
-__device__ void generate_random_numbers(const uint64_t master_key,
-                                        const uint64_t secondary_key,
-                                        const uint64_t gid, double* rn0,
-                                        double* rn1) {
-  threefry2x64_ctr_t counter;
+// Generates a pair of random numbers
+__device__ void generate_random_numbers(
+    const uint64_t secondary_key, const uint64_t counter,
+    double* rn0, double* rn1) {
+
+  const int nrns = 2;
+  threefry2x64_ctr_t ctr;
   threefry2x64_ctr_t key;
-  counter.v[0] = gid;
-  counter.v[1] = 0;
-  key.v[0] = master_key;
+  ctr.v[0] = counter*nrns + 1;
+  ctr.v[1] = counter*nrns + 2;
+  key.v[0] = secondary_key;
   key.v[1] = secondary_key;
 
   // Generate the random numbers
-  threefry2x64_ctr_t rand = threefry2x64(counter, key);
+  threefry2x64_ctr_t rand = threefry2x64(ctr, key);
 
   // Turn our random numbers from integrals to double precision
   uint64_t max_uint64 = UINT64_C(0xFFFFFFFFFFFFFFFF);
@@ -111,7 +113,7 @@ __global__ void inject_particles_kernel(
     const int y_off, const double local_particle_left_off,
     const double local_particle_bottom_off, const double local_particle_width,
     const double local_particle_height, const int nparticles, const double dt,
-    const double initial_energy, const int master_key, const double* edgex,
+    const double initial_energy, const int timestep, const double* edgex,
     const double* edgey, double* x, double* y, int* particle_cellx,
     int* particle_celly, double* omega_x, double* omega_y, double* e,
     double* weight, double* dt_to_census, double* mfp_to_collision) {
@@ -122,7 +124,7 @@ __global__ void inject_particles_kernel(
 
   // Generate a pool of random numbers
   double rn[NRANDOM_NUMBERS];
-  generate_random_numbers(master_key, 4, gid, &rn[0], &rn[1]);
+  generate_random_numbers(timestep*nparticles+gid, gid, &rn[0], &rn[1]);
 
   // Set the initial nandom location of the particle inside the source region
   x[gid] = local_particle_left_off + rn[0] * local_particle_width;
