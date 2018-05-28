@@ -84,7 +84,6 @@ void handle_particles(
     // Calculate the particles block offset, accounting for some remainder
     const int thread_block_off = tid * nb_per_thread;
 
-    int counter_off[BLOCK_SIZE];
     int x_facet[BLOCK_SIZE];
     int absorb_cs_index[BLOCK_SIZE];
     int scatter_cs_index[BLOCK_SIZE];
@@ -99,11 +98,6 @@ void handle_particles(
     double energy_deposition[BLOCK_SIZE];
     double distance_to_facet[BLOCK_SIZE];
     int next_event[BLOCK_SIZE];
-
-    // Populate the counter offset
-    for(int cc = 0; cc < BLOCK_SIZE; ++cc) {
-      counter_off[cc] = 2*cc;
-    }
 
     // Loop over the blocks this thread is responsible for
     for (int b = 0; b < nb_per_thread; ++b) {
@@ -122,12 +116,10 @@ void handle_particles(
       double* p_omega_y = &particle_block->omega_y[0];
       double* p_weight = &particle_block->weight[0];
 
-      uint64_t counter = 0;
-
       START_PROFILING(&tp);
 
       // Initialise cached particle data
-#pragma omp simd reduction(+: nparticles, counter)
+#pragma omp simd reduction(+: nparticles)
       for (int ip = 0; ip < BLOCK_SIZE; ++ip) {
         if (p_dead[ip]) {
           continue;
@@ -163,13 +155,14 @@ void handle_particles(
           p_dt_to_census[ip] = dt;
           double rn[4];
           generate_random_numbers(
-              *master_key, p_key[ip], counter++, &rn[0], &rn[1], &rn[2], &rn[3]);
-          p_mfp_to_collision[ip] =
-            -log(rn[0]) / macroscopic_cs_scatter[ip];
+              *master_key, p_key[ip], ip, &rn[0], &rn[1], &rn[2], &rn[3]);
+          p_mfp_to_collision[ip] = -log(rn[0]) / macroscopic_cs_scatter[ip];
         }
       }
 
       STOP_PROFILING(&tp, "cache_init");
+
+      uint64_t counter = 1;
 
       // Loop until we have reached census
       while (1) {
@@ -229,7 +222,7 @@ void handle_particles(
            collision_event(
               ip, global_nx, nx, x_off, y_off, inv_ntotal_particles,
               distance_to_collision, local_density[ip], cs_scatter_table,
-              cs_absorb_table, counter_off[ip] + counter, master_key,
+              cs_absorb_table, counter, master_key,
               &energy_deposition[ip], &number_density[ip],
               &microscopic_cs_scatter[ip], &microscopic_cs_absorb[ip],
               &macroscopic_cs_scatter[ip], &macroscopic_cs_absorb[ip],
@@ -248,7 +241,7 @@ void handle_particles(
         }
 
         // Have to adjust the counter for next usage
-        counter += 2*BLOCK_SIZE;
+        counter += 2;
 
 #ifdef TALLY_OUT
         START_PROFILING(&tp);
@@ -323,7 +316,7 @@ static inline void collision_event(
     const int ip, const int global_nx, const int nx, const int x_off, const int y_off,
     const double inv_ntotal_particles, const double distance_to_collision,
     const double local_density, const CrossSection* cs_scatter_table,
-    const CrossSection* cs_absorb_table, uint64_t counter_off,
+    const CrossSection* cs_absorb_table, uint64_t counter,
     const uint64_t* master_key, double* energy_deposition,
     double* number_density, double* microscopic_cs_scatter,
     double* microscopic_cs_absorb, double* macroscopic_cs_scatter,
@@ -349,7 +342,7 @@ static inline void collision_event(
 
   double rn1[4];
   generate_random_numbers(
-      *master_key, p_key[ip], counter_off, &rn1[0], &rn1[1], &rn1[2], &rn1[3]);
+      *master_key, p_key[ip], ip + counter*BLOCK_SIZE, &rn1[0], &rn1[1], &rn1[2], &rn1[3]);
 
   if (rn1[0] < p_absorb) {
     /* Model particles absorption */
