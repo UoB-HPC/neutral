@@ -777,10 +777,9 @@ inline double pcg64u01f_random_r(struct pcg_state_64 *rng)
 inline double generate_random_number(
     const uint64_t pkey, const uint64_t master_key, const uint64_t counter) {
 
-  size_t seed;
+  size_t seed = counter;
   seed += 1e16*master_key;   // iterations 
   seed += 1e5*pkey;          // particle index
-  seed += counter;           // random number offset
 
   pcg64si_random_t rng;
   pcg64si_srandom_r(&rng, seed);
