@@ -35,10 +35,10 @@ void solve_transport_2d(
   }
 
   handle_particles(global_nx, global_ny, nx, ny, pad, x_off, y_off, 1, dt,
-                   neighbours, density, edgex, edgey, edgedx, edgedy, facet_events,
-                   collision_events, master_key, ntotal_particles,
-                   *nparticles, particles, cs_scatter_table, cs_absorb_table,
-                   energy_deposition_tally);
+      neighbours, density, edgex, edgey, edgedx, edgedy, facet_events,
+      collision_events, master_key, ntotal_particles,
+      *nparticles, particles, cs_scatter_table, cs_absorb_table,
+      energy_deposition_tally);
 }
 
 // Handles the current active batch of particles
@@ -217,7 +217,7 @@ void handle_particles(
           const double distance_to_collision =
             p_mfp_to_collision[ip] * cell_mfp[ip];
 
-           collision_event(
+          collision_event(
               ip, global_nx, nx, x_off, y_off, inv_ntotal_particles,
               distance_to_collision, local_density[ip], cs_scatter_table,
               cs_absorb_table, counter, master_key,
@@ -762,24 +762,24 @@ size_t inject_particles(const int nparticles, const int global_nx,
 
 inline double my_ldexp(double val, int exp)
 {
-    uint64_t expull = exp;
-    const uint64_t res = *((uint64_t*)&val) + (expull << 52ULL);
-    return *((double*)&res);
+  uint64_t expull = exp;
+  const uint64_t res = *((uint64_t*)&val) + (expull << 52ULL);
+  return *((double*)&res);
 }
 
 inline double pcg64u01f_random_r(struct pcg_state_64 *rng)
 {
-    const uint64_t uval = pcg64si_random_r(rng);
-    const double x = my_ldexp(uval, -64);
-    return x;
+  const uint64_t uval = pcg64si_random_r(rng);
+  const double x = my_ldexp(uval, -64);
+  return x;
 }
 
 inline double generate_random_number(
     const uint64_t pkey, const uint64_t master_key, const uint64_t counter) {
 
   size_t seed;
-  seed += 1e11*master_key;   // iterations 
-  seed += 1e6*pkey; // particle index
+  seed += 1e16*master_key;   // iterations 
+  seed += 1e5*pkey;          // particle index
   seed += counter;           // random number offset
 
   pcg64si_random_t rng;
