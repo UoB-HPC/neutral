@@ -33,7 +33,7 @@ void solve_transport_2d(
     return;
   }
 
-  handle_particles(global_nx, global_ny, nx, ny, pad, x_off, y_off, 1, dt,
+  handle_particles(global_nx, global_ny, nx, ny, timestep, pad, x_off, y_off, 1, dt,
                    neighbours, density, edgex, edgey, edgedx, edgedy, facet_events,
                    collision_events, ntotal_particles,
                    *nparticles, particles, cs_scatter_table, cs_absorb_table,
@@ -43,6 +43,7 @@ void solve_transport_2d(
 // Handles the current active batch of particles
 void handle_particles(
     const int global_nx, const int global_ny, const int nx, const int ny,
+    const uint64_t timestep,
     const int pad, const int x_off, const int y_off, const int initial,
     const double dt, const int* neighbours, const double* density,
     const double* edgex, const double* edgey, const double* edgedx,
@@ -93,13 +94,14 @@ void handle_particles(
     double speed[BLOCK_SIZE];
     double energy_deposition[BLOCK_SIZE];
     double distance_to_facet[BLOCK_SIZE];
+    uint64_t key[BLOCK_SIZE];
     int next_event[BLOCK_SIZE];
 
     // Loop over the blocks this thread is responsible for
     for (int b = 0; b < nb_per_thread; ++b) {
-      Particle* particle_block = &particles[thread_block_off + b];
+      const uint64_t bid = thread_block_off + b;
+      Particle* particle_block = &particles[bid];
 
-      uint64_t* p_key = &particle_block->key[0];
       int* p_dead = &particle_block->dead[0];
       int* p_cellx = &particle_block->cellx[0];
       int* p_celly = &particle_block->celly[0];
@@ -147,13 +149,16 @@ void handle_particles(
           number_density[ip] * microscopic_cs_absorb[ip] * BARNS;
         speed[ip] = sqrt((2.0 * p_energy[ip] * eV_TO_J) / PARTICLE_MASS);
 
+        const uint64_t pid = bid*BLOCK_SIZE + ip;
+        key[ip] = timestep*ntotal_particles + pid;
+
         // Set time to census and MFPs until collision, unless travelled
         // particle
         if (initial) {
           p_dt_to_census[ip] = dt;
           double rn[4];
           generate_random_numbers(
-              p_key[ip], counter, &rn[0], &rn[1], &rn[2], &rn[3]);
+              key[ip], counter, &rn[0], &rn[1], &rn[2], &rn[3]);
           p_mfp_to_collision[ip] = -log(rn[0]) / macroscopic_cs_scatter[ip];
         }
       }
@@ -220,12 +225,12 @@ void handle_particles(
            collision_event(
               ip, global_nx, nx, x_off, y_off, inv_ntotal_particles,
               distance_to_collision, local_density[ip], cs_scatter_table,
-              cs_absorb_table, counter, &energy_deposition[ip], &number_density[ip],
+              cs_absorb_table, key, counter, &energy_deposition[ip], &number_density[ip],
               &microscopic_cs_scatter[ip], &microscopic_cs_absorb[ip],
               &macroscopic_cs_scatter[ip], &macroscopic_cs_absorb[ip],
               energy_deposition_tally, &scatter_cs_index[ip],
               &absorb_cs_index[ip], &speed[ip],p_x, p_y, p_dead, p_energy, 
-              p_omega_x, p_omega_y, p_key, p_mfp_to_collision, p_dt_to_census, 
+              p_omega_x, p_omega_y, p_mfp_to_collision, p_dt_to_census, 
               p_weight, p_cellx, p_celly, &found[ip]);
         }
         STOP_PROFILING(&tp, "collision");
@@ -295,9 +300,6 @@ void handle_particles(
             energy_deposition_tally, p_x, p_y, p_omega_x, p_omega_y, 
             p_mfp_to_collision, p_dt_to_census, p_energy, p_weight, 
             p_cellx, p_celly);
-
-        // Update the keys so future trips don't collide with random number space
-        p_key[ip] += nparticles;
       }
       STOP_PROFILING(&tp, "census");
     }
@@ -317,13 +319,12 @@ static inline void collision_event(
     const int ip, const int global_nx, const int nx, const int x_off, const int y_off,
     const double inv_ntotal_particles, const double distance_to_collision,
     const double local_density, const CrossSection* cs_scatter_table,
-    const CrossSection* cs_absorb_table, uint64_t counter,
+    const CrossSection* cs_absorb_table, uint64_t* key, uint64_t counter,
     double* energy_deposition, double* number_density, double* microscopic_cs_scatter,
     double* microscopic_cs_absorb, double* macroscopic_cs_scatter,
     double* macroscopic_cs_absorb, double* energy_deposition_tally,
     int* scatter_cs_index, int* absorb_cs_index, double* speed, double* p_x, 
-    double* p_y, int* p_dead, double* p_energy, 
-    double* p_omega_x, double* p_omega_y, uint64_t* p_key, 
+    double* p_y, int* p_dead, double* p_energy, double* p_omega_x, double* p_omega_y, 
     double* p_mfp_to_collision, double* p_dt_to_census, double* p_weight, 
     int* p_cellx, int* p_celly, int* found) {
 
@@ -342,7 +343,7 @@ static inline void collision_event(
 
   double rn1[4];
   generate_random_numbers(
-      p_key[ip], counter, &rn1[0], &rn1[1], &rn1[2], &rn1[3]);
+      key[ip], counter, &rn1[0], &rn1[1], &rn1[2], &rn1[3]);
 
   if (rn1[0] < p_absorb) {
     /* Model particles absorption */
@@ -754,7 +755,6 @@ uint64_t inject_particles(const int nparticles, const int global_nx,
       p->dt_to_census[k] = dt;
       p->mfp_to_collision[k] = 0.0;
       p->dead[k] = 0;
-      p->key[k] = pid;
     }
   }
 

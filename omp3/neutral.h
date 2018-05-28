@@ -3,6 +3,7 @@
 // Handles the current active batch of particles
 void handle_particles(
     const int global_nx, const int global_ny, const int nx, const int ny,
+    const uint64_t timestep,
     const int pad, const int x_off, const int y_off, const int initial,
     const double dt, const int* neighbours, const double* density,
     const double* edgex, const double* edgey, const double* edgedx,
@@ -31,13 +32,13 @@ static inline void collision_event(
     const int ip, const int global_nx, const int nx, const int x_off, const int y_off,
     const double inv_ntotal_particles, const double distance_to_collision,
     const double local_density, const CrossSection* cs_scatter_table,
-    const CrossSection* cs_absorb_table, uint64_t counter,
+    const CrossSection* cs_absorb_table, uint64_t* key,  uint64_t counter,
     double* energy_deposition, double* number_density, double* microscopic_cs_scatter,
     double* microscopic_cs_absorb, double* macroscopic_cs_scatter,
     double* macroscopic_cs_absorb, double* energy_deposition_tally,
     int* scatter_cs_index, int* absorb_cs_index, 
     double* speed, double* p_x, double* p_y, int* p_dead, double* p_energy, 
-    double* p_omega_x, double* p_omega_y, uint64_t* p_key, 
+    double* p_omega_x, double* p_omega_y, 
     double* p_mfp_to_collision, double* p_dt_to_census, double* p_weight,
     int* p_cellx, int* p_celly, int* found);
 
