@@ -113,7 +113,7 @@ __global__ void inject_particles_kernel(
     const int y_off, const double local_particle_left_off,
     const double local_particle_bottom_off, const double local_particle_width,
     const double local_particle_height, const int nparticles, const double dt,
-    const double initial_energy, const int timestep, const double* edgex,
+    const double initial_energy, const double* edgex,
     const double* edgey, double* x, double* y, int* particle_cellx,
     int* particle_celly, double* omega_x, double* omega_y, double* e,
     double* weight, double* dt_to_census, double* mfp_to_collision) {
@@ -124,7 +124,7 @@ __global__ void inject_particles_kernel(
 
   // Generate a pool of random numbers
   double rn[NRANDOM_NUMBERS];
-  generate_random_numbers(timestep*nparticles+gid, gid, &rn[0], &rn[1]);
+  generate_random_numbers(gid, 0, &rn[0], &rn[1]);
 
   // Set the initial nandom location of the particle inside the source region
   x[gid] = local_particle_left_off + rn[0] * local_particle_width;
@@ -153,7 +153,7 @@ __global__ void inject_particles_kernel(
   // Generating theta has uniform density, however 0.0 and 1.0 produce the same
   // value which introduces very very very small bias...
 
-  generate_random_numbers(master_key, 5, gid, &rn[0], &rn[1]);
+  generate_random_numbers(gid, 1, &rn[0], &rn[1]);
   const double theta = 2.0 * M_PI * rn[0];
   omega_x[gid] = cos(theta);
   omega_y[gid] = sin(theta);
@@ -170,17 +170,17 @@ __global__ void inject_particles_kernel(
 // Handles an individual particle.
 __global__ void handle_particles_kernel(
     const int nparticles, const int global_nx, const int global_ny,
-    const int nx, const int ny, const int pad, const int x_off, const int y_off,
-    const double dt, const int initial, const int ntotal_particles,
-    const double* density, const double* edgex, const double* edgey,
-    const double* edgedx, const double* edgedy, double* energy_deposition_tally,
-    int* particle_cellx, int* particle_celly, const int cs_scatter_nentries,
-    const int cs_absorb_nentries, const double* cs_scatter_keys,
-    const double* cs_scatter_values, const double* cs_absorb_keys,
-    const double* cs_absorb_values, double* particle_e,
+    const int nx, const int ny, const uint64_t timestep, const int pad, 
+    const int x_off, const int y_off, const double dt, const int initial, 
+    const int ntotal_particles, const double* density, const double* edgex, 
+    const double* edgey, const double* edgedx, const double* edgedy, 
+    double* energy_deposition_tally, int* particle_cellx, int* particle_celly, 
+    const int cs_scatter_nentries, const int cs_absorb_nentries, 
+    const double* cs_scatter_keys, const double* cs_scatter_values, 
+    const double* cs_absorb_keys, const double* cs_absorb_values, double* particle_e,
     double* particle_dt_to_census, double* particle_mfp_to_collision,
     double* particle_weight, double* particle_omega_x, double* particle_omega_y,
-    double* particle_x, double* particle_y, uint64_t master_key,
+    double* particle_x, double* particle_y, 
     uint64_t* nfacets_reduce_array, uint64_t* ncollisions_reduce_array, 
     uint64_t* nprocessed_reduce_array) {
 
@@ -195,8 +195,10 @@ __global__ void handle_particles_kernel(
   uint64_t nprocessed = 0;
 
   const int gid = blockIdx.x * blockDim.x + threadIdx.x;
-  const int pindex = gid;
-  double e = particle_e[pindex];
+  const int pind = gid;
+  double e = particle_e[pind];
+
+  const uint64_t pkey = timestep*ntotal_particles + pind;
 
   if (gid < nparticles && e >= MIN_ENERGY_OF_INTEREST) {
     nprocessed++;
@@ -208,18 +210,18 @@ __global__ void handle_particles_kernel(
     uint64_t local_key = 0;
 
     // Determine the current cell
-    int cellx = particle_cellx[pindex] - x_off + pad;
-    int celly = particle_celly[pindex] - y_off + pad;
+    int cellx = particle_cellx[pind] - x_off + pad;
+    int celly = particle_celly[pind] - y_off + pad;
 
     // Fetch particle data
-    double x = particle_x[pindex];
-    double y = particle_y[pindex];
-    double weight = particle_weight[pindex];
-    double omega_x = particle_omega_x[pindex];
-    double omega_y = particle_omega_y[pindex];
+    double x = particle_x[pind];
+    double y = particle_y[pind];
+    double weight = particle_weight[pind];
+    double omega_x = particle_omega_x[pind];
+    double omega_y = particle_omega_y[pind];
     double local_density = density[celly * (nx + 2 * pad) + cellx];
-    double dt_to_census = particle_dt_to_census[pindex];
-    double mfp_to_collision = particle_mfp_to_collision[pindex];
+    double dt_to_census = particle_dt_to_census[pind];
+    double mfp_to_collision = particle_mfp_to_collision[pind];
 
     // Fetch the cross sections and prepare related quantities
     double microscopic_cs_scatter =
@@ -242,7 +244,7 @@ __global__ void handle_particles_kernel(
     // Set time to census and MFPs until collision, unless travelled particle
     if (initial) {
       dt_to_census = dt;
-      generate_random_numbers(master_key, local_key++, gid, &rn[0], &rn[1]);
+      generate_random_numbers(pkey, local_key++, &rn[0], &rn[1]);
       mfp_to_collision = -log(rn[0]) / macroscopic_cs_scatter;
     }
 
@@ -322,7 +324,7 @@ __global__ void handle_particles_kernel(
             microscopic_cs_absorb,
             microscopic_cs_scatter + microscopic_cs_absorb, pabsorb);
 
-        generate_random_numbers(master_key, local_key++, gid, &rn[0], &rn[1]);
+        generate_random_numbers(pkey, local_key++, &rn[0], &rn[1]);
 
         if (rn[0] < pabsorb) {
 
@@ -335,7 +337,7 @@ __global__ void handle_particles_kernel(
           /* Model elastic particle scattering */
 
           // Choose a random scattering angle between -1 and 1
-          generate_random_numbers(master_key, local_key++, gid, &rn[0], &rn[1]);
+          generate_random_numbers(pkey, local_key++, &rn[0], &rn[1]);
           const double mu_cm = 1.0 - 2.0 * rn[0];
 
           // Calculate the new energy based on the relation to angle of
@@ -480,16 +482,16 @@ __global__ void handle_particles_kernel(
     }
 
     // Store the final particle data
-    particle_e[pindex] = e;
-    particle_x[pindex] = x;
-    particle_y[pindex] = y;
-    particle_weight[pindex] = weight;
-    particle_omega_x[pindex] = omega_x;
-    particle_omega_y[pindex] = omega_y;
-    particle_dt_to_census[pindex] = dt_to_census;
-    particle_mfp_to_collision[pindex] = mfp_to_collision;
-    particle_cellx[pindex] = cellx;
-    particle_celly[pindex] = celly;
+    particle_e[pind] = e;
+    particle_x[pind] = x;
+    particle_y[pind] = y;
+    particle_weight[pind] = weight;
+    particle_omega_x[pind] = omega_x;
+    particle_omega_y[pind] = omega_y;
+    particle_dt_to_census[pind] = dt_to_census;
+    particle_mfp_to_collision[pind] = mfp_to_collision;
+    particle_cellx[pind] = cellx;
+    particle_celly[pind] = celly;
   }
 
   // Finalise the balance tally reductions
