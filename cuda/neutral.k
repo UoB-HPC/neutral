@@ -86,16 +86,15 @@ __device__ double calculate_energy_deposition(
 
 // Generates a pair of random numbers
 __device__ void generate_random_numbers(
-    const uint64_t secondary_key, const uint64_t counter,
+    const uint64_t pkey, const uint64_t master_key, const uint64_t counter,
     double* rn0, double* rn1) {
 
-  const int nrns = 2;
   threefry2x64_ctr_t ctr;
   threefry2x64_ctr_t key;
-  ctr.v[0] = counter*nrns + 1;
-  ctr.v[1] = counter*nrns + 2;
-  key.v[0] = secondary_key;
-  key.v[1] = secondary_key;
+  ctr.v[0] = counter;
+  ctr.v[1] = 0;
+  key.v[0] = pkey;
+  key.v[1] = master_key;
 
   // Generate the random numbers
   threefry2x64_ctr_t rand = threefry2x64(ctr, key);
@@ -124,7 +123,7 @@ __global__ void inject_particles_kernel(
 
   // Generate a pool of random numbers
   double rn[NRANDOM_NUMBERS];
-  generate_random_numbers(gid, 0, &rn[0], &rn[1]);
+  generate_random_numbers(gid, 0, 0, &rn[0], &rn[1]);
 
   // Set the initial nandom location of the particle inside the source region
   x[gid] = local_particle_left_off + rn[0] * local_particle_width;
@@ -153,7 +152,7 @@ __global__ void inject_particles_kernel(
   // Generating theta has uniform density, however 0.0 and 1.0 produce the same
   // value which introduces very very very small bias...
 
-  generate_random_numbers(gid, 1, &rn[0], &rn[1]);
+  generate_random_numbers(gid, 1, 0, &rn[0], &rn[1]);
   const double theta = 2.0 * M_PI * rn[0];
   omega_x[gid] = cos(theta);
   omega_y[gid] = sin(theta);
@@ -242,7 +241,7 @@ __global__ void handle_particles_kernel(
     // Set time to census and MFPs until collision, unless travelled particle
     if (initial) {
       dt_to_census = dt;
-      generate_random_numbers(ping, master_key, local_key++, &rn[0], &rn[1]);
+      generate_random_numbers(pind, master_key, local_key++, &rn[0], &rn[1]);
       mfp_to_collision = -log(rn[0]) / macroscopic_cs_scatter;
     }
 
@@ -322,7 +321,7 @@ __global__ void handle_particles_kernel(
             microscopic_cs_absorb,
             microscopic_cs_scatter + microscopic_cs_absorb, pabsorb);
 
-        generate_random_numbers(ping, master_key, local_key++, &rn[0], &rn[1]);
+        generate_random_numbers(pind, master_key, local_key++, &rn[0], &rn[1]);
 
         if (rn[0] < pabsorb) {
 
@@ -335,7 +334,7 @@ __global__ void handle_particles_kernel(
           /* Model elastic particle scattering */
 
           // Choose a random scattering angle between -1 and 1
-          generate_random_numbers(ping, master_key, local_key++, &rn[0], &rn[1]);
+          generate_random_numbers(pind, master_key, local_key++, &rn[0], &rn[1]);
           const double mu_cm = 1.0 - 2.0 * rn[0];
 
           // Calculate the new energy based on the relation to angle of
