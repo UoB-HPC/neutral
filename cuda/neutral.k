@@ -96,15 +96,14 @@ __device__ void generate_random_numbers(
   threefry4x64_ctr_t ctr;
   threefry4x64_ctr_t key;
 
-  const int nrns = 4;
-  ctr.v[0] = counter*nrns+0;
-  ctr.v[1] = counter*nrns+1;
-  ctr.v[2] = counter*nrns+2;
-  ctr.v[3] = counter*nrns+3;
+  ctr.v[0] = counter;
+  ctr.v[1] = 0;
+  ctr.v[2] = 0;
+  ctr.v[3] = 0;
   key.v[0] = pkey;
-  key.v[1] = pkey;
-  key.v[2] = pkey;
-  key.v[3] = pkey;
+  key.v[1] = master_key;
+  key.v[2] = 0;
+  key.v[3] = 0;
 
   // Generate the random numbers
   threefry4x64_ctr_t rand = threefry4x64(ctr, key);
@@ -177,7 +176,7 @@ __global__ void inject_particles_kernel(
 // Handles an individual particle.
 __global__ void handle_particles_kernel(
     const int nparticles, const int global_nx, const int global_ny,
-    const int nx, const int ny, const uint64_t timestep, const int pad, 
+    const int nx, const int ny, const uint64_t master_key, const int pad, 
     const int x_off, const int y_off, const double dt, const int initial, 
     const int ntotal_particles, const double* density, const double* edgex, 
     const double* edgey, const double* edgedx, const double* edgedy, 
@@ -247,7 +246,7 @@ __global__ void handle_particles_kernel(
       dt_to_census = dt;
 
       double rn[NRANDOM_NUMBERS];
-      generate_random_numbers(timestep*nparticles + gid, counter++, &rn[0], &rn[1], &rn[2], &rn[3]);
+      generate_random_numbers(gid, master_key, counter++, &rn[0], &rn[1], &rn[2], &rn[3]);
 
       mfp_to_collision = -log(rn[0]) / macroscopic_cs_scatter;
     }
@@ -311,7 +310,7 @@ __global__ void handle_particles_kernel(
             microscopic_cs_scatter + microscopic_cs_absorb, pabsorb);
 
         double rn[NRANDOM_NUMBERS];
-        generate_random_numbers(timestep*nparticles + gid, counter++, &rn[0], &rn[1], &rn[2], &rn[3]);
+        generate_random_numbers(gid, master_key, counter++, &rn[0], &rn[1], &rn[2], &rn[3]);
 
         if (rn[0] < pabsorb) {
 
