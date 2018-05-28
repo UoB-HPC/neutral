@@ -36,11 +36,10 @@ static inline void collision_event(
     double* energy_deposition, double* number_density, double* microscopic_cs_scatter,
     double* microscopic_cs_absorb, double* macroscopic_cs_scatter,
     double* macroscopic_cs_absorb, double* energy_deposition_tally,
-    int* scatter_cs_index, int* absorb_cs_index, 
-    double* speed, double* p_x, double* p_y, int* p_dead, double* p_energy, 
-    double* p_omega_x, double* p_omega_y, 
+    int* scatter_cs_index, int* absorb_cs_index, double* speed, double* p_x, 
+    double* p_y, int* p_dead, double* p_energy, double* p_omega_x, double* p_omega_y, 
     double* p_mfp_to_collision, double* p_dt_to_census, double* p_weight,
-    int* p_cellx, int* p_celly, int* found);
+    int* p_cellx, int* p_celly, int* found, const uint64_t master_key);
 
 // Handles the census event
 void census_event(const int global_nx, const int nx, const int x_off,
@@ -94,5 +93,5 @@ double microscopic_cs_for_energy_linear(
     const CrossSection* cs, const double energy, int* cs_index, int* found);
 
 // Generates a pair of random numbers
-void generate_random_numbers(const uint64_t pkey, uint64_t counter,
-                             double* rn0, double* rn1, double* rn2, double* rn3);
+void generate_random_numbers(const uint64_t pkey, const uint64_t master_key, 
+    const uint64_t counter, double* rn0, double* rn1, double* rn2, double* rn3);

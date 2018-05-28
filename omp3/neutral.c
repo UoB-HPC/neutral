@@ -19,7 +19,7 @@
 // Performs a solve of dependent variables for particle transport
 void solve_transport_2d(
     const int nx, const int ny, const int global_nx, const int global_ny,
-    uint64_t timestep, const int pad, const int x_off, const int y_off, 
+    const uint64_t master_key, const int pad, const int x_off, const int y_off, 
     const double dt, const int ntotal_particles, int* nparticles, 
     const int* neighbours, Particle* particles, const double* density,
     const double* edgex, const double* edgey, const double* edgedx,
@@ -33,7 +33,7 @@ void solve_transport_2d(
     return;
   }
 
-  handle_particles(global_nx, global_ny, nx, ny, timestep, pad, x_off, y_off, 1, dt,
+  handle_particles(global_nx, global_ny, nx, ny, master_key, pad, x_off, y_off, 1, dt,
                    neighbours, density, edgex, edgey, edgedx, edgedy, facet_events,
                    collision_events, ntotal_particles,
                    *nparticles, particles, cs_scatter_table, cs_absorb_table,
@@ -43,9 +43,8 @@ void solve_transport_2d(
 // Handles the current active batch of particles
 void handle_particles(
     const int global_nx, const int global_ny, const int nx, const int ny,
-    const uint64_t timestep,
-    const int pad, const int x_off, const int y_off, const int initial,
-    const double dt, const int* neighbours, const double* density,
+    const uint64_t master_key, const int pad, const int x_off, const int y_off, 
+    const int initial, const double dt, const int* neighbours, const double* density,
     const double* edgex, const double* edgey, const double* edgedx,
     const double* edgedy, uint64_t* facets, uint64_t* collisions,
     const int ntotal_particles, const int nparticles_to_process, 
@@ -150,7 +149,7 @@ void handle_particles(
         speed[ip] = sqrt((2.0 * p_energy[ip] * eV_TO_J) / PARTICLE_MASS);
 
         const uint64_t pid = bid*BLOCK_SIZE + ip;
-        key[ip] = timestep*ntotal_particles + pid;
+        key[ip] = pid;
 
         // Set time to census and MFPs until collision, unless travelled
         // particle
@@ -158,7 +157,7 @@ void handle_particles(
           p_dt_to_census[ip] = dt;
           double rn[4];
           generate_random_numbers(
-              key[ip], counter, &rn[0], &rn[1], &rn[2], &rn[3]);
+              key[ip], master_key, counter, &rn[0], &rn[1], &rn[2], &rn[3]);
           p_mfp_to_collision[ip] = -log(rn[0]) / macroscopic_cs_scatter[ip];
         }
       }
@@ -231,7 +230,7 @@ void handle_particles(
               energy_deposition_tally, &scatter_cs_index[ip],
               &absorb_cs_index[ip], &speed[ip],p_x, p_y, p_dead, p_energy, 
               p_omega_x, p_omega_y, p_mfp_to_collision, p_dt_to_census, 
-              p_weight, p_cellx, p_celly, &found[ip]);
+              p_weight, p_cellx, p_celly, &found[ip], master_key);
         }
         STOP_PROFILING(&tp, "collision");
 
@@ -326,7 +325,7 @@ static inline void collision_event(
     int* scatter_cs_index, int* absorb_cs_index, double* speed, double* p_x, 
     double* p_y, int* p_dead, double* p_energy, double* p_omega_x, double* p_omega_y, 
     double* p_mfp_to_collision, double* p_dt_to_census, double* p_weight, 
-    int* p_cellx, int* p_celly, int* found) {
+    int* p_cellx, int* p_celly, int* found, const uint64_t master_key) {
 
   // Energy deposition stored locally for collision, not in tally mesh
   *energy_deposition += calculate_energy_deposition(
@@ -343,7 +342,7 @@ static inline void collision_event(
 
   double rn1[4];
   generate_random_numbers(
-      key[ip], counter, &rn1[0], &rn1[1], &rn1[2], &rn1[3]);
+      key[ip], master_key, counter, &rn1[0], &rn1[1], &rn1[2], &rn1[3]);
 
   if (rn1[0] < p_absorb) {
     /* Model particles absorption */
@@ -713,7 +712,7 @@ uint64_t inject_particles(const int nparticles, const int global_nx,
     for (int k = 0; k < BLOCK_SIZE; ++k) {
       const int pid = b*BLOCK_SIZE + k;
       double rn[4];
-      generate_random_numbers(pid, 0, &rn[0], &rn[1], &rn[2], &rn[3]);
+      generate_random_numbers(pid, 0, 0, &rn[0], &rn[1], &rn[2], &rn[3]);
 
       // Set the initial nandom location of the particle inside the source
       // region
@@ -763,21 +762,20 @@ uint64_t inject_particles(const int nparticles, const int global_nx,
 
 // Generates a pair of random numbers
 void generate_random_numbers(
-    const uint64_t pkey, uint64_t counter,
+    const uint64_t pkey, const uint64_t master_key, const uint64_t counter,
     double* rn0, double* rn1, double* rn2, double* rn3) {
 
   threefry4x64_ctr_t ctr;
   threefry4x64_ctr_t key;
 
-  const int nrns = 4;
-  ctr.v[0] = counter*nrns+0;
-  ctr.v[1] = counter*nrns+1;
-  ctr.v[2] = counter*nrns+2;
-  ctr.v[3] = counter*nrns+3;
+  ctr.v[0] = counter;
+  ctr.v[1] = 0;
+  ctr.v[2] = 0;
+  ctr.v[3] = 0;
   key.v[0] = pkey;
-  key.v[1] = pkey;
-  key.v[2] = pkey;
-  key.v[3] = pkey;
+  key.v[1] = master_key;
+  key.v[2] = 0;
+  key.v[3] = 0;
 
   // Generate the random numbers
   threefry4x64_ctr_t rand = threefry4x64(ctr, key);
