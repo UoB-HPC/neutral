@@ -209,7 +209,7 @@ void handle_particles(
 
         START_PROFILING(&tp);
         int found[BLOCK_SIZE];
-//#pragma omp simd
+#pragma omp simd
         for (int ip = 0; ip < BLOCK_SIZE; ++ip) {
           if (next_event[ip] != PARTICLE_COLLISION) {
             continue;
@@ -780,9 +780,9 @@ inline double generate_random_number(const uint64_t master_key,
     const uint64_t secondary_key, const uint64_t counter) {
 
   size_t seed;
-  seed += 1e18*master_key; // iterations 
+  seed += 1e18*master_key;   // iterations 
   seed += 1e6*secondary_key; // particle index
-  seed += counter; // random number offset
+  seed += counter;           // random number offset
 
   pcg64si_random_t rng;
   pcg64si_srandom_r(&rng, seed);

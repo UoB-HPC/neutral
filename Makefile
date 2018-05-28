@@ -2,12 +2,12 @@
 KERNELS  					 = omp3
 COMPILER 					 = INTEL
 MPI      					 = no
-OPTIONS  					+= -DTILES -DAoSoA -DMANUAL_ATOMIC #-DTALLY_OUT #-DENABLE_PROFILING -qopt-zmm-usage=high 
+OPTIONS  					+= -DTILES -DAoSoA -DMANUAL_ATOMIC #-DTALLY_OUT #-DENABLE_PROFILING
 ARCH_COMPILER_CC   = icc
 ARCH_COMPILER_CPP  = icpc
 
 # Compiler-specific flags
-CFLAGS_INTEL			 = -O3 -qopenmp -no-prec-div -std=gnu99 \
+CFLAGS_INTEL			 = -O3 -qopenmp -no-prec-div -std=c11 \
 											-DINTEL -Wall -qopt-report=5 -xCORE-AVX512 -qopt-zmm-usage=high
 CFLAGS_INTEL_KNL	 = -O3 -qopenmp -no-prec-div -std=gnu99 -DINTEL \
 										 -xMIC-AVX512 -Wall -qopt-report=5
@@ -20,9 +20,9 @@ CFLAGS_CRAY				 = -lrt -hlist=a
 CFLAGS_XL					 = -O3 -qsmp=omp
 CFLAGS_XL_OMP4		 = -qsmp -qoffload
 CFLAGS_CLANG			 = -std=gnu99 -fopenmp=libiomp5 -march=native -Wall
-CFLAGS_CLANG_OMP4  = -O3 -Wall -fopenmp-targets=nvptx64-nvidia-cuda -fopenmp-nonaliased-maps \
-										 -fopenmp=libomp --cuda-path=$(CUDA_PATH) -DCLANG
-										 #-I/home/projects/pwr8-rhel73-lsf/gcc/6.3.0/lib/gcc/powerpc64le-unknown-linux-gnu/6.3.0/include
+CFLAGS_CLANG_OMP4  = -O3 -Wall -fopenmp-targets=nvptx64-nvidia-cuda \
+										 -fopenmp-nonaliased-maps -fopenmp=libomp \
+										 --cuda-path=$(CUDA_PATH) -DCLANG
 CFLAGS_PGI				 = -O3 -fast -mp -Minfo
 
 OPTIONS  					+= -D__STDC_CONSTANT_MACROS
