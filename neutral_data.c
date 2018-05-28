@@ -14,8 +14,7 @@ void read_cs_file(const char* filename, CrossSection* cs, Mesh* mesh);
 void initialise_cross_sections(NeutralData* neutral_data, Mesh* mesh);
 
 // Initialises all of the neutral-specific data structures.
-void initialise_neutral_data(NeutralData* neutral_data, Mesh* mesh,
-                             const uint64_t master_key) {
+void initialise_neutral_data(NeutralData* neutral_data, Mesh* mesh) {
   const int pad = mesh->pad;
   const int local_nx = mesh->local_nx - 2 * pad;
   const int local_ny = mesh->local_ny - 2 * pad;
@@ -110,7 +109,7 @@ void initialise_neutral_data(NeutralData* neutral_data, Mesh* mesh,
         mesh->local_ny, pad, local_particle_left_off, local_particle_bottom_off,
         local_particle_width, local_particle_height, mesh->x_off, mesh->y_off,
         mesh->dt, mesh->edgex, mesh->edgey, neutral_data->initial_energy,
-        master_key, &neutral_data->local_particles);
+        &neutral_data->local_particles);
   }
 
   printf("Allocated %.4fGB of data.\n", allocation / GB);

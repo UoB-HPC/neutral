@@ -20,7 +20,7 @@
 void solve_transport_2d(
     const int nx, const int ny, const int global_nx, const int global_ny,
     const int pad, const int x_off, const int y_off, const double dt,
-    const int ntotal_particles, int* nparticles, uint64_t* master_key,
+    const int ntotal_particles, int* nparticles, 
     const int* neighbours, Particle* particles, const double* density,
     const double* edgex, const double* edgey, const double* edgedx,
     const double* edgedy, CrossSection* cs_scatter_table,
@@ -35,7 +35,7 @@ void solve_transport_2d(
 
   handle_particles(global_nx, global_ny, nx, ny, pad, x_off, y_off, 1, dt,
                    neighbours, density, edgex, edgey, edgedx, edgedy, facet_events,
-                   collision_events, master_key, ntotal_particles,
+                   collision_events, ntotal_particles,
                    *nparticles, particles, cs_scatter_table, cs_absorb_table,
                    energy_deposition_tally);
 }
@@ -47,13 +47,9 @@ void handle_particles(
     const double dt, const int* neighbours, const double* density,
     const double* edgex, const double* edgey, const double* edgedx,
     const double* edgedy, uint64_t* facets, uint64_t* collisions,
-    uint64_t* master_key, const int ntotal_particles,
-    const int nparticles_to_process, Particle* particles,
-    CrossSection* cs_scatter_table, CrossSection* cs_absorb_table,
-    double* energy_deposition_tally) {
-
-  // Maintain a master key, to not encounter the same random number streams
-  (*master_key)++;
+    const int ntotal_particles, const int nparticles_to_process, 
+    Particle* particles, CrossSection* cs_scatter_table, 
+    CrossSection* cs_absorb_table, double* energy_deposition_tally) {
 
   int nthreads = 1;
 #pragma omp parallel
@@ -118,6 +114,8 @@ void handle_particles(
 
       START_PROFILING(&tp);
 
+      uint64_t counter = 0;
+
       // Initialise cached particle data
 #pragma omp simd reduction(+: nparticles)
       for (int ip = 0; ip < BLOCK_SIZE; ++ip) {
@@ -155,14 +153,14 @@ void handle_particles(
           p_dt_to_census[ip] = dt;
           double rn[4];
           generate_random_numbers(
-              *master_key, p_key[ip], ip, &rn[0], &rn[1], &rn[2], &rn[3]);
+              p_key[ip], ip, counter, &rn[0], &rn[1], &rn[2], &rn[3]);
           p_mfp_to_collision[ip] = -log(rn[0]) / macroscopic_cs_scatter[ip];
         }
       }
 
-      STOP_PROFILING(&tp, "cache_init");
+      counter += 1;
 
-      uint64_t counter = 1;
+      STOP_PROFILING(&tp, "cache_init");
 
       // Loop until we have reached census
       while (1) {
@@ -222,8 +220,7 @@ void handle_particles(
            collision_event(
               ip, global_nx, nx, x_off, y_off, inv_ntotal_particles,
               distance_to_collision, local_density[ip], cs_scatter_table,
-              cs_absorb_table, counter, master_key,
-              &energy_deposition[ip], &number_density[ip],
+              cs_absorb_table, counter, &energy_deposition[ip], &number_density[ip],
               &microscopic_cs_scatter[ip], &microscopic_cs_absorb[ip],
               &macroscopic_cs_scatter[ip], &macroscopic_cs_absorb[ip],
               energy_deposition_tally, &scatter_cs_index[ip],
@@ -233,15 +230,15 @@ void handle_particles(
         }
         STOP_PROFILING(&tp, "collision");
 
+        // Account for random numbers generated
+        counter++;
+
         // Check if any of the table lookups failed
         for(int ip = 0; ip < BLOCK_SIZE; ++ip) {
           if (!found) {
             TERMINATE("No key for energy %.12e in cross sectional lookup.\n", p_energy[ip]);
           }
         }
-
-        // Have to adjust the counter for next usage
-        counter += 2;
 
 #ifdef TALLY_OUT
         START_PROFILING(&tp);
@@ -298,11 +295,15 @@ void handle_particles(
             energy_deposition_tally, p_x, p_y, p_omega_x, p_omega_y, 
             p_mfp_to_collision, p_dt_to_census, p_energy, p_weight, 
             p_cellx, p_celly);
+
+        // Update the keys so future trips don't collide with random number space
+        p_key[ip] += nparticles;
       }
       STOP_PROFILING(&tp, "census");
     }
     PRINT_PROFILING_RESULTS(&tp);
   }
+
 
   // Store a total number of facets and collisions
   *facets += nfacets;
@@ -317,8 +318,7 @@ static inline void collision_event(
     const double inv_ntotal_particles, const double distance_to_collision,
     const double local_density, const CrossSection* cs_scatter_table,
     const CrossSection* cs_absorb_table, uint64_t counter,
-    const uint64_t* master_key, double* energy_deposition,
-    double* number_density, double* microscopic_cs_scatter,
+    double* energy_deposition, double* number_density, double* microscopic_cs_scatter,
     double* microscopic_cs_absorb, double* macroscopic_cs_scatter,
     double* macroscopic_cs_absorb, double* energy_deposition_tally,
     int* scatter_cs_index, int* absorb_cs_index, double* speed, double* p_x, 
@@ -342,7 +342,7 @@ static inline void collision_event(
 
   double rn1[4];
   generate_random_numbers(
-      *master_key, p_key[ip], ip + counter*BLOCK_SIZE, &rn1[0], &rn1[1], &rn1[2], &rn1[3]);
+      p_key[ip], ip, counter, &rn1[0], &rn1[1], &rn1[2], &rn1[3]);
 
   if (rn1[0] < p_absorb) {
     /* Model particles absorption */
@@ -683,7 +683,7 @@ void validate(const int nx, const int ny, const char* params_filename,
 }
 
 // Initialises a new particle ready for tracking
-size_t inject_particles(const int nparticles, const int global_nx,
+uint64_t inject_particles(const int nparticles, const int global_nx,
     const int local_nx, const int local_ny, const int pad,
     const double local_particle_left_off,
     const double local_particle_bottom_off,
@@ -691,7 +691,7 @@ size_t inject_particles(const int nparticles, const int global_nx,
     const double local_particle_height, const int x_off,
     const int y_off, const double dt, const double* edgex,
     const double* edgey, const double initial_energy,
-    const uint64_t master_key, Particle** particles) {
+    Particle** particles) {
 
   if(nparticles % BLOCK_SIZE) {
     TERMINATE("The number of particles should be a multiple of the BLOCK_SIZE.\n");
@@ -712,7 +712,7 @@ size_t inject_particles(const int nparticles, const int global_nx,
     for (int k = 0; k < BLOCK_SIZE; ++k) {
       double rn[4];
       generate_random_numbers(
-          master_key, 0, b*BLOCK_SIZE + k, &rn[0], &rn[1], &rn[2], &rn[3]);
+          0, k, b, &rn[0], &rn[1], &rn[2], &rn[3]);
 
       // Set the initial nandom location of the particle inside the source
       // region
@@ -762,23 +762,23 @@ size_t inject_particles(const int nparticles, const int global_nx,
 }
 
 // Generates a pair of random numbers
-void generate_random_numbers(const uint64_t master_key,
-    const uint64_t secondary_key, const uint64_t gid,
+void generate_random_numbers(
+    const uint64_t pkey, const uint64_t vec_lane, uint64_t counter,
     double* rn0, double* rn1, double* rn2, double* rn3) {
 
-  threefry4x64_ctr_t counter;
+  threefry4x64_ctr_t ctr;
   threefry4x64_ctr_t key;
-  counter.v[0] = gid;
-  counter.v[1] = 0;
-  counter.v[2] = 0;
-  counter.v[3] = 0;
-  key.v[0] = master_key;
-  key.v[1] = secondary_key;
-  key.v[2] = 0;
-  key.v[3] = 0;
+  ctr.v[0] = vec_lane + (counter+0)*4*BLOCK_SIZE;
+  ctr.v[1] = vec_lane + (counter+1)*4*BLOCK_SIZE;
+  ctr.v[2] = vec_lane + (counter+2)*4*BLOCK_SIZE;
+  ctr.v[3] = vec_lane + (counter+3)*4*BLOCK_SIZE;
+  key.v[0] = pkey;
+  key.v[1] = pkey;
+  key.v[2] = pkey;
+  key.v[3] = pkey;
 
   // Generate the random numbers
-  threefry4x64_ctr_t rand = threefry4x64(counter, key);
+  threefry4x64_ctr_t rand = threefry4x64(ctr, key);
 
   // Turn our random numbers from integrals to double precision
   *rn0 = rand.v[0] * FACTOR + HALF_FACTOR;
