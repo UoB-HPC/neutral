@@ -15,6 +15,10 @@
 
 #define BLOCK_SIZE 32
 
+#ifndef M_PI
+#define M_PI (3.14159265358979323846)
+#endif
+
 /* Problem-Independent Constants */
 #define eV_TO_J 1.60217646e-19           // 1 eV to Joules
 #define AVOGADROS 6.02214085774e23       // Avogadro's constant

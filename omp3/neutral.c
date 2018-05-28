@@ -5,6 +5,7 @@
 #include "../../shared_data.h"
 #include "../neutral_interface.h"
 #include "../rand.h"
+#include "../pcg_variants.h"
 #include <assert.h>
 #include <float.h>
 #include <math.h>
@@ -84,7 +85,6 @@ void handle_particles(
     // Calculate the particles block offset, accounting for some remainder
     const int thread_block_off = tid * nb_per_thread;
 
-    int counter_off[BLOCK_SIZE];
     int x_facet[BLOCK_SIZE];
     int absorb_cs_index[BLOCK_SIZE];
     int scatter_cs_index[BLOCK_SIZE];
@@ -99,11 +99,6 @@ void handle_particles(
     double energy_deposition[BLOCK_SIZE];
     double distance_to_facet[BLOCK_SIZE];
     int next_event[BLOCK_SIZE];
-
-    // Populate the counter offset
-    for(int cc = 0; cc < BLOCK_SIZE; ++cc) {
-      counter_off[cc] = 2*cc;
-    }
 
     // Loop over the blocks this thread is responsible for
     for (int b = 0; b < nb_per_thread; ++b) {
@@ -122,12 +117,10 @@ void handle_particles(
       double* p_omega_y = &particle_block->omega_y[0];
       double* p_weight = &particle_block->weight[0];
 
-      uint64_t counter = 0;
-
       START_PROFILING(&tp);
 
       // Initialise cached particle data
-#pragma omp simd reduction(+: nparticles, counter)
+#pragma omp simd reduction(+: nparticles)
       for (int ip = 0; ip < BLOCK_SIZE; ++ip) {
         if (p_dead[ip]) {
           continue;
@@ -161,13 +154,12 @@ void handle_particles(
         // particle
         if (initial) {
           p_dt_to_census[ip] = dt;
-          double rn[4];
-          generate_random_numbers(
-              *master_key, p_key[ip], counter++, &rn[0], &rn[1], &rn[2], &rn[3]);
-          p_mfp_to_collision[ip] =
-            -log(rn[0]) / macroscopic_cs_scatter[ip];
+          double rn = generate_random_number(*master_key, p_key[ip], ip);
+          p_mfp_to_collision[ip] = -log(rn) / macroscopic_cs_scatter[ip];
         }
       }
+
+      uint64_t counter = 1;
 
       STOP_PROFILING(&tp, "cache_init");
 
@@ -229,7 +221,7 @@ void handle_particles(
            collision_event(
               ip, global_nx, nx, x_off, y_off, inv_ntotal_particles,
               distance_to_collision, local_density[ip], cs_scatter_table,
-              cs_absorb_table, counter_off[ip] + counter, master_key,
+              cs_absorb_table, counter, master_key,
               &energy_deposition[ip], &number_density[ip],
               &microscopic_cs_scatter[ip], &microscopic_cs_absorb[ip],
               &macroscopic_cs_scatter[ip], &macroscopic_cs_absorb[ip],
@@ -247,8 +239,8 @@ void handle_particles(
           }
         }
 
-        // Have to adjust the counter for next usage
-        counter += 2*BLOCK_SIZE;
+        // Assume that the maximum of three random numbers were generated
+        counter += 3;
 
 #ifdef TALLY_OUT
         START_PROFILING(&tp);
@@ -323,7 +315,7 @@ static inline void collision_event(
     const int ip, const int global_nx, const int nx, const int x_off, const int y_off,
     const double inv_ntotal_particles, const double distance_to_collision,
     const double local_density, const CrossSection* cs_scatter_table,
-    const CrossSection* cs_absorb_table, uint64_t counter_off,
+    const CrossSection* cs_absorb_table, uint64_t counter,
     const uint64_t* master_key, double* energy_deposition,
     double* number_density, double* microscopic_cs_scatter,
     double* microscopic_cs_absorb, double* macroscopic_cs_scatter,
@@ -347,11 +339,9 @@ static inline void collision_event(
   const double p_absorb = *macroscopic_cs_absorb /
     (*macroscopic_cs_scatter + *macroscopic_cs_absorb);
 
-  double rn1[4];
-  generate_random_numbers(
-      *master_key, p_key[ip], counter_off, &rn1[0], &rn1[1], &rn1[2], &rn1[3]);
+  double rn0 = generate_random_number(*master_key, p_key[ip], ip + (counter++)*BLOCK_SIZE);
 
-  if (rn1[0] < p_absorb) {
+  if (rn0 < p_absorb) {
     /* Model particles absorption */
 
     // Find the new particles weight after absorption, saving the energy change
@@ -377,8 +367,10 @@ static inline void collision_event(
     // plane, which solves a different equation. Change so that we consider
     // the full set of directional cosines, allowing scattering between planes.
 
+    double rn1 = generate_random_number(*master_key, p_key[ip], ip + (counter++)*BLOCK_SIZE);
+
     // Choose a random scattering angle between -1 and 1
-    const double mu_cm = 1.0 - 2.0 * rn1[1];
+    const double mu_cm = 1.0 - 2.0 * rn1;
 
     // Calculate the new energy based on the relation to angle of incidence
     const double e_new = p_energy[ip] *
@@ -416,7 +408,8 @@ static inline void collision_event(
   *macroscopic_cs_absorb = *number_density * (*microscopic_cs_absorb) * BARNS;
 
   // Re-sample number of mean free paths to collision
-  p_mfp_to_collision[ip] = -log(rn1[3]) / *macroscopic_cs_scatter;
+  double rn3 = generate_random_number(*master_key, p_key[ip], ip + (counter++)*BLOCK_SIZE);
+  p_mfp_to_collision[ip] = -log(rn3) / *macroscopic_cs_scatter;
   p_dt_to_census[ip] -= distance_to_collision / *speed;
   *speed = sqrt((2.0 * p_energy[ip] * eV_TO_J) / PARTICLE_MASS);
 }
@@ -717,14 +710,14 @@ size_t inject_particles(const int nparticles, const int global_nx,
     Particle* p = &(*particles)[b];
 
     for (int k = 0; k < BLOCK_SIZE; ++k) {
-      double rn[4];
-      generate_random_numbers(
-          master_key, 0, b*BLOCK_SIZE + k, &rn[0], &rn[1], &rn[2], &rn[3]);
+      const int pid = b*BLOCK_SIZE + k;
+      double rn0 = generate_random_number(master_key, 0, pid);
+      double rn1 = generate_random_number(master_key, 1, pid);
 
       // Set the initial nandom location of the particle inside the source
       // region
-      p->x[k] = local_particle_left_off + rn[0] * local_particle_width;
-      p->y[k] = local_particle_bottom_off + rn[1] * local_particle_height;
+      p->x[k] = local_particle_left_off + rn0 * local_particle_width;
+      p->y[k] = local_particle_bottom_off + rn1 * local_particle_height;
 
       // Check the location of the specific cell that the particle sits within.
       // We have to check this explicitly because the mesh might be non-uniform.
@@ -748,7 +741,8 @@ size_t inject_particles(const int nparticles, const int global_nx,
 
       // Generating theta has uniform density, however 0.0 and 1.0 produce the
       // same value which introduces very very very small bias...
-      const double theta = 2.0 * M_PI * rn[2];
+      double rn2 = generate_random_number(master_key, 2, pid);
+      const double theta = 2.0 * M_PI * rn2;
       p->omega_x[k] = cos(theta);
       p->omega_y[k] = sin(theta);
 
@@ -761,21 +755,43 @@ size_t inject_particles(const int nparticles, const int global_nx,
       p->dt_to_census[k] = dt;
       p->mfp_to_collision[k] = 0.0;
       p->dead[k] = 0;
-      p->key[k] = b*BLOCK_SIZE + k;
+      p->key[k] = pid;
     }
   }
 
   return allocation_in_bytes;
 }
 
-// Generates a pair of random numbers
-void generate_random_numbers(const uint64_t master_key,
-    const uint64_t secondary_key, const uint64_t gid,
-    double* rn0, double* rn1, double* rn2, double* rn3) {
+inline double my_ldexp(double val, int exp)
+{
+    uint64_t expull = exp;
+    const uint64_t res = *((uint64_t*)&val) + (expull << 52ULL);
+    return *((double*)&res);
+}
 
+inline double pcg64u01f_random_r(struct pcg_state_64 *rng)
+{
+    const uint64_t uval = pcg64si_random_r(rng);
+    const double x = my_ldexp(uval, -64);
+    return x;
+}
+
+inline double generate_random_number(const uint64_t master_key,
+    const uint64_t secondary_key, const uint64_t counter) {
+
+  size_t seed;
+  seed += 1e18*master_key; // iterations 
+  seed += 1e6*secondary_key; // particle index
+  seed += counter; // random number offset
+
+  pcg64si_random_t rng;
+  pcg64si_srandom_r(&rng, seed);
+  return pcg64u01f_random_r(&rng);
+
+#if 0
   threefry4x64_ctr_t counter;
   threefry4x64_ctr_t key;
-  counter.v[0] = gid;
+  counter.v[0] = counter;
   counter.v[1] = 0;
   counter.v[2] = 0;
   counter.v[3] = 0;
@@ -792,4 +808,5 @@ void generate_random_numbers(const uint64_t master_key,
   *rn1 = rand.v[1] * FACTOR + HALF_FACTOR;
   *rn2 = rand.v[2] * FACTOR + HALF_FACTOR;
   *rn3 = rand.v[3] * FACTOR + HALF_FACTOR;
+#endif // if 0
 }
