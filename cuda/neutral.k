@@ -170,7 +170,7 @@ __global__ void inject_particles_kernel(
 // Handles an individual particle.
 __global__ void handle_particles_kernel(
     const int nparticles, const int global_nx, const int global_ny,
-    const int nx, const int ny, const uint64_t timestep, const int pad, 
+    const int nx, const int ny, const uint64_t master_key, const int pad, 
     const int x_off, const int y_off, const double dt, const int initial, 
     const int ntotal_particles, const double* density, const double* edgex, 
     const double* edgey, const double* edgedx, const double* edgedy, 
@@ -197,8 +197,6 @@ __global__ void handle_particles_kernel(
   const int gid = blockIdx.x * blockDim.x + threadIdx.x;
   const int pind = gid;
   double e = particle_e[pind];
-
-  const uint64_t pkey = timestep*ntotal_particles + pind;
 
   if (gid < nparticles && e >= MIN_ENERGY_OF_INTEREST) {
     nprocessed++;
@@ -244,7 +242,7 @@ __global__ void handle_particles_kernel(
     // Set time to census and MFPs until collision, unless travelled particle
     if (initial) {
       dt_to_census = dt;
-      generate_random_numbers(pkey, local_key++, &rn[0], &rn[1]);
+      generate_random_numbers(ping, master_key, local_key++, &rn[0], &rn[1]);
       mfp_to_collision = -log(rn[0]) / macroscopic_cs_scatter;
     }
 
@@ -324,7 +322,7 @@ __global__ void handle_particles_kernel(
             microscopic_cs_absorb,
             microscopic_cs_scatter + microscopic_cs_absorb, pabsorb);
 
-        generate_random_numbers(pkey, local_key++, &rn[0], &rn[1]);
+        generate_random_numbers(ping, master_key, local_key++, &rn[0], &rn[1]);
 
         if (rn[0] < pabsorb) {
 
@@ -337,7 +335,7 @@ __global__ void handle_particles_kernel(
           /* Model elastic particle scattering */
 
           // Choose a random scattering angle between -1 and 1
-          generate_random_numbers(pkey, local_key++, &rn[0], &rn[1]);
+          generate_random_numbers(ping, master_key, local_key++, &rn[0], &rn[1]);
           const double mu_cm = 1.0 - 2.0 * rn[0];
 
           // Calculate the new energy based on the relation to angle of

@@ -18,7 +18,7 @@
 // Performs a solve of dependent variables for particle transport
 void solve_transport_2d(
     const int nx, const int ny, const int global_nx, const int global_ny,
-    const uint64_t timestep, const int pad, const int x_off, const int y_off, const double dt,
+    const uint64_t master_key, const int pad, const int x_off, const int y_off, const double dt,
     const int ntotal_particles, int* nparticles, 
     const int* neighbours, Particle* particles, const double* density,
     const double* edgex, const double* edgey, const double* edgedx,
@@ -32,7 +32,7 @@ void solve_transport_2d(
     return;
   }
 
-  handle_particles(global_nx, global_ny, nx, ny, timestep, pad, x_off, y_off, 1, dt,
+  handle_particles(global_nx, global_ny, nx, ny, master_key, pad, x_off, y_off, 1, dt,
                    neighbours, density, edgex, edgey, edgedx, edgedy, facet_events,
                    collision_events, ntotal_particles,
                    *nparticles, particles, cs_scatter_table, cs_absorb_table,
@@ -42,7 +42,7 @@ void solve_transport_2d(
 // Handles the current active batch of particles
 void handle_particles(
     const int global_nx, const int global_ny, const int nx, const int ny,
-    const uint64_t timestep, const int pad, const int x_off, const int y_off, 
+    const uint64_t master_key, const int pad, const int x_off, const int y_off, 
     const int initial, const double dt, const int* neighbours, const double* density,
     const double* edgex, const double* edgey, const double* edgedx,
     const double* edgedy, uint64_t* facets, uint64_t* collisions,
@@ -83,7 +83,7 @@ void handle_particles(
       const int pid = particles_off + pp;
       Particle* particle = &particles_start[pid];
 
-      const uint64_t pkey = timestep*ntotal_particles + pid;
+      const uint64_t pkey = master_key*ntotal_particles + pid;
 
       if (particle->dead) {
         continue;
@@ -123,7 +123,7 @@ void handle_particles(
       // particle
       if (initial) {
         particle->dt_to_census = dt;
-        generate_random_numbers(pkey, counter++, &rn[0], &rn[1]);
+        generate_random_numbers(pkey, master_key, counter++, &rn[0], &rn[1]);
         particle->mfp_to_collision = -log(rn[0]) / macroscopic_cs_scatter;
       }
 
@@ -151,7 +151,7 @@ void handle_particles(
 
           // Handles a collision event
           result = collision_event(
-              global_nx, nx, x_off, y_off, timestep*ntotal_particles + pid, 
+              global_nx, nx, x_off, y_off, pid, master_key, 
               inv_ntotal_particles, distance_to_collision, local_density, 
               cs_scatter_table, cs_absorb_table, particle, &counter, 
               &energy_deposition, &number_density, &microscopic_cs_scatter,
@@ -205,10 +205,11 @@ void handle_particles(
 // Handles a collision event
 int collision_event(
     const int global_nx, const int nx, const int x_off, const int y_off,
-    const uint64_t pkey, const double inv_ntotal_particles, const double distance_to_collision,
-    const double local_density, const CrossSection* cs_scatter_table,
-    const CrossSection* cs_absorb_table, Particle* particle, uint64_t* counter,
-    double* energy_deposition, double* number_density, double* microscopic_cs_scatter,
+    const uint64_t pkey, const uint64_t master_key, const double inv_ntotal_particles, 
+    const double distance_to_collision, const double local_density, 
+    const CrossSection* cs_scatter_table, const CrossSection* cs_absorb_table, 
+    Particle* particle, uint64_t* counter, double* energy_deposition, 
+    double* number_density, double* microscopic_cs_scatter,
     double* microscopic_cs_absorb, double* macroscopic_cs_scatter,
     double* macroscopic_cs_absorb, double* energy_deposition_tally,
     int* scatter_cs_index, int* absorb_cs_index, double rn[NRANDOM_NUMBERS],
@@ -228,7 +229,7 @@ int collision_event(
                           (*macroscopic_cs_scatter + *macroscopic_cs_absorb);
 
   double rn1[NRANDOM_NUMBERS];
-  generate_random_numbers(pkey, (*counter)++, &rn1[0], &rn1[1]);
+  generate_random_numbers(pkey, master_key, (*counter)++, &rn1[0], &rn1[1]);
 
   if (rn1[0] < p_absorb) {
     /* Model particle absorption */
@@ -287,7 +288,7 @@ int collision_event(
   *macroscopic_cs_absorb = *number_density * (*microscopic_cs_absorb) * BARNS;
 
   // Re-sample number of mean free paths to collision
-  generate_random_numbers(pkey, (*counter)++, &rn[0], &rn[1]);
+  generate_random_numbers(pkey, master_key, (*counter)++, &rn[0], &rn[1]);
   particle->mfp_to_collision = -log(rn[0]) / *macroscopic_cs_scatter;
   particle->dt_to_census -= distance_to_collision / *speed;
   *speed = sqrt((2.0 * particle->energy * eV_TO_J) / PARTICLE_MASS);
@@ -426,7 +427,7 @@ void calc_distance_to_facet(const int global_nx, const double x, const double y,
                             int* x_facet, const double* edgex,
                             const double* edgey) {
 
-  // Check the timestep required to move the particle along a single axis
+  // Check the master_key required to move the particle along a single axis
   // If the velocity is positive then the top or right boundary will be hit
   const int cellx = particle_cellx - x_off + pad;
   const int celly = particle_celly - y_off + pad;
@@ -599,7 +600,7 @@ size_t inject_particles(const int nparticles, const int global_nx,
     Particle* particle = &(*particles)[kk];
 
     double rn[NRANDOM_NUMBERS];
-    generate_random_numbers(kk, 0, &rn[0], &rn[1]);
+    generate_random_numbers(kk, 0, 0, &rn[0], &rn[1]);
 
     // Set the initial nandom location of the particle inside the source
     // region
@@ -629,7 +630,7 @@ size_t inject_particles(const int nparticles, const int global_nx,
     // Generating theta has uniform density, however 0.0 and 1.0 produce the
     // same
     // value which introduces very very very small bias...
-    generate_random_numbers(kk, 1, &rn[0], &rn[1]);
+    generate_random_numbers(kk, 0, 1, &rn[0], &rn[1]);
     const double theta = 2.0 * M_PI * rn[0];
     particle->omega_x = cos(theta);
     particle->omega_y = sin(theta);
@@ -650,17 +651,17 @@ size_t inject_particles(const int nparticles, const int global_nx,
   return (sizeof(Particle) * nparticles * 2);
 }
 
-// Generates a pair of random numbers
 void generate_random_numbers(
-    const uint64_t secondary_key, const uint64_t counter, double* rn0, double* rn1) {
+    const uint64_t pkey, const uint64_t master_key, const uint64_t counter, 
+    double* rn0, double* rn1) {
 
   const int nrns = 2;
   threefry2x64_ctr_t ctr;
   threefry2x64_ctr_t key;
-  ctr.v[0] = counter*nrns + 1;
-  ctr.v[1] = counter*nrns + 2;
-  key.v[0] = secondary_key;
-  key.v[1] = secondary_key;
+  ctr.v[0] = counter;
+  ctr.v[1] = 0;
+  key.v[0] = pkey;
+  key.v[1] = master_key;
 
   // Generate the random numbers
   threefry2x64_ctr_t rand = threefry2x64(ctr, key);

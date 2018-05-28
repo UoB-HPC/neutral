@@ -16,7 +16,7 @@
 // Performs a solve of dependent variables for particle transport.
 void solve_transport_2d(
     const int nx, const int ny, const int global_nx, const int global_ny,
-    const uint64_t timestep, const int pad, const int x_off, const int y_off, 
+    const uint64_t master_key, const int pad, const int x_off, const int y_off, 
     const double dt, const int nparticles_total, int* nlocal_particles, 
     const int* neighbours, Particle* particles, const double* density,
     const double* edgex, const double* edgey, const double* edgedx,
@@ -35,7 +35,7 @@ void solve_transport_2d(
     return;
   }
 
-  handle_particles(global_nx, global_ny, nx, ny, timestep, pad, x_off, y_off, 1, dt,
+  handle_particles(global_nx, global_ny, nx, ny, master_key, pad, x_off, y_off, 1, dt,
                    neighbours, density, edgex, edgey, edgedx, edgedy, facet_events,
                    collision_events, nparticles_sent, nparticles_total,
                    nparticles, particles, cs_scatter_table, cs_absorb_table, 
@@ -46,7 +46,7 @@ void solve_transport_2d(
 // Handles the current active batch of particles
 void handle_particles(
     const int global_nx, const int global_ny, const int nx, const int ny,
-    const uint64_t timestep, const int pad, const int x_off, const int y_off, const int initial,
+    const uint64_t master_key, const int pad, const int x_off, const int y_off, const int initial,
     const double dt, const int* neighbours, const double* density,
     const double* edgex, const double* edgey, const double* edgedx,
     const double* edgedy, uint64_t* facets, uint64_t* collisions,
@@ -59,7 +59,7 @@ void handle_particles(
   const int nthreads = NTHREADS;
   const int nblocks = ceil(nparticles_total / (double)NTHREADS);
   handle_particles_kernel<<<nblocks, nthreads>>>(
-      nparticles_total, global_nx, global_ny, nx, ny, timestep, pad, x_off, y_off, dt,
+      nparticles_total, global_nx, global_ny, nx, ny, master_key, pad, x_off, y_off, dt,
       initial, nparticles_total, density, edgex, edgey, edgedx, edgedy,
       energy_deposition_tally, particles->cellx, particles->celly,
       cs_scatter_table->nentries, cs_absorb_table->nentries,
