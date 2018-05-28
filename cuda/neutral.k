@@ -91,7 +91,8 @@ __device__ double calculate_energy_deposition(
 
 // Generates a pair of random numbers
 __device__ void generate_random_numbers(
-    const uint64_t pkey, uint64_t counter, double* rn0, double* rn1, double* rn2, double* rn3) {
+    const uint64_t pkey, const uint64_t master_key, const uint64_t counter, 
+    double* rn0, double* rn1, double* rn2, double* rn3) {
 
   threefry4x64_ctr_t ctr;
   threefry4x64_ctr_t key;
@@ -131,7 +132,7 @@ __global__ void inject_particles_kernel(
 
   // Generate a pool of random numbers
   double rn[NRANDOM_NUMBERS];
-  generate_random_numbers(gid, 0, &rn[0], &rn[1], &rn[2], &rn[3]);
+  generate_random_numbers(gid, 0, 0, &rn[0], &rn[1], &rn[2], &rn[3]);
 
   // Set the initial nandom location of the particle inside the source region
   x[gid] = local_particle_left_off + rn[0] * local_particle_width;
