@@ -59,7 +59,6 @@ int main(int argc, char** argv) {
 #endif
 
   // Perform the general initialisation steps for the mesh etc
-  uint64_t master_key = 0;
   initialise_mpi(argc, argv, &mesh.rank, &mesh.nranks);
   initialise_devices(mesh.rank);
   initialise_comms(&mesh);
@@ -70,19 +69,19 @@ int main(int argc, char** argv) {
 
   handle_boundary_2d(mesh.local_nx, mesh.local_ny, &mesh, shared_data.density,
                      NO_INVERT, PACK);
-  initialise_neutral_data(&neutral_data, &mesh, master_key++);
+  initialise_neutral_data(&neutral_data, &mesh);
 
   // Make sure initialisation phase is complete
   barrier();
 
   // Main timestep loop where we will track each particle through time
-  int tt;
+  uint64_t tt;
   double wallclock = 0.0;
   double elapsed_sim_time = 0.0;
   for (tt = 1; tt <= mesh.niters; ++tt) {
 
     if (mesh.rank == MASTER) {
-      printf("\nIteration  %d\n", tt);
+      printf("\nIteration  %lu\n", tt);
     }
 
     if (visit_dump) {
@@ -102,7 +101,7 @@ int main(int argc, char** argv) {
         mesh.local_nx - 2 * mesh.pad, mesh.local_ny - 2 * mesh.pad,
         mesh.global_nx, mesh.global_ny, mesh.pad, mesh.x_off, mesh.y_off,
         mesh.dt, neutral_data.nparticles, &neutral_data.nlocal_particles,
-        &master_key, mesh.neighbours, neutral_data.local_particles,
+        tt, mesh.neighbours, neutral_data.local_particles,
         shared_data.density, mesh.edgex, mesh.edgey, mesh.edgedx, mesh.edgedy,
         neutral_data.cs_scatter_table, neutral_data.cs_absorb_table,
         neutral_data.energy_deposition_tally, neutral_data.nfacets_reduce_array,
@@ -125,7 +124,7 @@ int main(int argc, char** argv) {
 
     if (visit_dump) {
       char tally_name[100];
-      sprintf(tally_name, "energy%d", tt);
+      sprintf(tally_name, "energy%lu", tt);
       int dneighbours[NNEIGHBOURS] = {EDGE, EDGE, EDGE, EDGE, EDGE, EDGE};
       write_all_ranks_to_visit(
           mesh.global_nx, mesh.global_ny, mesh.local_nx - 2 * mesh.pad,

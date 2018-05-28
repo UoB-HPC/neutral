@@ -67,7 +67,6 @@ typedef struct {
   double* weight;           // weight of the particle
   double* dt_to_census;     // the time until census is reached
   double* mfp_to_collision; // the mean free paths until a collision
-  uint64_t* key;            // key for random number generation
   int* cellx;               // x position in mesh
   int* celly;               // y position in mesh
   int* dead;                // particle is dead
@@ -86,7 +85,6 @@ typedef struct {
   double weight[BLOCK_SIZE];           // weight of the particle
   double dt_to_census[BLOCK_SIZE];     // the time until census is reached
   double mfp_to_collision[BLOCK_SIZE]; // the mean free paths until a collision
-  uint64_t key[BLOCK_SIZE];            // key for random number generation
   int cellx[BLOCK_SIZE];               // x position in mesh
   int celly[BLOCK_SIZE];               // y position in mesh
   int dead[BLOCK_SIZE];                // particle is dead
@@ -105,7 +103,6 @@ typedef struct {
   double weight;           // weight of the particle
   double dt_to_census;     // the time until census is reached
   double mfp_to_collision; // the mean free paths until a collision
-  uint64_t key;            // key for random number generation
   int cellx;               // x position in mesh
   int celly;               // y position in mesh
   int dead;                // particle is dead
@@ -145,7 +142,6 @@ MPI_Datatype particle_type;
 #endif // if 0
 
 // Initialises all of the Neutral-specific data structures.
-void initialise_neutral_data(NeutralData* bright_data, Mesh* mesh,
-                             const uint64_t master_key);
+void initialise_neutral_data(NeutralData* bright_data, Mesh* mesh);
 
 #endif

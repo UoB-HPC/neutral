@@ -7,7 +7,7 @@ void handle_particles(
     const double dt, const int* neighbours, const double* density,
     const double* edgex, const double* edgey, const double* edgedx,
     const double* edgedy, uint64_t* facets, uint64_t* collisions,
-    uint64_t* master_key, const int ntotal_particles,
+    uint64_t master_key, const int ntotal_particles,
     const int nparticles_to_process, Particle* particles_start,
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table,
     double* energy_deposition_tally);
@@ -31,15 +31,15 @@ static inline void collision_event(
     const int ip, const int global_nx, const int nx, const int x_off, const int y_off,
     const double inv_ntotal_particles, const double distance_to_collision,
     const double local_density, const CrossSection* cs_scatter_table,
-    const CrossSection* cs_absorb_table, uint64_t counter_off,
-    const uint64_t* master_key, double* energy_deposition,
+    const CrossSection* cs_absorb_table, uint64_t counter,
+    const uint64_t master_key, double* energy_deposition,
     double* number_density, double* microscopic_cs_scatter,
     double* microscopic_cs_absorb, double* macroscopic_cs_scatter,
     double* macroscopic_cs_absorb, double* energy_deposition_tally,
-    int* scatter_cs_index, int* absorb_cs_index, 
-    double* speed, double* p_x, double* p_y, int* p_dead, double* p_energy, 
-    double* p_omega_x, double* p_omega_y, uint64_t* p_key, 
-    double* p_mfp_to_collision, double* p_dt_to_census, double* p_weight,
+    int* scatter_cs_index, int* absorb_cs_index, double* speed, double* p_x, 
+    double* p_y, int* p_dead, double* p_energy, 
+    double* p_omega_x, double* p_omega_y, const uint64_t pid,
+    double* p_mfp_to_collision, double* p_dt_to_census, double* p_weight, 
     int* p_cellx, int* p_celly, int* found);
 
 // Handles the census event
