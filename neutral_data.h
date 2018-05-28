@@ -113,7 +113,6 @@ MPI_Datatype particle_type;
 #endif // if 0
 
 // Initialises all of the Neutral-specific data structures.
-void initialise_neutral_data(NeutralData* bright_data, Mesh* mesh,
-                             const uint64_t master_key);
+void initialise_neutral_data(NeutralData* bright_data, Mesh* mesh);
 
 #endif

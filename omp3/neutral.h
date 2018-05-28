@@ -7,7 +7,7 @@ void handle_particles(
     const double dt, const int* neighbours, const double* density,
     const double* edgex, const double* edgey, const double* edgedx,
     const double* edgedy, uint64_t* facets, uint64_t* collisions,
-    uint64_t* master_key, const int ntotal_particles,
+    const int ntotal_particles,
     const int nparticles_to_process, Particle* particles_start,
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table,
     double* energy_deposition_tally);
@@ -31,7 +31,7 @@ int collision_event(
     const double inv_ntotal_particles, const double distance_to_collision,
     const double local_density, const CrossSection* cs_scatter_table,
     const CrossSection* cs_absorb_table, Particle* particle, uint64_t* counter,
-    const uint64_t* master_key, double* energy_deposition,
+    double* energy_deposition,
     double* number_density, double* microscopic_cs_scatter,
     double* microscopic_cs_absorb, double* macroscopic_cs_scatter,
     double* macroscopic_cs_absorb, double* energy_deposition_tally,
@@ -55,7 +55,7 @@ void update_tallies(const int nx, const int x_off, const int y_off,
 // Handle the collision event, including absorption and scattering
 int handle_collision(Particle* particle, const double macroscopic_cs_absorb,
                      uint64_t* counter, const double macroscopic_cs_total,
-                     const double distance_to_collision, uint64_t master_key);
+                     const double distance_to_collision);
 
 // Sends a particle to a neighbour and replaces in the particle list
 void send_and_mark_particle(const int destination, Particle* particle);
@@ -81,6 +81,5 @@ double microscopic_cs_for_energy(const CrossSection* cs, const double energy,
                                  int* cs_index);
 
 // Generates a pair of random numbers
-void generate_random_numbers(const uint64_t master_key,
-                             const uint64_t secondary_key, const uint64_t gid,
+void generate_random_numbers(const uint64_t secondary_key, const uint64_t gid,
                              double* rn0, double* rn1);

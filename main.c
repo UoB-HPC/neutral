@@ -59,7 +59,6 @@ int main(int argc, char** argv) {
 #endif
 
   // Perform the general initialisation steps for the mesh etc
-  uint64_t master_key = 0;
   initialise_mpi(argc, argv, &mesh.rank, &mesh.nranks);
   initialise_devices(mesh.rank);
   initialise_comms(&mesh);
@@ -70,7 +69,7 @@ int main(int argc, char** argv) {
 
   handle_boundary_2d(mesh.local_nx, mesh.local_ny, &mesh, shared_data.density,
                      NO_INVERT, PACK);
-  initialise_neutral_data(&neutral_data, &mesh, master_key++);
+  initialise_neutral_data(&neutral_data, &mesh);
 
   // Make sure initialisation phase is complete
   barrier();
@@ -100,7 +99,7 @@ int main(int argc, char** argv) {
         mesh.local_nx - 2 * mesh.pad, mesh.local_ny - 2 * mesh.pad,
         mesh.global_nx, mesh.global_ny, mesh.pad, mesh.x_off, mesh.y_off,
         mesh.dt, neutral_data.nparticles, &neutral_data.nlocal_particles,
-        &master_key, mesh.neighbours, neutral_data.local_particles,
+        mesh.neighbours, neutral_data.local_particles,
         shared_data.density, mesh.edgex, mesh.edgey, mesh.edgedx, mesh.edgedy,
         neutral_data.cs_scatter_table, neutral_data.cs_absorb_table,
         neutral_data.energy_deposition_tally, neutral_data.nfacets_reduce_array,

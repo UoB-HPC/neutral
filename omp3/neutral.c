@@ -19,7 +19,7 @@
 void solve_transport_2d(
     const int nx, const int ny, const int global_nx, const int global_ny,
     const int pad, const int x_off, const int y_off, const double dt,
-    const int ntotal_particles, int* nparticles, uint64_t* master_key,
+    const int ntotal_particles, int* nparticles, 
     const int* neighbours, Particle* particles, const double* density,
     const double* edgex, const double* edgey, const double* edgedx,
     const double* edgedy, CrossSection* cs_scatter_table,
@@ -34,7 +34,7 @@ void solve_transport_2d(
 
   handle_particles(global_nx, global_ny, nx, ny, pad, x_off, y_off, 1, dt,
                    neighbours, density, edgex, edgey, edgedx, edgedy, facet_events,
-                   collision_events, master_key, ntotal_particles,
+                   collision_events, ntotal_particles,
                    *nparticles, particles, cs_scatter_table, cs_absorb_table,
                    energy_deposition_tally);
 }
@@ -46,13 +46,9 @@ void handle_particles(
     const double dt, const int* neighbours, const double* density,
     const double* edgex, const double* edgey, const double* edgedx,
     const double* edgedy, uint64_t* facets, uint64_t* collisions,
-    uint64_t* master_key, const int ntotal_particles,
-    const int nparticles_to_process, Particle* particles_start,
-    CrossSection* cs_scatter_table, CrossSection* cs_absorb_table,
-    double* energy_deposition_tally) {
-
-  // Maintain a master key, to not encounter the same random number streams
-  (*master_key)++;
+    const int ntotal_particles, const int nparticles_to_process, 
+    Particle* particles_start, CrossSection* cs_scatter_table, 
+    CrossSection* cs_absorb_table, double* energy_deposition_tally) {
 
   int nthreads = 0;
 #pragma omp parallel
@@ -124,7 +120,7 @@ void handle_particles(
       // particle
       if (initial) {
         particle->dt_to_census = dt;
-        generate_random_numbers(*master_key, particle->key, counter++, &rn[0],
+        generate_random_numbers(particle->key, counter++, &rn[0],
                                 &rn[1]);
         particle->mfp_to_collision = -log(rn[0]) / macroscopic_cs_scatter;
       }
@@ -155,7 +151,7 @@ void handle_particles(
           result = collision_event(
               global_nx, nx, x_off, y_off, inv_ntotal_particles,
               distance_to_collision, local_density, cs_scatter_table,
-              cs_absorb_table, particle, &counter, master_key,
+              cs_absorb_table, particle, &counter, 
               &energy_deposition, &number_density, &microscopic_cs_scatter,
               &microscopic_cs_absorb, &macroscopic_cs_scatter,
               &macroscopic_cs_absorb, energy_deposition_tally,
@@ -191,6 +187,8 @@ void handle_particles(
                        &microscopic_cs_scatter, &microscopic_cs_absorb,
                        energy_deposition_tally);
 
+          particle->key += ntotal_particles;
+
           break;
         }
       }
@@ -210,7 +208,7 @@ int collision_event(
     const double inv_ntotal_particles, const double distance_to_collision,
     const double local_density, const CrossSection* cs_scatter_table,
     const CrossSection* cs_absorb_table, Particle* particle, uint64_t* counter,
-    const uint64_t* master_key, double* energy_deposition,
+    double* energy_deposition,
     double* number_density, double* microscopic_cs_scatter,
     double* microscopic_cs_absorb, double* macroscopic_cs_scatter,
     double* macroscopic_cs_absorb, double* energy_deposition_tally,
@@ -231,7 +229,7 @@ int collision_event(
                           (*macroscopic_cs_scatter + *macroscopic_cs_absorb);
 
   double rn1[NRANDOM_NUMBERS];
-  generate_random_numbers(*master_key, particle->key, (*counter)++, &rn1[0],
+  generate_random_numbers(particle->key, (*counter)++, &rn1[0],
                           &rn1[1]);
 
   if (rn1[0] < p_absorb) {
@@ -291,7 +289,7 @@ int collision_event(
   *macroscopic_cs_absorb = *number_density * (*microscopic_cs_absorb) * BARNS;
 
   // Re-sample number of mean free paths to collision
-  generate_random_numbers(*master_key, particle->key, (*counter)++, &rn[0],
+  generate_random_numbers(particle->key, (*counter)++, &rn[0],
                           &rn[1]);
   particle->mfp_to_collision = -log(rn[0]) / *macroscopic_cs_scatter;
   particle->dt_to_census -= distance_to_collision / *speed;
@@ -591,7 +589,7 @@ size_t inject_particles(const int nparticles, const int global_nx,
                         const double local_particle_height, const int x_off,
                         const int y_off, const double dt, const double* edgex,
                         const double* edgey, const double initial_energy,
-                        const uint64_t master_key, Particle** particles) {
+                        Particle** particles) {
 
   *particles = (Particle*)malloc(sizeof(Particle) * nparticles * 2);
   if (!*particles) {
@@ -604,7 +602,7 @@ size_t inject_particles(const int nparticles, const int global_nx,
     Particle* particle = &(*particles)[kk];
 
     double rn[NRANDOM_NUMBERS];
-    generate_random_numbers(master_key, 0, kk, &rn[0], &rn[1]);
+    generate_random_numbers(0, kk, &rn[0], &rn[1]);
 
     // Set the initial nandom location of the particle inside the source
     // region
@@ -634,7 +632,7 @@ size_t inject_particles(const int nparticles, const int global_nx,
     // Generating theta has uniform density, however 0.0 and 1.0 produce the
     // same
     // value which introduces very very very small bias...
-    generate_random_numbers(master_key, 1, kk, &rn[0], &rn[1]);
+    generate_random_numbers(1, kk, &rn[0], &rn[1]);
     const double theta = 2.0 * M_PI * rn[0];
     particle->omega_x = cos(theta);
     particle->omega_y = sin(theta);
@@ -657,19 +655,20 @@ size_t inject_particles(const int nparticles, const int global_nx,
 }
 
 // Generates a pair of random numbers
-void generate_random_numbers(const uint64_t master_key,
-                             const uint64_t secondary_key, const uint64_t gid,
+void generate_random_numbers(
+                             const uint64_t secondary_key, const uint64_t counter,
                              double* rn0, double* rn1) {
 
-  threefry2x64_ctr_t counter;
+  const int nrns = 2;
+  threefry2x64_ctr_t ctr;
   threefry2x64_ctr_t key;
-  counter.v[0] = gid;
-  counter.v[1] = 0;
-  key.v[0] = master_key;
+  ctr.v[0] = counter*nrns + 1;
+  ctr.v[1] = counter*nrns + 2;
+  key.v[0] = secondary_key;
   key.v[1] = secondary_key;
 
   // Generate the random numbers
-  threefry2x64_ctr_t rand = threefry2x64(counter, key);
+  threefry2x64_ctr_t rand = threefry2x64(ctr, key);
 
   // Turn our random numbers from integrals to double precision
   uint64_t max_uint64 = UINT64_C(0xFFFFFFFFFFFFFFFF);
