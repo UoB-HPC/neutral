@@ -153,12 +153,12 @@ void handle_particles(
           p_dt_to_census[ip] = dt;
           double rn[4];
           generate_random_numbers(
-              p_key[ip], ip, counter, &rn[0], &rn[1], &rn[2], &rn[3]);
+              p_key[ip], counter, &rn[0], &rn[1], &rn[2], &rn[3]);
           p_mfp_to_collision[ip] = -log(rn[0]) / macroscopic_cs_scatter[ip];
         }
       }
 
-      counter += 1;
+      counter++;
 
       STOP_PROFILING(&tp, "cache_init");
 
@@ -342,7 +342,7 @@ static inline void collision_event(
 
   double rn1[4];
   generate_random_numbers(
-      p_key[ip], ip, counter, &rn1[0], &rn1[1], &rn1[2], &rn1[3]);
+      p_key[ip], counter, &rn1[0], &rn1[1], &rn1[2], &rn1[3]);
 
   if (rn1[0] < p_absorb) {
     /* Model particles absorption */
@@ -710,9 +710,9 @@ uint64_t inject_particles(const int nparticles, const int global_nx,
     Particle* p = &(*particles)[b];
 
     for (int k = 0; k < BLOCK_SIZE; ++k) {
+      const int pid = b*BLOCK_SIZE + k;
       double rn[4];
-      generate_random_numbers(
-          0, k, b, &rn[0], &rn[1], &rn[2], &rn[3]);
+      generate_random_numbers(pid, b, &rn[0], &rn[1], &rn[2], &rn[3]);
 
       // Set the initial nandom location of the particle inside the source
       // region
@@ -754,7 +754,7 @@ uint64_t inject_particles(const int nparticles, const int global_nx,
       p->dt_to_census[k] = dt;
       p->mfp_to_collision[k] = 0.0;
       p->dead[k] = 0;
-      p->key[k] = b*BLOCK_SIZE + k;
+      p->key[k] = pid;
     }
   }
 
@@ -763,15 +763,16 @@ uint64_t inject_particles(const int nparticles, const int global_nx,
 
 // Generates a pair of random numbers
 void generate_random_numbers(
-    const uint64_t pkey, const uint64_t vec_lane, uint64_t counter,
-    double* rn0, double* rn1, double* rn2, double* rn3) {
+    const uint64_t pkey, uint64_t counter, double* rn0, 
+    double* rn1, double* rn2, double* rn3) {
 
   threefry4x64_ctr_t ctr;
   threefry4x64_ctr_t key;
-  ctr.v[0] = vec_lane + (counter+0)*4*BLOCK_SIZE;
-  ctr.v[1] = vec_lane + (counter+1)*4*BLOCK_SIZE;
-  ctr.v[2] = vec_lane + (counter+2)*4*BLOCK_SIZE;
-  ctr.v[3] = vec_lane + (counter+3)*4*BLOCK_SIZE;
+  const int nrns = 4;
+  ctr.v[0] = counter*nrns+0;
+  ctr.v[1] = counter*nrns+1;
+  ctr.v[2] = counter*nrns+2;
+  ctr.v[3] = counter*nrns+3;
   key.v[0] = pkey;
   key.v[1] = pkey;
   key.v[2] = pkey;

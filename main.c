@@ -99,7 +99,7 @@ int main(int argc, char** argv) {
     // Begin the main solve step
     solve_transport_2d(
         mesh.local_nx - 2 * mesh.pad, mesh.local_ny - 2 * mesh.pad,
-        mesh.global_nx, mesh.global_ny, mesh.pad, mesh.x_off, mesh.y_off,
+        mesh.global_nx, mesh.global_ny, tt, mesh.pad, mesh.x_off, mesh.y_off,
         mesh.dt, neutral_data.nparticles, &neutral_data.nlocal_particles,
         mesh.neighbours, neutral_data.local_particles,
         shared_data.density, mesh.edgex, mesh.edgey, mesh.edgedx, mesh.edgedy,

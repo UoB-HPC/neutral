@@ -89,23 +89,25 @@ __device__ double calculate_energy_deposition(
     heating_response * number_density;
 }
 
-__device__ void generate_random_numbers(const uint64_t master_key,
-    const uint64_t secondary_key,
-    const uint64_t gid, double* rn0,
-    double* rn1, double* rn2, double* rn3) {
-  threefry4x64_ctr_t counter;
+// Generates a pair of random numbers
+__device__ void generate_random_numbers(
+    const uint64_t pkey, uint64_t counter, double* rn0, double* rn1, double* rn2, double* rn3) {
+
+  threefry4x64_ctr_t ctr;
   threefry4x64_ctr_t key;
-  counter.v[0] = gid;
-  counter.v[1] = 0;
-  counter.v[2] = 0;
-  counter.v[3] = 0;
-  key.v[0] = master_key;
-  key.v[1] = secondary_key;
-  key.v[2] = 0;
-  key.v[3] = 0;
+
+  const int nrns = 4;
+  ctr.v[0] = counter*nrns+0;
+  ctr.v[1] = counter*nrns+1;
+  ctr.v[2] = counter*nrns+2;
+  ctr.v[3] = counter*nrns+3;
+  key.v[0] = pkey;
+  key.v[1] = pkey;
+  key.v[2] = pkey;
+  key.v[3] = pkey;
 
   // Generate the random numbers
-  threefry4x64_ctr_t rand = threefry4x64(counter, key);
+  threefry4x64_ctr_t rand = threefry4x64(ctr, key);
 
   // Turn our random numbers from integrals to double precision
   *rn0 = rand.v[0] * FACTOR + HALF_FACTOR;
@@ -119,7 +121,7 @@ __global__ void inject_particles_kernel(
     const int y_off, const double local_particle_left_off,
     const double local_particle_bottom_off, const double local_particle_width,
     const double local_particle_height, const int nparticles, const double dt,
-    const double initial_energy, const int master_key, const double* edgex,
+    const double initial_energy, const double* edgex,
     const double* edgey, double* x, double* y, int* particle_cellx,
     int* particle_celly, double* omega_x, double* omega_y, double* e,
     double* weight, double* dt_to_census, double* mfp_to_collision) {
@@ -130,7 +132,7 @@ __global__ void inject_particles_kernel(
 
   // Generate a pool of random numbers
   double rn[NRANDOM_NUMBERS];
-  generate_random_numbers(master_key, 4, gid, &rn[0], &rn[1], &rn[2], &rn[3]);
+  generate_random_numbers(gid, 0, &rn[0], &rn[1], &rn[2], &rn[3]);
 
   // Set the initial nandom location of the particle inside the source region
   x[gid] = local_particle_left_off + rn[0] * local_particle_width;
@@ -175,19 +177,18 @@ __global__ void inject_particles_kernel(
 // Handles an individual particle.
 __global__ void handle_particles_kernel(
     const int nparticles, const int global_nx, const int global_ny,
-    const int nx, const int ny, const int pad, const int x_off, const int y_off,
-    const double dt, const int initial, const int ntotal_particles,
-    const double* density, const double* edgex, const double* edgey,
-    const double* edgedx, const double* edgedy, double* energy_deposition_tally,
-    int* particle_cellx, int* particle_celly, const int cs_scatter_nentries,
-    const int cs_absorb_nentries, const double* cs_scatter_keys,
-    const double* cs_scatter_values, const double* cs_absorb_keys,
-    const double* cs_absorb_values, double* particle_e,
+    const int nx, const int ny, const uint64_t timestep, const int pad, 
+    const int x_off, const int y_off, const double dt, const int initial, 
+    const int ntotal_particles, const double* density, const double* edgex, 
+    const double* edgey, const double* edgedx, const double* edgedy, 
+    double* energy_deposition_tally, int* particle_cellx, int* particle_celly, 
+    const int cs_scatter_nentries, const int cs_absorb_nentries, 
+    const double* cs_scatter_keys, const double* cs_scatter_values, 
+    const double* cs_absorb_keys, const double* cs_absorb_values, double* particle_e,
     double* particle_dt_to_census, double* particle_mfp_to_collision,
     double* particle_weight, double* particle_omega_x, double* particle_omega_y,
-    double* particle_x, double* particle_y, uint64_t master_key,
-    uint64_t* nfacets_reduce_array, uint64_t* ncollisions_reduce_array, 
-    uint64_t* nprocessed_reduce_array) {
+    double* particle_x, double* particle_y, uint64_t* nfacets_reduce_array, 
+    uint64_t* ncollisions_reduce_array, uint64_t* nprocessed_reduce_array) {
 
   // (1) particle can stream and reach census
   // (2) particle can collide and either
@@ -209,7 +210,7 @@ __global__ void handle_particles_kernel(
     int absorb_cs_index = -1;
     int scatter_cs_index = -1;
     double cell_mfp = 0.0;
-    uint64_t local_key = 0;
+    uint64_t counter = 0;
 
     // Determine the current cell
     int cellx = particle_cellx[pindex] - x_off + pad;
@@ -246,7 +247,7 @@ __global__ void handle_particles_kernel(
       dt_to_census = dt;
 
       double rn[NRANDOM_NUMBERS];
-      generate_random_numbers(master_key, local_key++, gid, &rn[0], &rn[1], &rn[2], &rn[3]);
+      generate_random_numbers(timestep*nparticles + gid, counter++, &rn[0], &rn[1], &rn[2], &rn[3]);
 
       mfp_to_collision = -log(rn[0]) / macroscopic_cs_scatter;
     }
@@ -310,7 +311,7 @@ __global__ void handle_particles_kernel(
             microscopic_cs_scatter + microscopic_cs_absorb, pabsorb);
 
         double rn[NRANDOM_NUMBERS];
-        generate_random_numbers(master_key, local_key++, gid, &rn[0], &rn[1], &rn[2], &rn[3]);
+        generate_random_numbers(timestep*nparticles + gid, counter++, &rn[0], &rn[1], &rn[2], &rn[3]);
 
         if (rn[0] < pabsorb) {
 
