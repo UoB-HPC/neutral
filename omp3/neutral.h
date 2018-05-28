@@ -93,5 +93,5 @@ double microscopic_cs_for_energy_linear(
     const CrossSection* cs, const double energy, int* cs_index, int* found);
 
 // Generates a pair of random numbers
-void generate_random_numbers(const uint64_t pkey, uint64_t vec_lane, uint64_t counter,
+void generate_random_numbers(const uint64_t pkey, uint64_t counter,
                              double* rn0, double* rn1, double* rn2, double* rn3);

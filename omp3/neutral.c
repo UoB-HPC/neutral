@@ -19,8 +19,8 @@
 // Performs a solve of dependent variables for particle transport
 void solve_transport_2d(
     const int nx, const int ny, const int global_nx, const int global_ny,
-    const int pad, const int x_off, const int y_off, const double dt,
-    const int ntotal_particles, int* nparticles, 
+    uint64_t timestep, const int pad, const int x_off, const int y_off, 
+    const double dt, const int ntotal_particles, int* nparticles, 
     const int* neighbours, Particle* particles, const double* density,
     const double* edgex, const double* edgey, const double* edgedx,
     const double* edgedy, CrossSection* cs_scatter_table,
@@ -712,7 +712,7 @@ uint64_t inject_particles(const int nparticles, const int global_nx,
     for (int k = 0; k < BLOCK_SIZE; ++k) {
       const int pid = b*BLOCK_SIZE + k;
       double rn[4];
-      generate_random_numbers(pid, b, &rn[0], &rn[1], &rn[2], &rn[3]);
+      generate_random_numbers(pid, 0, &rn[0], &rn[1], &rn[2], &rn[3]);
 
       // Set the initial nandom location of the particle inside the source
       // region
@@ -763,11 +763,12 @@ uint64_t inject_particles(const int nparticles, const int global_nx,
 
 // Generates a pair of random numbers
 void generate_random_numbers(
-    const uint64_t pkey, uint64_t counter, double* rn0, 
-    double* rn1, double* rn2, double* rn3) {
+    const uint64_t pkey, uint64_t counter,
+    double* rn0, double* rn1, double* rn2, double* rn3) {
 
   threefry4x64_ctr_t ctr;
   threefry4x64_ctr_t key;
+
   const int nrns = 4;
   ctr.v[0] = counter*nrns+0;
   ctr.v[1] = counter*nrns+1;
