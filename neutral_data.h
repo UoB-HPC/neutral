@@ -13,7 +13,7 @@
 #endif
 #endif // if 0
 
-#define BLOCK_SIZE 32
+#define BLOCK_SIZE 16
 
 /* Problem-Independent Constants */
 #define eV_TO_J 1.60217646e-19           // 1 eV to Joules
