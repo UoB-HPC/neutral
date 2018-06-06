@@ -83,7 +83,7 @@ void handle_particles(
       const int pid = particles_off + pp;
       Particle* particle = &particles_start[pid];
 
-      const uint64_t pkey = master_key*ntotal_particles + pid;
+      const uint64_t pkey = pid;
 
       if (particle->dead) {
         continue;
