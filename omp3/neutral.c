@@ -17,6 +17,9 @@
 #include "mpi.h"
 #endif
 
+#define MASTER_KEY_OFF (1000000000000000ULL)
+#define PARTICLE_KEY_OFF (10000ULL)
+
 // Performs a solve of dependent variables for particle transport
 void solve_transport_2d(
     const int nx, const int ny, const int global_nx, const int global_ny,
@@ -789,7 +792,7 @@ inline double pcg64u01f_random_r(struct pcg_state_64 *rng)
 inline double generate_random_number(
     const uint64_t pkey, const uint64_t master_key, const uint64_t counter) {
 
-  size_t seed = counter + 1000000000000000ULL*master_key + 10000ULL*pkey;
+  size_t seed = counter + MASTER_KEY_OFF*master_key + PARTICLE_KEY_OFF*pkey;
 
   pcg64si_random_t rng;
   pcg64si_srandom_r(&rng, seed);
