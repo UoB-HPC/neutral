@@ -82,20 +82,20 @@ void handle_particles(
     // Calculate the particles block offset, accounting for some remainder
     const int thread_block_off = tid * nb_per_thread;
 
-    int x_facet[BLOCK_SIZE];
-    int absorb_cs_index[BLOCK_SIZE];
-    int scatter_cs_index[BLOCK_SIZE];
-    double cell_mfp[BLOCK_SIZE];
-    double local_density[BLOCK_SIZE];
-    double microscopic_cs_scatter[BLOCK_SIZE];
-    double microscopic_cs_absorb[BLOCK_SIZE];
-    double number_density[BLOCK_SIZE];
-    double macroscopic_cs_scatter[BLOCK_SIZE];
-    double macroscopic_cs_absorb[BLOCK_SIZE];
-    double speed[BLOCK_SIZE];
-    double energy_deposition[BLOCK_SIZE];
-    double distance_to_facet[BLOCK_SIZE];
-    int next_event[BLOCK_SIZE];
+    __attribute__((aligned(64))) int x_facet[BLOCK_SIZE];
+    __attribute__((aligned(64))) int absorb_cs_index[BLOCK_SIZE];
+    __attribute__((aligned(64))) int scatter_cs_index[BLOCK_SIZE];
+    __attribute__((aligned(64))) double cell_mfp[BLOCK_SIZE];
+    __attribute__((aligned(64))) double local_density[BLOCK_SIZE];
+    __attribute__((aligned(64))) double microscopic_cs_scatter[BLOCK_SIZE];
+    __attribute__((aligned(64))) double microscopic_cs_absorb[BLOCK_SIZE];
+    __attribute__((aligned(64))) double number_density[BLOCK_SIZE];
+    __attribute__((aligned(64))) double macroscopic_cs_scatter[BLOCK_SIZE];
+    __attribute__((aligned(64))) double macroscopic_cs_absorb[BLOCK_SIZE];
+    __attribute__((aligned(64))) double speed[BLOCK_SIZE];
+    __attribute__((aligned(64))) double energy_deposition[BLOCK_SIZE];
+    __attribute__((aligned(64))) double distance_to_facet[BLOCK_SIZE];
+    __attribute__((aligned(64))) int next_event[BLOCK_SIZE];
 
     // Loop over the blocks this thread is responsible for
     for (int b = 0; b < nb_per_thread; ++b) {
@@ -113,6 +113,18 @@ void handle_particles(
       double* p_omega_x = &particle_block->omega_x[0];
       double* p_omega_y = &particle_block->omega_y[0];
       double* p_weight = &particle_block->weight[0];
+
+      __assume_aligned(p_dead, 64);
+      __assume_aligned(p_cellx, 64);
+      __assume_aligned(p_celly, 64);
+      __assume_aligned(p_energy, 64);
+      __assume_aligned(p_dt_to_census, 64);
+      __assume_aligned(p_mfp_to_collision, 64);
+      __assume_aligned(p_x, 64);
+      __assume_aligned(p_y, 64);
+      __assume_aligned(p_omega_x, 64);
+      __assume_aligned(p_omega_y, 64);
+      __assume_aligned(p_weight, 64);
 
       START_PROFILING(&tp);
 
@@ -777,9 +789,7 @@ inline double pcg64u01f_random_r(struct pcg_state_64 *rng)
 inline double generate_random_number(
     const uint64_t pkey, const uint64_t master_key, const uint64_t counter) {
 
-  size_t seed = counter;
-  seed += 1e16*master_key;   // iterations 
-  seed += 1e5*pkey;          // particle index
+  size_t seed = counter + 1000000000000000ULL*master_key + 10000ULL*pkey;
 
   pcg64si_random_t rng;
   pcg64si_srandom_r(&rng, seed);
