@@ -79,7 +79,8 @@ void handle_particles(
 
 #pragma omp target teams distribute parallel for simd \
   map(tofrom: nfacets, ncollisions, nparticles) \
-  reduction(+: nfacets, ncollisions, nparticles)
+  reduction(+: nfacets, ncollisions, nparticles) \
+  num_teams((int)(nparticles_to_process/128.0)+1)
   for(int pp = 0; pp < nparticles_to_process; ++pp) {
 
     // (1) particle can stream and reach census
