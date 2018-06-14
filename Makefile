@@ -11,8 +11,8 @@ CFLAGS_INTEL			 = -O3 -qopenmp -no-prec-div -std=gnu99 -DINTEL \
 										 -Wall -qopt-report=5 -xhost
 CFLAGS_INTEL_KNL	 = -O3 -qopenmp -no-prec-div -std=gnu99 -DINTEL \
 										 -xMIC-AVX512 -Wall -qopt-report=5
-CFLAGS_GCC				 = -std=gnu99 -fopenmp -march=native -Wall
-CFLAGS_GCCTX2				 = -std=gnu99 -fopenmp -Wall
+CFLAGS_GCC				 = -O3 -std=gnu99 -fopenmp -march=native -Wall
+CFLAGS_GCCTX2			 = -O3 -std=gnu99 -fopenmp -Wall
 CFLAGS_GCC_KNL   	 = -O3 -fopenmp -std=gnu99 \
 										 -mavx512f -mavx512cd -mavx512er -mavx512pf
 CFLAGS_GCC_POWER   = -O3 -mcpu=power8 -mtune=power8 -fopenmp -std=gnu99
@@ -22,7 +22,6 @@ CFLAGS_XL_OMP4		 = -qsmp -qoffload
 CFLAGS_CLANG			 = -std=gnu99 -fopenmp=libiomp5 -march=native -Wall
 CFLAGS_CLANG_OMP4  = -O3 -Wall -fopenmp-targets=nvptx64-nvidia-cuda -fopenmp-nonaliased-maps \
 										 -fopenmp=libomp --cuda-path=$(CUDA_PATH) -DCLANG
-										 #-I/home/projects/pwr8-rhel73-lsf/gcc/6.3.0/lib/gcc/powerpc64le-unknown-linux-gnu/6.3.0/include
 CFLAGS_PGI				 = -O3 -fast -mp -Minfo
 
 OPTIONS  					+= -D__STDC_CONSTANT_MACROS
@@ -61,6 +60,10 @@ ifeq ($(KERNELS), cuda)
 endif
 
 ifeq ($(KERNELS), omp4)
+  OPTIONS += -DSoA
+endif
+
+ifeq ($(KERNELS), oacc)
   OPTIONS += -DSoA
 endif
 
