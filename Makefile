@@ -1,10 +1,10 @@
 # User defined parameters
-KERNELS  					 = omp3
-COMPILER 					 = INTEL
+KERNELS  					 = omp4
+COMPILER 					 = CRAY
 MPI      					 = no
 OPTIONS  					+= -DTILES #-DENABLE_PROFILING 
-ARCH_COMPILER_CC   = icc
-ARCH_COMPILER_CPP  = icpc
+ARCH_COMPILER_CC   = cc
+ARCH_COMPILER_CPP  = CC
 
 # Compiler-specific flags
 CFLAGS_INTEL			 = -O3 -qopenmp -no-prec-div -std=gnu99 -DINTEL \
