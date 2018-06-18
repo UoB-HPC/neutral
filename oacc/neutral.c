@@ -10,10 +10,14 @@
 #include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "pcg_variants.h"
 
 #ifdef MPI
 #include "mpi.h"
 #endif
+
+#define MASTER_KEY_OFF (1000000000000000ULL)
+#define PARTICLE_KEY_OFF (10000ULL)
 
 // Performs a solve of dependent variables for particle transport
 void solve_transport_2d(
@@ -65,7 +69,6 @@ void handle_particles(
   int* p_cellx = particles_start->cellx;
   int* p_celly = particles_start->celly;
   int* p_dead = particles_start->dead;
-
   double* cs_scatter_table_keys = cs_scatter_table->keys;
   double* cs_scatter_table_values = cs_scatter_table->values;
   int cs_scatter_table_nentries = cs_scatter_table->nentries;
@@ -123,8 +126,8 @@ void handle_particles(
     // particle
     if (initial) {
       p_dt_to_census[pp] = dt;
-      generate_random_numbers(pp, master_key, counter++, &rn[0], &rn[1]);
-      p_mfp_to_collision[pp] = -log(rn[0]) / macroscopic_cs_scatter;
+      double rn0 = generate_random_numbers(pp, master_key, counter++);
+      p_mfp_to_collision[pp] = -log(rn0) / macroscopic_cs_scatter;
     }
 
     // Loop until we have reached census
@@ -244,10 +247,9 @@ inline int collision_event(
   const double p_absorb = *macroscopic_cs_absorb /
     (*macroscopic_cs_scatter + *macroscopic_cs_absorb);
 
-  double rn1[NRANDOM_NUMBERS];
-  generate_random_numbers(pp, master_key, (*counter)++, &rn1[0], &rn1[1]);
+  double rn0 = generate_random_numbers(pp, master_key, (*counter)++);
 
-  if (rn1[0] < p_absorb) {
+  if (rn0 < p_absorb) {
     /* Model particle absorption */
 
     // Find the new particle weight after absorption, saving the energy change
@@ -272,7 +274,8 @@ inline int collision_event(
     // the full set of directional cosines, allowing scattering between planes.
 
     // Choose a random scattering angle between -1 and 1
-    const double mu_cm = 1.0 - 2.0 * rn1[1];
+    double rn1 = generate_random_numbers(pp, master_key, (*counter)++);
+    const double mu_cm = 1.0 - 2.0 * rn1;
 
     // Calculate the new energy based on the relation to angle of incidence
     const double e_new = p_energy[pp] *
@@ -306,8 +309,8 @@ inline int collision_event(
   *macroscopic_cs_absorb = *number_density * (*microscopic_cs_absorb) * BARNS;
 
   // Re-sample number of mean free paths to collision
-  generate_random_numbers(pp, master_key, (*counter)++, &rn[0], &rn[1]);
-  p_mfp_to_collision[pp] = -log(rn[0]) / *macroscopic_cs_scatter;
+  double rn2 = generate_random_numbers(pp, master_key, (*counter)++);
+  p_mfp_to_collision[pp] = -log(rn2) / *macroscopic_cs_scatter;
   p_dt_to_census[pp] -= distance_to_collision / *speed;
   *speed = sqrt((2.0 * p_energy[pp] * eV_TO_J) / PARTICLE_MASS);
 
@@ -637,13 +640,13 @@ size_t inject_particles(const int nparticles, const int global_nx,
 #pragma acc kernels
 #pragma acc loop independent
   for (int pp = 0; pp < nparticles; ++pp) {
-    double rn[NRANDOM_NUMBERS];
-    generate_random_numbers(pp, 0, 0, &rn[0], &rn[1]);
+    double rn0 = generate_random_numbers(pp, 0, 0);
+    double rn1 = generate_random_numbers(pp, 0, 1);
 
     // Set the initial nandom location of the particle inside the source
     // region
-    p_x[pp] = local_particle_left_off + rn[0] * local_particle_width;
-    p_y[pp] = local_particle_bottom_off + rn[1] * local_particle_height;
+    p_x[pp] = local_particle_left_off + rn0 * local_particle_width;
+    p_y[pp] = local_particle_bottom_off + rn1 * local_particle_height;
 
     // Check the location of the specific cell that the particle sits within.
     // We have to check this explicitly because the mesh might be non-uniform.
@@ -668,8 +671,8 @@ size_t inject_particles(const int nparticles, const int global_nx,
     // Generating theta has uniform density, however 0.0 and 1.0 produce the
     // same
     // value which introduces very very very small bias...
-    generate_random_numbers(pp, 0, 1, &rn[0], &rn[1]);
-    const double theta = 2.0 * M_PI * rn[0];
+    double rn2 = generate_random_numbers(pp, 0, 2);
+    const double theta = 2.0 * M_PI * rn2;
     p_omega_x[pp] = cos(theta);
     p_omega_y[pp] = sin(theta);
 
@@ -689,6 +692,34 @@ size_t inject_particles(const int nparticles, const int global_nx,
   return allocation;
 }
 
+inline double my_ldexp(uint64_t val)
+{
+  // Turn our random numbers from integrals to double precision
+  uint64_t max_uint64 = UINT64_C(0xFFFFFFFFFFFFFFFF);
+  const double factor = 1.0 / (max_uint64 + 1.0);
+  const double half_factor = 0.5 * factor;
+  return val * factor + half_factor;
+}
+
+inline double pcg64u01f_random_r(struct pcg_state_64* rng)
+{
+  const uint64_t uval = pcg64si_random_r(rng);
+  const double x = my_ldexp(uval);
+  return x;
+}
+
+inline double generate_random_numbers(
+    const uint64_t pkey, const uint64_t master_key, const uint64_t counter) {
+
+  uint64_t seed = counter + MASTER_KEY_OFF*master_key + PARTICLE_KEY_OFF*pkey;
+
+  pcg64si_random_t rng;
+  pcg64si_srandom_r(&rng, seed);
+  return pcg64u01f_random_r(&rng);
+}
+
+#if 0
+#pragma acc routine
 inline void generate_random_numbers(
     const uint64_t pkey, const uint64_t master_key, const uint64_t counter, 
     double* rn0, double* rn1) {
@@ -711,3 +742,4 @@ inline void generate_random_numbers(
   *rn0 = rand.v[0] * factor + half_factor;
   *rn1 = rand.v[1] * factor + half_factor;
 }
+#endif // if 0

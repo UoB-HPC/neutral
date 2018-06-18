@@ -83,6 +83,5 @@ double microscopic_cs_for_energy(const double* keys, const double* values,
 void validate(const int nx, const int ny, const char* params_filename,
     const int rank, double* energy_deposition_tally);
 
-void generate_random_numbers(
-    const uint64_t pkey, const uint64_t master_key, const uint64_t counter, 
-    double* rn0, double* rn1);
+double generate_random_numbers(
+    const uint64_t pkey, const uint64_t master_key, const uint64_t counter);
