@@ -13,7 +13,7 @@
 #endif
 #endif // if 0
 
-#define BLOCK_SIZE 32
+#define BLOCK_SIZE 16
 
 #ifndef M_PI
 #define M_PI (3.14159265358979323846)
