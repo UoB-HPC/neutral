@@ -18,7 +18,6 @@
 #endif
 
 #define MASTER_KEY_OFF (1000000000000000ULL)
-#define PARTICLE_KEY_OFF (10000ULL)
 
 // Performs a solve of dependent variables for particle transport
 void solve_transport_2d(
@@ -117,6 +116,8 @@ void handle_particles(
       double* p_omega_y = &particle_block->omega_y[0];
       double* p_weight = &particle_block->weight[0];
 
+      __attribute((aligned(64))) pcg64si_random_t rng[BLOCK_SIZE];
+
       __assume_aligned(p_dead, 64);
       __assume_aligned(p_cellx, 64);
       __assume_aligned(p_celly, 64);
@@ -165,9 +166,12 @@ void handle_particles(
         // Set time to census and MFPs until collision, unless travelled
         // particle
         if (initial) {
+          const int pkey = bid*BLOCK_SIZE + ip;
+          uint64_t seed = MASTER_KEY_OFF*master_key + pkey;
+          pcg64si_srandom_r(&rng[ip], seed);
+
           p_dt_to_census[ip] = dt;
-          const int pid = bid*BLOCK_SIZE + ip;
-          double rn = generate_random_number(pid, master_key, ip);
+          double rn = generate_random_number(&rng[ip]);
           p_mfp_to_collision[ip] = -log(rn) / macroscopic_cs_scatter[ip];
         }
       }
@@ -242,7 +246,7 @@ void handle_particles(
               energy_deposition_tally, &scatter_cs_index[ip],
               &absorb_cs_index[ip], &speed[ip],p_x, p_y, p_dead, p_energy, 
               p_omega_x, p_omega_y, pid, p_mfp_to_collision, p_dt_to_census, 
-              p_weight, p_cellx, p_celly, &found[ip]);
+              p_weight, p_cellx, p_celly, &found[ip], &rng[ip]);
         }
         STOP_PROFILING(&tp, "collision");
 
@@ -338,7 +342,7 @@ static inline void collision_event(
     double* p_y, int* p_dead, double* p_energy, 
     double* p_omega_x, double* p_omega_y, const uint64_t pid,
     double* p_mfp_to_collision, double* p_dt_to_census, double* p_weight, 
-    int* p_cellx, int* p_celly, int* found) {
+    int* p_cellx, int* p_celly, int* found, pcg64si_random_t* p_rng) {
 
   // Energy deposition stored locally for collision, not in tally mesh
   *energy_deposition += calculate_energy_deposition(
@@ -353,7 +357,7 @@ static inline void collision_event(
   const double p_absorb = *macroscopic_cs_absorb /
     (*macroscopic_cs_scatter + *macroscopic_cs_absorb);
 
-  double rn0 = generate_random_number(pid, master_key, ip + (counter++)*BLOCK_SIZE);
+  double rn0 = generate_random_number(p_rng);
 
   if (rn0 < p_absorb) {
     /* Model particles absorption */
@@ -381,7 +385,7 @@ static inline void collision_event(
     // plane, which solves a different equation. Change so that we consider
     // the full set of directional cosines, allowing scattering between planes.
 
-    double rn1 = generate_random_number(pid, master_key, ip + (counter++)*BLOCK_SIZE);
+    double rn1 = generate_random_number(p_rng);
 
     // Choose a random scattering angle between -1 and 1
     const double mu_cm = 1.0 - 2.0 * rn1;
@@ -422,7 +426,7 @@ static inline void collision_event(
   *macroscopic_cs_absorb = *number_density * (*microscopic_cs_absorb) * BARNS;
 
   // Re-sample number of mean free paths to collision
-  double rn3 = generate_random_number(pid, master_key, ip + (counter++)*BLOCK_SIZE);
+  double rn3 = generate_random_number(p_rng);
   p_mfp_to_collision[ip] = -log(rn3) / *macroscopic_cs_scatter;
   p_dt_to_census[ip] -= distance_to_collision / *speed;
   *speed = sqrt((2.0 * p_energy[ip] * eV_TO_J) / PARTICLE_MASS);
@@ -725,8 +729,11 @@ size_t inject_particles(const int nparticles, const int global_nx,
 
     for (int k = 0; k < BLOCK_SIZE; ++k) {
       const int pid = b*BLOCK_SIZE + k;
-      double rn0 = generate_random_number(0, 0, pid);
-      double rn1 = generate_random_number(0, 1, pid);
+      pcg64si_random_t rng;
+      pcg64si_srandom_r(&rng, pid);
+
+      double rn0 = generate_random_number(&rng);
+      double rn1 = generate_random_number(&rng);
 
       // Set the initial nandom location of the particle inside the source
       // region
@@ -755,7 +762,7 @@ size_t inject_particles(const int nparticles, const int global_nx,
 
       // Generating theta has uniform density, however 0.0 and 1.0 produce the
       // same value which introduces very very very small bias...
-      double rn2 = generate_random_number(0, 2, pid);
+      double rn2 = generate_random_number(&rng);
       const double theta = 2.0 * M_PI * rn2;
       p->omega_x[k] = cos(theta);
       p->omega_y[k] = sin(theta);
@@ -782,19 +789,9 @@ inline double my_ldexp(double val, int exp)
   return *((double*)&res);
 }
 
-inline double pcg64u01f_random_r(struct pcg_state_64 *rng)
+inline double generate_random_number(pcg64si_random_t* rng) 
 {
   const uint64_t uval = pcg64si_random_r(rng);
   const double x = my_ldexp(uval, -64);
   return x;
-}
-
-inline double generate_random_number(
-    const uint64_t pkey, const uint64_t master_key, const uint64_t counter) {
-
-  uint64_t seed = counter + MASTER_KEY_OFF*master_key + PARTICLE_KEY_OFF*pkey;
-
-  pcg64si_random_t rng;
-  pcg64si_srandom_r(&rng, seed);
-  return pcg64u01f_random_r(&rng);
 }

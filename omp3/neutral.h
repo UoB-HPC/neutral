@@ -1,4 +1,5 @@
 #include "../neutral_interface.h"
+#include "../pcg_variants.h"
 
 // Handles the current active batch of particles
 void handle_particles(
@@ -40,7 +41,7 @@ static inline void collision_event(
     double* p_y, int* p_dead, double* p_energy, 
     double* p_omega_x, double* p_omega_y, const uint64_t pid,
     double* p_mfp_to_collision, double* p_dt_to_census, double* p_weight, 
-    int* p_cellx, int* p_celly, int* found);
+    int* p_cellx, int* p_celly, int* found, pcg64si_random_t* rng);
 
 // Handles the census event
 void census_event(const int global_nx, const int nx, const int x_off,
@@ -93,5 +94,4 @@ double microscopic_cs_for_energy_binary(
 double microscopic_cs_for_energy_linear(
     const CrossSection* cs, const double energy, int* cs_index, int* found);
 
-double generate_random_number(const uint64_t master_key,
-    const uint64_t secondary_key, const uint64_t counter);
+double generate_random_number(pcg64si_random_t* rng);
