@@ -69,13 +69,43 @@ void handle_particles(
   int* p_cellx = particles_start->cellx;
   int* p_celly = particles_start->celly;
   int* p_dead = particles_start->dead;
-  double* cs_scatter_table_keys = cs_scatter_table->keys;
-  double* cs_scatter_table_values = cs_scatter_table->values;
-  int cs_scatter_table_nentries = cs_scatter_table->nentries;
-  double* cs_absorb_table_keys = cs_absorb_table->keys;
-  double* cs_absorb_table_values = cs_absorb_table->values;
-  int cs_absorb_table_nentries = cs_absorb_table->nentries;
 
+  double* cs_scatter_keys = cs_scatter_table->keys;
+  double* cs_scatter_values = cs_scatter_table->values;
+  int cs_scatter_nentries = cs_scatter_table->nentries;
+  double* cs_absorb_keys = cs_absorb_table->keys;
+  double* cs_absorb_values = cs_absorb_table->values;
+  int cs_absorb_nentries = cs_absorb_table->nentries;
+
+  double microscopic_cs_scatter_c = 0.0;
+#pragma acc kernels
+#pragma acc loop independent
+  for(int pp = 0; pp < nparticles_to_process; ++pp) {
+
+    int scatter_cs_index = -1;
+
+#if 0
+    int ind = cs_scatter_nentries / 2;
+    int width = ind / 2;
+    while (p_energy[pp] < cs_scatter_keys[ind] || p_energy[pp] >= cs_scatter_keys[ind + 1]) {
+      ind += (p_energy[pp] < cs_scatter_keys[ind]) ? -width : width;
+      width = max(1, width / 2); // To handle odd cases, allows one extra walk
+    }
+
+    // Return the value linearly interpolated
+    microscopic_cs_scatter_c += cs_scatter_values[ind] +
+      ((p_energy[pp] - cs_scatter_keys[ind]) / (cs_scatter_keys[ind + 1] - cs_scatter_keys[ind])) *
+      (cs_scatter_values[ind + 1] - cs_scatter_values[ind]);
+#endif // if 0
+
+    microscopic_cs_scatter_c += microscopic_cs_for_energy_binary(
+        cs_scatter_keys, cs_scatter_values, cs_scatter_nentries, p_energy[pp], &scatter_cs_index);
+
+  }
+
+  printf("microscopic_cs_scatter_c %.12f\n", microscopic_cs_scatter_c);
+
+#if 0
 #pragma acc kernels
 #pragma acc loop independent
   for(int pp = 0; pp < nparticles_to_process; ++pp) {
@@ -103,11 +133,11 @@ void handle_particles(
     double local_density = density[celly * (nx + 2 * pad) + cellx];
 
     // Fetch the cross sections and prepare related quantities
-    double microscopic_cs_scatter = microscopic_cs_for_energy(
-      cs_scatter_table_keys, cs_scatter_table_values, cs_scatter_table_nentries,
+    double microscopic_cs_scatter = microscopic_cs_for_energy_binary(
+        cs_scatter_keys, cs_scatter_values, cs_scatter_nentries,
         p_energy[pp], &scatter_cs_index);
-    double microscopic_cs_absorb = microscopic_cs_for_energy(
-      cs_absorb_table_keys, cs_absorb_table_values, cs_absorb_table_nentries,
+    double microscopic_cs_absorb = microscopic_cs_for_energy_binary(
+        cs_absorb_keys, cs_absorb_values, cs_absorb_nentries,
         p_energy[pp], &absorb_cs_index);
     double number_density = (local_density * AVOGADROS / MOLAR_MASS);
     double macroscopic_cs_scatter =
@@ -157,9 +187,9 @@ void handle_particles(
             global_nx, nx, x_off, y_off,
             master_key, inv_ntotal_particles, 
             distance_to_collision, local_density, 
-    cs_absorb_table_keys, cs_scatter_table_keys,
-    cs_absorb_table_values, cs_scatter_table_values,
-    cs_absorb_table_nentries, cs_scatter_table_nentries,
+            cs_absorb_keys, cs_scatter_keys,
+            cs_absorb_values, cs_scatter_values,
+            cs_absorb_nentries, cs_scatter_nentries,
             pp, p_x, p_y, p_cellx, p_celly, p_weight, p_energy, p_dead, p_omega_x, p_omega_y, p_dt_to_census, p_mfp_to_collision, &counter, &energy_deposition, 
             &number_density, &microscopic_cs_scatter,
             &microscopic_cs_absorb, &macroscopic_cs_scatter,
@@ -217,6 +247,7 @@ void handle_particles(
   *collisions += ncollisions;
 
   printf("Particles  %llu\n", nparticles);
+#endif // if 0
 }
 
 // Handles a collision event
@@ -224,9 +255,9 @@ inline int collision_event(
     const int global_nx, const int nx, const int x_off, const int y_off,
     const uint64_t master_key, const double inv_ntotal_particles, 
     const double distance_to_collision, const double local_density, 
-    const double* cs_absorb_table_keys, const double* cs_scatter_table_keys,
-    const double* cs_absorb_table_values, const double* cs_scatter_table_values,
-    const int cs_absorb_table_nentries, const int cs_scatter_table_nentries,
+    const double* cs_absorb_keys, const double* cs_scatter_keys,
+    const double* cs_absorb_values, const double* cs_scatter_values,
+    const int cs_absorb_nentries, const int cs_scatter_nentries,
     const uint64_t pp, double* p_x, double* p_y, int* p_cellx, int* p_celly, double* p_weight, double* p_energy, int* p_dead, double* p_omega_x, double* p_omega_y, double* p_dt_to_census, double* p_mfp_to_collision, uint64_t* counter, double* energy_deposition, 
     double* number_density, double* microscopic_cs_scatter,
     double* microscopic_cs_absorb, double* macroscopic_cs_scatter,
@@ -298,11 +329,11 @@ inline int collision_event(
   }
 
   // Energy has changed so update the cross-sections
-  *microscopic_cs_scatter = microscopic_cs_for_energy(
-          cs_scatter_table_keys, cs_scatter_table_values, cs_scatter_table_nentries, 
+  *microscopic_cs_scatter = microscopic_cs_for_energy_linear(
+      cs_scatter_keys, cs_scatter_values, cs_scatter_nentries, 
       p_energy[pp], scatter_cs_index);
-  *microscopic_cs_absorb = microscopic_cs_for_energy(
-          cs_absorb_table_keys, cs_absorb_table_values, cs_absorb_table_nentries, 
+  *microscopic_cs_absorb = microscopic_cs_for_energy_linear(
+      cs_absorb_keys, cs_absorb_values, cs_absorb_nentries, 
       p_energy[pp], absorb_cs_index);
   *number_density = (local_density * AVOGADROS / MOLAR_MASS);
   *macroscopic_cs_scatter = *number_density * (*microscopic_cs_scatter) * BARNS;
@@ -514,33 +545,19 @@ inline double calculate_energy_deposition(
 }
 
 // Fetch the cross section for a particular energy value
-inline double microscopic_cs_for_energy(const double* keys, const double* values,
-                                 const int nentries, 
-    const double p_energy, int* cs_index) {
+inline double microscopic_cs_for_energy_linear(
+    double* keys, double* values, const int nentries, const double energy, int* cs_index) {
 
+  // Determine the correct search direction required to move towards the
+  // new energy
+  const int direction = (energy > keys[*cs_index]) ? 1 : -1;
+
+  // This search will move in the correct direction towards the new energy group
   int ind = 0;
-  if (*cs_index > -1) {
-    // Determine the correct search direction required to move towards the
-    // new energy
-    const int direction = (p_energy > keys[*cs_index]) ? 1 : -1;
-
-    // This search will move in the correct direction towards the new energy
-    // group
-    int found = 0;
-    for (ind = *cs_index; ind >= 0 && ind < nentries; ind += direction) {
-      // Check if we have found the new energy group index
-      if (p_energy >= keys[ind] && p_energy < keys[ind + 1]) {
-        found = 1;
-        break;
-      }
-    }
-  } else {
-    // Use a simple binary search to find the energy group
-    ind = nentries / 2;
-    int width = ind / 2;
-    while (p_energy < keys[ind] || p_energy >= keys[ind + 1]) {
-      ind += (p_energy < keys[ind]) ? -width : width;
-      width = max(1, width / 2); // To handle odd cases, allows one extra walk
+  for (ind = *cs_index; ind >= 0 && ind < nentries; ind += direction) {
+    // Check if we have found the new energy group index
+    if (energy >= keys[ind] && energy < keys[ind + 1]) {
+      break;
     }
   }
 
@@ -548,7 +565,27 @@ inline double microscopic_cs_for_energy(const double* keys, const double* values
 
   // Return the value linearly interpolated
   return values[ind] +
-    ((p_energy - keys[ind]) / (keys[ind + 1] - keys[ind])) *
+    ((energy - keys[ind]) / (keys[ind + 1] - keys[ind])) *
+    (values[ind + 1] - values[ind]);
+}
+
+// Fetch the cross section for a particular energy value
+inline double microscopic_cs_for_energy_binary(
+    double* keys, double* values, const int nentries, const double energy, int* cs_index) {
+
+  // Use a simple binary search to find the energy group
+  int ind = nentries / 2;
+  int width = ind / 2;
+  while (energy < keys[ind] || energy >= keys[ind + 1]) {
+    ind += (energy < keys[ind]) ? -width : width;
+    width = max(1, width / 2); // To handle odd cases, allows one extra walk
+  }
+
+  *cs_index = ind;
+
+  // Return the value linearly interpolated
+  return values[ind] +
+    ((energy - keys[ind]) / (keys[ind + 1] - keys[ind])) *
     (values[ind + 1] - values[ind]);
 }
 
@@ -558,8 +595,8 @@ void validate(const int nx, const int ny, const char* params_filename,
 
   // Reduce the entire energy deposition tally locally
   double local_energy_tally = 0.0;
-#pragma omp target teams distribute parallel for \
-  map(tofrom : local_energy_tally) reduction(+ : local_energy_tally)
+#pragma acc kernels
+#pragma acc loop independent
   for (int ii = 0; ii < nx * ny; ++ii) {
     local_energy_tally += energy_deposition_tally[ii];
   }

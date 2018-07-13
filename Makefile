@@ -24,6 +24,8 @@ CFLAGS_CLANG_OMP4  = -O3 -Wall -fopenmp-targets=nvptx64-nvidia-cuda -fopenmp-non
 										 -fopenmp=libomp --cuda-path=$(CUDA_PATH) -DCLANG
 CFLAGS_PGI_NV			 = -fast -acc -ta=tesla:cc60 -Minfo=acc
 CFLAGS_PGI_MC			 = -ta=multicore -fast 
+CFLAGS_INTEL_RAJA  = -O3 -qopenmp -std=c++11 -DINTEL -Wall
+CFLAGS_NVCC_RAJA   = -O3 -arch=sm_60 -x cu -std=c++11 --expt-extended-lambda -DRAJA_USE_CUDA
 
 OPTIONS  					+= -D__STDC_CONSTANT_MACROS
 
@@ -50,7 +52,7 @@ endif
 
 # Default compiler
 ARCH_LINKER    		= $(ARCH_COMPILER_CC)
-ARCH_FLAGS     		= $(CFLAGS_$(COMPILER))
+ARCH_FLAGS     		= $(CFLAGS_$(COMPILER)) $(OPTIONS)
 ARCH_LDFLAGS   		= $(ARCH_FLAGS) -lm
 ARCH_BUILD_DIR 		= ../obj/neutral/
 ARCH_DIR       		= ..
@@ -68,6 +70,14 @@ ifeq ($(KERNELS), oacc)
   OPTIONS += -DSoA
 endif
 
+ifeq ($(KERNELS), raja)
+ifeq ("${RAJA_PATH}", "")
+$(error "$$RAJA_PATH is not set, please set this to the root of your RAJA install.")
+endif
+  OPTIONS += -I$(RAJA_PATH)/include/
+  ARCH_LDFLAGS = -arch=sm_60 -Xcompiler "-fopenmp" -lRAJA -L$(RAJA_PATH)/lib
+endif
+
 # Get specialised kernels
 SRC  			 = $(wildcard *.c)
 SRC  			+= $(wildcard $(KERNELS)/*.c)
@@ -77,14 +87,14 @@ SRC_CLEAN  = $(subst $(ARCH_DIR)/,,$(SRC))
 OBJS 			+= $(patsubst %.c, $(ARCH_BUILD_DIR)/%.o, $(SRC_CLEAN))
 
 neutral: make_build_dir $(OBJS) Makefile
-	$(ARCH_LINKER) $(OBJS) $(OPTIONS) $(ARCH_LDFLAGS) -o neutral.$(KERNELS)
+	$(ARCH_LINKER) $(OBJS) $(ARCH_LDFLAGS) -o neutral.$(KERNELS)
 
 # Rule to make controlling code
 $(ARCH_BUILD_DIR)/%.o: %.c Makefile 
-	$(ARCH_COMPILER_CC) $(ARCH_FLAGS) $(OPTIONS) -c $< -o $@
+	$(ARCH_COMPILER_CC) $(ARCH_FLAGS) -c $< -o $@
 
 $(ARCH_BUILD_DIR)/%.o: $(ARCH_DIR)/%.c Makefile 
-	$(ARCH_COMPILER_CC) $(ARCH_FLAGS) $(OPTIONS) -c $< -o $@
+	$(ARCH_COMPILER_CC) $(ARCH_FLAGS) -c $< -o $@
 
 make_build_dir:
 	@mkdir -p $(ARCH_BUILD_DIR)/

@@ -7,6 +7,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#define max(a, b) (((a) > (b)) ? (a) : (b))
+
 // Reads a cross section file
 void read_cs_file(const char* filename, CrossSection* cs, Mesh* mesh);
 
@@ -115,17 +117,6 @@ void initialise_neutral_data(NeutralData* neutral_data, Mesh* mesh) {
   printf("Allocated %.4fGB of data.\n", allocation / GB);
 
   initialise_cross_sections(neutral_data, mesh);
-
-#if 0
-#ifdef MPI
-  const int blocks[3] = { 8, 1, 1 };
-  MPI_Datatype types[3] = { MPI_DOUBLE, MPI_UINT64_T, MPI_INT };
-  MPI_Aint disp[3] = { 0, blocks[0]*sizeof(double), disp[0]+sizeof(uint64_t) };
-  MPI_Type_create_struct(
-      2, blocks, disp, types, &particle_type);
-  MPI_Type_commit(&particle_type);
-#endif
-#endif // if 0
 }
 
 // Reads in a cross-sectional data file
