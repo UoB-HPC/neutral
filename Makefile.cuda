@@ -6,7 +6,7 @@ CCBIN_GCC 			= g++
 CCBIN_GCC_POWER = g++
 CCBIN						= $(CCBIN_$(COMPILER))
 
-ARCH_LINKER 	 = $(ARCH_COMPILER_CPP)
+ARCH_LINKER 	 = $(CCBIN)
 ARCH_LDFLAGS   = -fopenmp -lcudart -L$(CUDA_PATH)/lib64
 
 CUDA_SRC   			= $(wildcard $(KERNELS)/*.cu)
