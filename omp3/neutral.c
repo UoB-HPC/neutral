@@ -727,6 +727,7 @@ size_t inject_particles(const int nparticles, const int global_nx,
   for(int b = 0; b < nb; ++b) {
     Particle* p = &(*particles)[b];
 
+#pragma omp simd
     for (int k = 0; k < BLOCK_SIZE; ++k) {
       const int pid = b*BLOCK_SIZE + k;
       pcg64si_random_t rng;
