@@ -184,8 +184,12 @@ void handle_particles(
       while (1) {
         uint64_t ncompleted = 0;
 
+        uint64_t ncom = 0;
+        uint64_t nfac = 0;
+        uint64_t ncol = 0;
+
         START_PROFILING(&tp);
-#pragma omp simd simdlen(16) reduction(+: ncompleted, nfacets, ncollisions)
+#pragma omp simd simdlen(16) reduction(+: ncom, nfac, ncol)
         for (int ip = 0; ip < BLOCK_SIZE; ++ip) {
           if (p_dead[ip]) {
             next_event[ip] = PARTICLE_DEAD;
@@ -219,6 +223,10 @@ void handle_particles(
           }
         }
         STOP_PROFILING(&tp, "calc_events");
+
+        nfacets += nfac;
+        ncompleted += ncom;
+        ncollisions += ncol;
 
         if (ncompleted == BLOCK_SIZE) {
           break;
