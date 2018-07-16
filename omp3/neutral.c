@@ -170,6 +170,9 @@ void handle_particles(
       while (1) {
         uint64_t ncompleted = 0;
 
+        uint64_t nf = 0;
+        uint64_t nc = 0;
+
         START_PROFILING(&tp);
 #pragma omp simd simdlen(16) reduction(+: ncompleted, nfacets, ncollisions)
         for (int ip = 0; ip < BLOCK_SIZE; ++ip) {
@@ -195,16 +198,19 @@ void handle_particles(
           if (distance_to_collision < distance_to_facet[ip] &&
               distance_to_collision < distance_to_census) {
             next_event[ip] = PARTICLE_COLLISION;
-            ncollisions++;
+            nc++;
           } else if (distance_to_facet[ip] < distance_to_census) {
             next_event[ip] = PARTICLE_FACET;
-            nfacets++;
+            nf++;
           } else {
             next_event[ip] = PARTICLE_CENSUS;
             ncompleted++;
           }
         }
         STOP_PROFILING(&tp, "calc_events");
+
+        nfacets += nf;
+        ncollisions += nc;
 
         if (ncompleted == BLOCK_SIZE) {
           break;
