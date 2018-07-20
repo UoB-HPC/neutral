@@ -78,35 +78,28 @@ void handle_particles(
   int cs_absorb_nentries = cs_absorb_table->nentries;
 
   double microscopic_cs_scatter_c = 0.0;
-#pragma acc kernels
-#pragma acc loop independent
-  for(int pp = 0; pp < nparticles_to_process; ++pp) {
-
-    int scatter_cs_index = -1;
-
-#if 0
-    int ind = cs_scatter_nentries / 2;
-    int width = ind / 2;
-    while (p_energy[pp] < cs_scatter_keys[ind] || p_energy[pp] >= cs_scatter_keys[ind + 1]) {
-      ind += (p_energy[pp] < cs_scatter_keys[ind]) ? -width : width;
-      width = max(1, width / 2); // To handle odd cases, allows one extra walk
-    }
-
-    // Return the value linearly interpolated
-    microscopic_cs_scatter_c += cs_scatter_values[ind] +
-      ((p_energy[pp] - cs_scatter_keys[ind]) / (cs_scatter_keys[ind + 1] - cs_scatter_keys[ind])) *
-      (cs_scatter_values[ind + 1] - cs_scatter_values[ind]);
-#endif // if 0
-
-    microscopic_cs_scatter_c += microscopic_cs_for_energy_binary(
-        cs_scatter_keys, cs_scatter_values, cs_scatter_nentries, p_energy[pp], &scatter_cs_index);
-
-  }
-
-  printf("microscopic_cs_scatter_c %.12f\n", microscopic_cs_scatter_c);
-
-#if 0
-#pragma acc kernels
+#pragma acc parallel present(\
+    edgex[:nx],\
+    edgey[:ny],\
+    edgedx[:nx],\
+    edgedy[:ny],\
+    density[:nx*ny],\
+    energy_deposition_tally[:nx*ny],\
+    cs_scatter_keys[:cs_scatter_nentries], \
+    cs_scatter_values[:cs_scatter_nentries], \
+    cs_absorb_keys[:cs_absorb_nentries], \
+    cs_absorb_values[:cs_absorb_nentries],\
+    p_x[:nparticles_to_process],\
+    p_y[:nparticles_to_process],\
+    p_omega_x[:nparticles_to_process],\
+    p_omega_y[:nparticles_to_process],\
+    p_weight[:nparticles_to_process],\
+    p_dt_to_census[:nparticles_to_process],\
+    p_mfp_to_collision[:nparticles_to_process],\
+    p_cellx[:nparticles_to_process],\
+    p_celly[:nparticles_to_process],\
+    p_dead[:nparticles_to_process])\
+  reduction(+: nfacets, ncollisions, nparticles)
 #pragma acc loop independent
   for(int pp = 0; pp < nparticles_to_process; ++pp) {
 
@@ -247,7 +240,6 @@ void handle_particles(
   *collisions += ncollisions;
 
   printf("Particles  %llu\n", nparticles);
-#endif // if 0
 }
 
 // Handles a collision event
@@ -754,29 +746,3 @@ inline double generate_random_numbers(
   pcg64si_srandom_r(&rng, seed);
   return pcg64u01f_random_r(&rng);
 }
-
-#if 0
-#pragma acc routine
-inline void generate_random_numbers(
-    const uint64_t pkey, const uint64_t master_key, const uint64_t counter, 
-    double* rn0, double* rn1) {
-
-  const int nrns = 2;
-  threefry2x64_ctr_t ctr;
-  threefry2x64_ctr_t key;
-  ctr.v[0] = counter;
-  ctr.v[1] = 0;
-  key.v[0] = pkey;
-  key.v[1] = master_key;
-
-  // Generate the random numbers
-  threefry2x64_ctr_t rand = threefry2x64(ctr, key);
-
-  // Turn our random numbers from integrals to double precision
-  uint64_t max_uint64 = UINT64_C(0xFFFFFFFFFFFFFFFF);
-  const double factor = 1.0 / (max_uint64 + 1.0);
-  const double half_factor = 0.5 * factor;
-  *rn0 = rand.v[0] * factor + half_factor;
-  *rn1 = rand.v[1] * factor + half_factor;
-}
-#endif // if 0
