@@ -85,9 +85,10 @@ __device__ double calculate_energy_deposition(
 }
 
 // Generates a pair of random numbers
-__device__ void generate_random_numbers(
-    const uint64_t pkey, const uint64_t master_key, const uint64_t counter,
-    double* rn0, double* rn1) {
+__device__ void generate_random_numbers(const uint64_t pkey,
+                                        const uint64_t master_key,
+                                        const uint64_t counter, double* rn0,
+                                        double* rn1) {
 
   threefry2x64_ctr_t ctr;
   threefry2x64_ctr_t key;
@@ -112,10 +113,10 @@ __global__ void inject_particles_kernel(
     const int y_off, const double local_particle_left_off,
     const double local_particle_bottom_off, const double local_particle_width,
     const double local_particle_height, const int nparticles, const double dt,
-    const double initial_energy, const double* edgex,
-    const double* edgey, double* x, double* y, int* particle_cellx,
-    int* particle_celly, double* omega_x, double* omega_y, double* e,
-    double* weight, double* dt_to_census, double* mfp_to_collision) {
+    const double initial_energy, const double* edgex, const double* edgey,
+    double* x, double* y, int* particle_cellx, int* particle_celly,
+    double* omega_x, double* omega_y, double* e, double* weight,
+    double* dt_to_census, double* mfp_to_collision) {
 
   const int gid = blockIdx.x * blockDim.x + threadIdx.x;
   if (gid >= nparticles)
@@ -169,19 +170,19 @@ __global__ void inject_particles_kernel(
 // Handles an individual particle.
 __global__ void handle_particles_kernel(
     const int nparticles, const int global_nx, const int global_ny,
-    const int nx, const int ny, const uint64_t master_key, const int pad, 
-    const int x_off, const int y_off, const double dt, const int initial, 
-    const int ntotal_particles, const double* density, const double* edgex, 
-    const double* edgey, const double* edgedx, const double* edgedy, 
-    double* energy_deposition_tally, int* particle_cellx, int* particle_celly, 
-    const int cs_scatter_nentries, const int cs_absorb_nentries, 
-    const double* cs_scatter_keys, const double* cs_scatter_values, 
-    const double* cs_absorb_keys, const double* cs_absorb_values, double* particle_e,
-    double* particle_dt_to_census, double* particle_mfp_to_collision,
-    double* particle_weight, double* particle_omega_x, double* particle_omega_y,
-    double* particle_x, double* particle_y, 
-    uint64_t* nfacets_reduce_array, uint64_t* ncollisions_reduce_array, 
-    uint64_t* nprocessed_reduce_array) {
+    const int nx, const int ny, const uint64_t master_key, const int pad,
+    const int x_off, const int y_off, const double dt, const int initial,
+    const int ntotal_particles, const double* density, const double* edgex,
+    const double* edgey, const double* edgedx, const double* edgedy,
+    double* energy_deposition_tally, int* particle_cellx, int* particle_celly,
+    const int cs_scatter_nentries, const int cs_absorb_nentries,
+    const double* cs_scatter_keys, const double* cs_scatter_values,
+    const double* cs_absorb_keys, const double* cs_absorb_values,
+    double* particle_e, double* particle_dt_to_census,
+    double* particle_mfp_to_collision, double* particle_weight,
+    double* particle_omega_x, double* particle_omega_y, double* particle_x,
+    double* particle_y, uint64_t* nfacets_reduce_array,
+    uint64_t* ncollisions_reduce_array, uint64_t* nprocessed_reduce_array) {
 
   // (1) particle can stream and reach census
   // (2) particle can collide and either
@@ -261,9 +262,11 @@ __global__ void handle_particles_kernel(
       double y1 = edgey[celly + 1];
 
       // The bound is open on the left and bottom so we have to correct for this
-      // and required the movement to the facet to go slightly further than the 
-      // edge in the calculated values, using OPEN_BOUND_CORRECTION, which is the
-      // smallest possible distance we can be from the closed bound e.g. 1.0e-14.
+      // and required the movement to the facet to go slightly further than the
+      // edge in the calculated values, using OPEN_BOUND_CORRECTION, which is
+      // the
+      // smallest possible distance we can be from the closed bound e.g.
+      // 1.0e-14.
       double dt_x = (omega_x >= 0.0)
                         ? (x1 - x) * u_x_inv
                         : ((x0 - OPEN_BOUND_CORRECTION) - x) * u_x_inv;
@@ -334,7 +337,8 @@ __global__ void handle_particles_kernel(
           /* Model elastic particle scattering */
 
           // Choose a random scattering angle between -1 and 1
-          generate_random_numbers(pind, master_key, local_key++, &rn[0], &rn[1]);
+          generate_random_numbers(pind, master_key, local_key++, &rn[0],
+                                  &rn[1]);
           const double mu_cm = 1.0 - 2.0 * rn[0];
 
           // Calculate the new energy based on the relation to angle of
@@ -453,8 +457,7 @@ __global__ void handle_particles_kernel(
         macroscopic_cs_scatter =
             number_density * microscopic_cs_scatter * BARNS;
         macroscopic_cs_absorb = number_density * microscopic_cs_absorb * BARNS;
-      }
-      else {
+      } else {
 
         /* Census */
 

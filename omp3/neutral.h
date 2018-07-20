@@ -1,16 +1,18 @@
 #include "../neutral_interface.h"
 
 // Handles the current active batch of particles
-void handle_particles(
-    const int global_nx, const int global_ny, const int nx, const int ny,
-    const uint64_t master_key, const int pad, const int x_off, const int y_off, 
-    const int initial, const double dt, const int* neighbours, const double* density,
-    const double* edgex, const double* edgey, const double* edgedx,
-    const double* edgedy, uint64_t* facets, uint64_t* collisions,
-    const int ntotal_particles,
-    const int nparticles_to_process, Particle* particles_start,
-    CrossSection* cs_scatter_table, CrossSection* cs_absorb_table,
-    double* energy_deposition_tally);
+void handle_particles(const int global_nx, const int global_ny, const int nx,
+                      const int ny, const uint64_t master_key, const int pad,
+                      const int x_off, const int y_off, const int initial,
+                      const double dt, const int* neighbours,
+                      const double* density, const double* edgex,
+                      const double* edgey, const double* edgedx,
+                      const double* edgedy, uint64_t* facets,
+                      uint64_t* collisions, const int ntotal_particles,
+                      const int nparticles_to_process,
+                      Particle* particles_start, CrossSection* cs_scatter_table,
+                      CrossSection* cs_absorb_table,
+                      double* energy_deposition_tally);
 
 // Handle facet event
 int facet_event(const int global_nx, const int global_ny, const int nx,
@@ -22,21 +24,21 @@ int facet_event(const int global_nx, const int global_ny, const int nx,
                 double* energy_deposition, double* number_density,
                 double* microscopic_cs_scatter, double* microscopic_cs_absorb,
                 double* macroscopic_cs_scatter, double* macroscopic_cs_absorb,
-                double* energy_deposition_tally, int* cellx, int* celly, 
+                double* energy_deposition_tally, int* cellx, int* celly,
                 double* local_density);
 
 // Handles a collision event
 int collision_event(
     const int global_nx, const int nx, const int x_off, const int y_off,
-    const uint64_t pkey, const uint64_t master_key, const double inv_ntotal_particles, 
-    const double distance_to_collision, const double local_density, 
-    const CrossSection* cs_scatter_table, const CrossSection* cs_absorb_table, 
-    Particle* particle, uint64_t* counter, double* energy_deposition,
-    double* number_density, double* microscopic_cs_scatter,
-    double* microscopic_cs_absorb, double* macroscopic_cs_scatter,
-    double* macroscopic_cs_absorb, double* energy_deposition_tally,
-    int* scatter_cs_index, int* absorb_cs_index, double rn[NRANDOM_NUMBERS],
-    double* speed);
+    const uint64_t pkey, const uint64_t master_key,
+    const double inv_ntotal_particles, const double distance_to_collision,
+    const double local_density, const CrossSection* cs_scatter_table,
+    const CrossSection* cs_absorb_table, Particle* particle, uint64_t* counter,
+    double* energy_deposition, double* number_density,
+    double* microscopic_cs_scatter, double* microscopic_cs_absorb,
+    double* macroscopic_cs_scatter, double* macroscopic_cs_absorb,
+    double* energy_deposition_tally, int* scatter_cs_index,
+    int* absorb_cs_index, double rn[NRANDOM_NUMBERS], double* speed);
 
 void census_event(const int global_nx, const int nx, const int x_off,
                   const int y_off, const double inv_ntotal_particles,
@@ -80,6 +82,5 @@ double calculate_energy_deposition(
 double microscopic_cs_for_energy(const CrossSection* cs, const double energy,
                                  int* cs_index);
 
-void generate_random_numbers(
-    const uint64_t pkey, const uint64_t master_key, const uint64_t counter, 
-    double* rn0, double* rn1);
+void generate_random_numbers(const uint64_t pkey, const uint64_t master_key,
+                             const uint64_t counter, double* rn0, double* rn1);

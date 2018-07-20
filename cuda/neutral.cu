@@ -16,14 +16,14 @@
 // Performs a solve of dependent variables for particle transport.
 void solve_transport_2d(
     const int nx, const int ny, const int global_nx, const int global_ny,
-    const uint64_t master_key, const int pad, const int x_off, const int y_off, 
-    const double dt, const int nparticles_total, int* nlocal_particles, 
+    const uint64_t master_key, const int pad, const int x_off, const int y_off,
+    const double dt, const int nparticles_total, int* nlocal_particles,
     const int* neighbours, Particle* particles, const double* density,
     const double* edgex, const double* edgey, const double* edgedx,
     const double* edgedy, CrossSection* cs_scatter_table,
     CrossSection* cs_absorb_table, double* energy_deposition_tally,
     uint64_t* nfacets_reduce_array, uint64_t* ncollisions_reduce_array,
-    uint64_t* nprocessed_reduce_array, uint64_t* facet_events, 
+    uint64_t* nprocessed_reduce_array, uint64_t* facet_events,
     uint64_t* collision_events) {
 
   // This is the known starting number of particles
@@ -35,39 +35,39 @@ void solve_transport_2d(
     return;
   }
 
-  handle_particles(global_nx, global_ny, nx, ny, master_key, pad, x_off, y_off, 1, dt,
-                   neighbours, density, edgex, edgey, edgedx, edgedy, facet_events,
-                   collision_events, nparticles_sent, nparticles_total,
-                   nparticles, particles, cs_scatter_table, cs_absorb_table, 
-                   energy_deposition_tally, nfacets_reduce_array,
-                   ncollisions_reduce_array, nprocessed_reduce_array);
+  handle_particles(
+      global_nx, global_ny, nx, ny, master_key, pad, x_off, y_off, 1, dt,
+      neighbours, density, edgex, edgey, edgedx, edgedy, facet_events,
+      collision_events, nparticles_sent, nparticles_total, nparticles,
+      particles, cs_scatter_table, cs_absorb_table, energy_deposition_tally,
+      nfacets_reduce_array, ncollisions_reduce_array, nprocessed_reduce_array);
 }
 
 // Handles the current active batch of particles
 void handle_particles(
     const int global_nx, const int global_ny, const int nx, const int ny,
-    const uint64_t master_key, const int pad, const int x_off, const int y_off, const int initial,
-    const double dt, const int* neighbours, const double* density,
-    const double* edgex, const double* edgey, const double* edgedx,
-    const double* edgedy, uint64_t* facets, uint64_t* collisions,
-    int* nparticles_sent, const int nparticles_total,
+    const uint64_t master_key, const int pad, const int x_off, const int y_off,
+    const int initial, const double dt, const int* neighbours,
+    const double* density, const double* edgex, const double* edgey,
+    const double* edgedx, const double* edgedy, uint64_t* facets,
+    uint64_t* collisions, int* nparticles_sent, const int nparticles_total,
     const int nparticles_to_process, Particle* particles,
     CrossSection* cs_scatter_table, CrossSection* cs_absorb_table,
-    double* energy_deposition_tally, uint64_t* nfacets_reduce_array, 
+    double* energy_deposition_tally, uint64_t* nfacets_reduce_array,
     uint64_t* ncollisions_reduce_array, uint64_t* nprocessed_reduce_array) {
 
   const int nthreads = NTHREADS;
   const int nblocks = ceil(nparticles_total / (double)NTHREADS);
   handle_particles_kernel<<<nblocks, nthreads>>>(
-      nparticles_total, global_nx, global_ny, nx, ny, master_key, pad, x_off, y_off, dt,
-      initial, nparticles_total, density, edgex, edgey, edgedx, edgedy,
-      energy_deposition_tally, particles->cellx, particles->celly,
+      nparticles_total, global_nx, global_ny, nx, ny, master_key, pad, x_off,
+      y_off, dt, initial, nparticles_total, density, edgex, edgey, edgedx,
+      edgedy, energy_deposition_tally, particles->cellx, particles->celly,
       cs_scatter_table->nentries, cs_absorb_table->nentries,
       cs_scatter_table->keys, cs_scatter_table->values, cs_absorb_table->keys,
       cs_absorb_table->values, particles->energy, particles->dt_to_census,
       particles->mfp_to_collision, particles->weight, particles->omega_x,
-      particles->omega_y, particles->x, particles->y, 
-      nfacets_reduce_array, ncollisions_reduce_array, nprocessed_reduce_array);
+      particles->omega_y, particles->x, particles->y, nfacets_reduce_array,
+      ncollisions_reduce_array, nprocessed_reduce_array);
 
   // Finalise the reduction of the balance tallies
   uint64_t nfacets = 0;
@@ -130,8 +130,7 @@ size_t inject_particles(const int nparticles, const int global_nx,
 }
 
 // Sends a particle to a neighbour and replaces in the particle list
-void send_and_mark_particle(const int destination, Particle* particle) {
-}
+void send_and_mark_particle(const int destination, Particle* particle) {}
 
 // Validates the results of the simulation
 void validate(const int nx, const int ny, const char* params_filename,
