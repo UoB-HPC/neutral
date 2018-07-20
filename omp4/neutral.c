@@ -80,12 +80,13 @@ void handle_particles(const int global_nx, const int global_ny, const int nx,
   double* cs_absorb_table_values = cs_absorb_table->values;
   int cs_absorb_table_nentries = cs_absorb_table->nentries;
 
-#pragma omp target teams distribute parallel for simd \
+  int nt = nparticles_to_process/128+1;
+
+#pragma omp target teams distribute parallel for \
   map(tofrom: nfacets, ncollisions, nparticles) \
   reduction(+: nfacets, ncollisions, nparticles) \
-  num_teams((int)(nparticles_to_process/128.0)+1)
+  num_teams(nt)
   for (int pp = 0; pp < nparticles_to_process; ++pp) {
-
     // (1) particle can stream and reach census
     // (2) particle can collide and either
     //      - the particle will be absorbed
@@ -109,12 +110,14 @@ void handle_particles(const int global_nx, const int global_ny, const int nx,
     double local_density = density[celly * (nx + 2 * pad) + cellx];
 
     // Fetch the cross sections and prepare related quantities
-    double microscopic_cs_scatter = microscopic_cs_for_energy(
+    double microscopic_cs_scatter; 
+    microscopic_cs_for_energy(
         cs_scatter_table_keys, cs_scatter_table_values,
-        cs_scatter_table_nentries, p_energy[pp], &scatter_cs_index);
-    double microscopic_cs_absorb = microscopic_cs_for_energy(
+        cs_scatter_table_nentries, p_energy[pp], &scatter_cs_index, &microscopic_cs_scatter);
+    double microscopic_cs_absorb; 
+    microscopic_cs_for_energy(
         cs_absorb_table_keys, cs_absorb_table_values, cs_absorb_table_nentries,
-        p_energy[pp], &absorb_cs_index);
+        p_energy[pp], &absorb_cs_index, &microscopic_cs_absorb);
     double number_density = (local_density * AVOGADROS / MOLAR_MASS);
     double macroscopic_cs_scatter =
         number_density * microscopic_cs_scatter * BARNS;
@@ -217,7 +220,7 @@ void handle_particles(const int global_nx, const int global_ny, const int nx,
 }
 
 // Handles a collision event
-static inline int collision_event(
+int collision_event(
     const int global_nx, const int nx, const int x_off, const int y_off,
     const uint64_t master_key, const double inv_ntotal_particles,
     const double distance_to_collision, const double local_density,
@@ -234,10 +237,10 @@ static inline int collision_event(
     int* absorb_cs_index, double rn[NRANDOM_NUMBERS], double* speed) {
 
   // Energy deposition stored locally for collision, not in tally mesh
-  *energy_deposition += calculate_energy_deposition(
+  add_energy_deposition(
       global_nx, nx, x_off, y_off, p_energy[pp], p_weight[pp],
       inv_ntotal_particles, distance_to_collision, *number_density,
-      *microscopic_cs_absorb, *microscopic_cs_scatter + *microscopic_cs_absorb);
+      *microscopic_cs_absorb, *microscopic_cs_scatter + *microscopic_cs_absorb, energy_deposition);
 
   // Moves the particle to the collision site
   p_x[pp] += distance_to_collision * p_omega_x[pp];
@@ -298,12 +301,12 @@ static inline int collision_event(
   }
 
   // Energy has changed so update the cross-sections
-  *microscopic_cs_scatter = microscopic_cs_for_energy(
+  microscopic_cs_for_energy(
       cs_scatter_table_keys, cs_scatter_table_values, cs_scatter_table_nentries,
-      p_energy[pp], scatter_cs_index);
-  *microscopic_cs_absorb = microscopic_cs_for_energy(
+      p_energy[pp], scatter_cs_index, microscopic_cs_scatter);
+  microscopic_cs_for_energy(
       cs_absorb_table_keys, cs_absorb_table_values, cs_absorb_table_nentries,
-      p_energy[pp], absorb_cs_index);
+      p_energy[pp], absorb_cs_index, microscopic_cs_absorb);
   *number_density = (local_density * AVOGADROS / MOLAR_MASS);
   *macroscopic_cs_scatter = *number_density * (*microscopic_cs_scatter) * BARNS;
   *macroscopic_cs_absorb = *number_density * (*microscopic_cs_absorb) * BARNS;
@@ -318,7 +321,7 @@ static inline int collision_event(
 }
 
 // Handle facet event
-static inline int
+int
 facet_event(const int global_nx, const int global_ny, const int nx,
             const int ny, const int x_off, const int y_off,
             const double inv_ntotal_particles, const double distance_to_facet,
@@ -337,10 +340,10 @@ facet_event(const int global_nx, const int global_ny, const int nx,
   p_mfp_to_collision[pp] -= (distance_to_facet / cell_mfp);
   p_dt_to_census[pp] -= (distance_to_facet / speed);
 
-  *energy_deposition += calculate_energy_deposition(
+   add_energy_deposition(
       global_nx, nx, x_off, y_off, p_energy[pp], p_weight[pp],
       inv_ntotal_particles, distance_to_facet, *number_density,
-      *microscopic_cs_absorb, *microscopic_cs_scatter + *microscopic_cs_absorb);
+      *microscopic_cs_absorb, *microscopic_cs_scatter + *microscopic_cs_absorb, energy_deposition);
 
   // Update tallies as we leave a cell
   update_tallies(nx, x_off, y_off, p_cellx[pp], p_celly[pp],
@@ -402,7 +405,7 @@ facet_event(const int global_nx, const int global_ny, const int nx,
 }
 
 // Handles the census event
-static inline void
+void
 census_event(const int global_nx, const int nx, const int x_off,
              const int y_off, const double inv_ntotal_particles,
              const double distance_to_census, const double cell_mfp,
@@ -417,10 +420,10 @@ census_event(const int global_nx, const int nx, const int x_off,
   p_x[pp] += distance_to_census * p_omega_x[pp];
   p_y[pp] += distance_to_census * p_omega_y[pp];
   p_mfp_to_collision[pp] -= (distance_to_census / cell_mfp);
-  *energy_deposition += calculate_energy_deposition(
+   add_energy_deposition(
       global_nx, nx, x_off, y_off, p_energy[pp], p_weight[pp],
       inv_ntotal_particles, distance_to_census, *number_density,
-      *microscopic_cs_absorb, *microscopic_cs_scatter + *microscopic_cs_absorb);
+      *microscopic_cs_absorb, *microscopic_cs_scatter + *microscopic_cs_absorb, energy_deposition);
 
   // Need to store tally information as finished with particle
   update_tallies(nx, x_off, y_off, p_cellx[pp], p_celly[pp],
@@ -431,7 +434,7 @@ census_event(const int global_nx, const int nx, const int x_off,
 }
 
 // Tallies the energy deposition in the cell
-static inline void update_tallies(const int nx, const int x_off,
+void update_tallies(const int nx, const int x_off,
                                   const int y_off, const int p_cellx,
                                   const int p_celly,
                                   const double inv_ntotal_particles,
@@ -447,7 +450,7 @@ static inline void update_tallies(const int nx, const int x_off,
 }
 
 // Calculate the distance to the next facet
-static inline void
+void
 calc_distance_to_facet(const int global_nx, const double p_x, const double p_y,
                        const int pad, const int x_off, const int y_off,
                        const double p_omega_x, const double p_omega_y,
@@ -498,12 +501,12 @@ calc_distance_to_facet(const int global_nx, const double p_x, const double p_y,
 }
 
 // Calculate the energy deposition in the cell
-static inline double calculate_energy_deposition(
+void add_energy_deposition(
     const int global_nx, const int nx, const int x_off, const int y_off,
     const double p_energy, const double p_weight,
     const double inv_ntotal_particles, const double path_length,
     const double number_density, const double microscopic_cs_absorb,
-    const double microscopic_cs_total) {
+    const double microscopic_cs_total, double* ed) {
 
   // Calculate the energy deposition based on the path length
   const double average_exit_energy_absorb = 0.0;
@@ -518,16 +521,16 @@ static inline double calculate_energy_deposition(
       average_exit_energy_scatter;
   const double heating_response =
       (p_energy - scattering_heating - absorption_heating);
-  return p_weight * path_length * (microscopic_cs_total * BARNS) *
+  *ed +=  p_weight * path_length * (microscopic_cs_total * BARNS) *
          heating_response * number_density;
 }
 
 // Fetch the cross section for a particular energy value
-static inline double microscopic_cs_for_energy(const double* keys,
+void microscopic_cs_for_energy(const double* keys,
                                                const double* values,
                                                const int nentries,
                                                const double p_energy,
-                                               int* cs_index) {
+                                               int* cs_index, double* cs) {
 
   int ind = 0;
   if (*cs_index > -1) {
@@ -558,9 +561,33 @@ static inline double microscopic_cs_for_energy(const double* keys,
   *cs_index = ind;
 
   // Return the value linearly interpolated
-  return values[ind] +
+  *cs = values[ind] +
          ((p_energy - keys[ind]) / (keys[ind + 1] - keys[ind])) *
              (values[ind + 1] - values[ind]);
+}
+
+void generate_random_numbers(const uint64_t pkey,
+                                           const uint64_t master_key,
+                                           const uint64_t counter, double* rn0,
+                                           double* rn1) {
+
+  const int nrns = 2;
+  threefry2x64_ctr_t ctr;
+  threefry2x64_ctr_t key;
+  ctr.v[0] = counter;
+  ctr.v[1] = 0;
+  key.v[0] = pkey;
+  key.v[1] = master_key;
+
+  // Generate the random numbers
+  threefry2x64_ctr_t rand = threefry2x64(ctr, key);
+
+  // Turn our random numbers from integrals to double precision
+  uint64_t max_uint64 = UINT64_C(0xFFFFFFFFFFFFFFFF);
+  const double factor = 1.0 / (max_uint64 + 1.0);
+  const double half_factor = 0.5 * factor;
+  *rn0 = rand.v[0] * factor + half_factor;
+  *rn1 = rand.v[1] * factor + half_factor;
 }
 
 // Validates the results of the simulation
@@ -702,26 +729,3 @@ size_t inject_particles(const int nparticles, const int global_nx,
   return allocation;
 }
 
-static inline void generate_random_numbers(const uint64_t pkey,
-                                           const uint64_t master_key,
-                                           const uint64_t counter, double* rn0,
-                                           double* rn1) {
-
-  const int nrns = 2;
-  threefry2x64_ctr_t ctr;
-  threefry2x64_ctr_t key;
-  ctr.v[0] = counter;
-  ctr.v[1] = 0;
-  key.v[0] = pkey;
-  key.v[1] = master_key;
-
-  // Generate the random numbers
-  threefry2x64_ctr_t rand = threefry2x64(ctr, key);
-
-  // Turn our random numbers from integrals to double precision
-  uint64_t max_uint64 = UINT64_C(0xFFFFFFFFFFFFFFFF);
-  const double factor = 1.0 / (max_uint64 + 1.0);
-  const double half_factor = 0.5 * factor;
-  *rn0 = rand.v[0] * factor + half_factor;
-  *rn1 = rand.v[1] * factor + half_factor;
-}

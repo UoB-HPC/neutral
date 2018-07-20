@@ -14,6 +14,38 @@ void handle_particles(const int global_nx, const int global_ny, const int nx,
                       CrossSection* cs_absorb_table,
                       double* energy_deposition_tally);
 
+// Validates the results of the simulation
+void validate(const int nx, const int ny, const char* params_filename,
+              const int rank, double* energy_deposition_tally);
+
+
+#pragma omp declare target
+
+// Fetch the cross section for a particular energy value
+void microscopic_cs_for_energy(const double* keys, const double* values,
+                                 const int nentries, const double p_energy,
+                                 int* cs_index, double* cs);
+
+void generate_random_numbers(const uint64_t pkey, const uint64_t master_key,
+                             const uint64_t counter, double* rn0, double* rn1);
+
+// Calculate the energy deposition in the cell
+void add_energy_deposition(const int global_nx, const int nx,
+                                   const int x_off, const int y_off,
+                                   const double p_energy, const double p_weight,
+                                   const double inv_ntotal_particles,
+                                   const double path_length,
+                                   const double number_density,
+                                   const double microscopic_cs_absorb,
+                                   const double microscopic_cs_total, double* ed);
+
+// Tallies the energy deposition in the cell
+void update_tallies(const int nx, const int x_off, const int y_off,
+                    const int p_cellx, const int p_celly,
+                    const double inv_ntotal_particles,
+                    const double energy_deposition,
+                    double* energy_deposition_tally);
+
 // Handles a collision event
 int collision_event(
     const int global_nx, const int nx, const int x_off, const int y_off,
@@ -59,16 +91,6 @@ void census_event(const int global_nx, const int nx, const int x_off,
                   double* microscopic_cs_scatter, double* microscopic_cs_absorb,
                   double* energy_deposition_tally);
 
-// Tallies the energy deposition in the cell
-void update_tallies(const int nx, const int x_off, const int y_off,
-                    const int p_cellx, const int p_celly,
-                    const double inv_ntotal_particles,
-                    const double energy_deposition,
-                    double* energy_deposition_tally);
-
-// Sends a particle to a neighbour and replaces in the particle list
-void send_and_mark_particle(const int destination, Particle* particle);
-
 // Calculate the distance to the next facet
 void calc_distance_to_facet(const int global_nx, const double p_x,
                             const double p_y, const int pad, const int x_off,
@@ -78,24 +100,6 @@ void calc_distance_to_facet(const int global_nx, const double p_x,
                             double* distance_to_facet, int* x_facet,
                             const double* edgex, const double* edgey);
 
-// Calculate the energy deposition in the cell
-double calculate_energy_deposition(const int global_nx, const int nx,
-                                   const int x_off, const int y_off,
-                                   const double p_energy, const double p_weight,
-                                   const double inv_ntotal_particles,
-                                   const double path_length,
-                                   const double number_density,
-                                   const double microscopic_cs_absorb,
-                                   const double microscopic_cs_total);
 
-// Fetch the cross section for a particular energy value
-double microscopic_cs_for_energy(const double* keys, const double* values,
-                                 const int nentries, const double p_energy,
-                                 int* cs_index);
 
-// Validates the results of the simulation
-void validate(const int nx, const int ny, const char* params_filename,
-              const int rank, double* energy_deposition_tally);
-
-void generate_random_numbers(const uint64_t pkey, const uint64_t master_key,
-                             const uint64_t counter, double* rn0, double* rn1);
+#pragma omp end declare target
