@@ -5,6 +5,7 @@
 #include "../../shared.h"
 #include "../../shared_data.h"
 #include "../neutral_interface.h"
+#include "pcg_variants.h"
 #include <assert.h>
 #include <float.h>
 #include <math.h>
@@ -17,6 +18,9 @@
 #endif
 
 #define max(a, b) (((a) > (b)) ? (a) : (b))
+
+#define MASTER_KEY_OFF (1000000000000000ULL)
+#define PARTICLE_KEY_OFF (10000ULL)
 
 // Performs a solve of dependent variables for particle transport
 void solve_transport_2d(
@@ -113,9 +117,8 @@ void handle_particles(const int global_nx, const int global_ny, const int nx,
           // particle
           if (initial) {
             particle->dt_to_census = dt;
-            generate_random_numbers(pkey, master_key, counter++, &rn[0],
-                                    &rn[1]);
-            particle->mfp_to_collision = -log(rn[0]) / macroscopic_cs_scatter;
+            double rn0 = generate_random_numbers(pkey, master_key, counter++);
+            particle->mfp_to_collision = -log(rn0) / macroscopic_cs_scatter;
           }
 
           // Loop until we have reached census
@@ -222,10 +225,9 @@ RAJA_DEVICE int collision_event(
   const double p_absorb = *macroscopic_cs_absorb /
                           (*macroscopic_cs_scatter + *macroscopic_cs_absorb);
 
-  double rn1[NRANDOM_NUMBERS];
-  generate_random_numbers(pkey, master_key, (*counter)++, &rn1[0], &rn1[1]);
+  double rn0 = generate_random_numbers(pkey, master_key, (*counter)++);
 
-  if (rn1[0] < p_absorb) {
+  if (rn0 < p_absorb) {
     /* Model particle absorption */
 
     // Find the new particle weight after absorption, saving the energy change
@@ -250,7 +252,8 @@ RAJA_DEVICE int collision_event(
     // the full set of directional cosines, allowing scattering between planes.
 
     // Choose a random scattering angle between -1 and 1
-    const double mu_cm = 1.0 - 2.0 * rn1[1];
+    double rn1 = generate_random_numbers(pkey, master_key, (*counter)++);
+    const double mu_cm = 1.0 - 2.0 * rn1;
 
     // Calculate the new energy based on the relation to angle of incidence
     const double e_new = particle->energy *
@@ -282,8 +285,8 @@ RAJA_DEVICE int collision_event(
   *macroscopic_cs_absorb = *number_density * (*microscopic_cs_absorb) * BARNS;
 
   // Re-sample number of mean free paths to collision
-  generate_random_numbers(pkey, master_key, (*counter)++, &rn[0], &rn[1]);
-  particle->mfp_to_collision = -log(rn[0]) / *macroscopic_cs_scatter;
+  double rn2 = generate_random_numbers(pkey, master_key, (*counter)++);
+  particle->mfp_to_collision = -log(rn2) / *macroscopic_cs_scatter;
   particle->dt_to_census -= distance_to_collision / *speed;
   *speed = sqrt((2.0 * particle->energy * eV_TO_J) / PARTICLE_MASS);
 
@@ -405,9 +408,21 @@ RAJA_DEVICE void update_tallies(const int nx, const int x_off, const int y_off,
   const int cellx = particle->cellx - x_off;
   const int celly = particle->celly - y_off;
 
+#if defined(RAJA_USE_CUDA)
+  atomicAdd(
+      &energy_deposition_tally[celly * nx + cellx],
+      energy_deposition*inv_ntotal_particles);
+#else
 #pragma omp atomic update
-  energy_deposition_tally[celly * nx + cellx] +=
-      energy_deposition * inv_ntotal_particles;
+      energy_deposition_tally[celly * nx + cellx] += 
+        energy_deposition*inv_ntotal_particles;
+#endif
+
+#if 0
+  RAJA::atomic::atomicAdd<atomic_policy>(
+      &energy_deposition_tally[celly * nx + cellx],
+      energy_deposition*inv_ntotal_particles);
+#endif // if 0
 }
 
 // Calculate the distance to the next facet
@@ -501,19 +516,13 @@ RAJA_DEVICE double microscopic_cs_for_energy(const CrossSection* cs,
 
     // This search will move in the correct direction towards the new energy
     // group
-    int found = 0;
     for (ind = *cs_index; ind >= 0 && ind < cs->nentries; ind += direction) {
       // Check if we have found the new energy group index
       if (energy >= keys[ind] && energy < keys[ind + 1]) {
-        found = 1;
         break;
       }
     }
 
-    // if (!found) {
-    //  TERMINATE("No key for energy %.12e in cross sectional lookup.\n",
-    //  energy);
-    //}
   } else {
     // Use a simple binary search to find the energy group
     ind = cs->nentries / 2;
@@ -583,23 +592,31 @@ size_t inject_particles(const int nparticles, const int global_nx,
                         const double* edgey, const double initial_energy,
                         Particle** particles) {
 
-  *particles = (Particle*)malloc(sizeof(Particle) * nparticles * 2);
-  if (!*particles) {
+  Particle* p;
+
+#if defined(RAJA_USE_CUDA)
+  cudaMalloc(&p, sizeof(Particle)*nparticles*2);
+#else
+  p = (Particle*)malloc(sizeof(Particle) * nparticles * 2);
+  if (!p) {
     TERMINATE("Could not allocate particle array.\n");
   }
+#endif
 
   START_PROFILING(&compute_profile);
-#pragma omp parallel for
-  for (int kk = 0; kk < nparticles; ++kk) {
-    Particle* particle = &(*particles)[kk];
 
-    double rn[NRANDOM_NUMBERS];
-    generate_random_numbers(kk, 0, 0, &rn[0], &rn[1]);
+  RAJA::forall<exec_policy>(
+      RAJA::RangeSegment(0, nparticles), [=] RAJA_DEVICE(int kk) {
+
+    Particle* particle = &p[kk];
+
+    double rn0 = generate_random_numbers(kk, 0, 0);
+    double rn1 = generate_random_numbers(kk, 0, 1);
 
     // Set the initial nandom location of the particle inside the source
     // region
-    particle->x = local_particle_left_off + rn[0] * local_particle_width;
-    particle->y = local_particle_bottom_off + rn[1] * local_particle_height;
+    particle->x = local_particle_left_off + rn0 * local_particle_width;
+    particle->y = local_particle_bottom_off + rn1 * local_particle_height;
 
     // Check the location of the specific cell that the particle sits within.
     // We have to check this explicitly because the mesh might be non-uniform.
@@ -622,10 +639,9 @@ size_t inject_particles(const int nparticles, const int global_nx,
     particle->celly = celly;
 
     // Generating theta has uniform density, however 0.0 and 1.0 produce the
-    // same
-    // value which introduces very very very small bias...
-    generate_random_numbers(kk, 0, 1, &rn[0], &rn[1]);
-    const double theta = 2.0 * M_PI * rn[0];
+    // same value which introduces very very very small bias...
+    double rn2 = generate_random_numbers(kk, 0, 2);
+    const double theta = 2.0 * M_PI * rn2;
     particle->omega_x = cos(theta);
     particle->omega_y = sin(theta);
 
@@ -638,33 +654,37 @@ size_t inject_particles(const int nparticles, const int global_nx,
     particle->dt_to_census = dt;
     particle->mfp_to_collision = 0.0;
     particle->dead = 0;
-  }
+  });
 
   STOP_PROFILING(&compute_profile, "initialising particles");
+
+  *particles = p;
 
   return (sizeof(Particle) * nparticles * 2);
 }
 
-RAJA_DEVICE void generate_random_numbers(const uint64_t pkey,
-                                         const uint64_t master_key,
-                                         const uint64_t counter, double* rn0,
-                                         double* rn1) {
-
-  const int nrns = 2;
-  threefry2x64_ctr_t ctr;
-  threefry2x64_ctr_t key;
-  ctr.v[0] = counter;
-  ctr.v[1] = 0;
-  key.v[0] = pkey;
-  key.v[1] = master_key;
-
-  // Generate the random numbers
-  threefry2x64_ctr_t rand = threefry2x64(ctr, key);
-
+RAJA_HOST_DEVICE double my_ldexp(uint64_t val) {
   // Turn our random numbers from integrals to double precision
   uint64_t max_uint64 = UINT64_C(0xFFFFFFFFFFFFFFFF);
   const double factor = 1.0 / (max_uint64 + 1.0);
   const double half_factor = 0.5 * factor;
-  *rn0 = rand.v[0] * factor + half_factor;
-  *rn1 = rand.v[1] * factor + half_factor;
+  return val * factor + half_factor;
+}
+
+RAJA_HOST_DEVICE double pcg64u01f_random_r(struct pcg_state_64* rng) {
+  const uint64_t uval = pcg64si_random_r(rng);
+  const double x = my_ldexp(uval);
+  return x;
+}
+
+RAJA_HOST_DEVICE double generate_random_numbers(const uint64_t pkey,
+                                      const uint64_t master_key,
+                                      const uint64_t counter) {
+
+  uint64_t seed =
+      counter + MASTER_KEY_OFF * master_key + PARTICLE_KEY_OFF * pkey;
+
+  pcg64si_random_t rng;
+  pcg64si_srandom_r(&rng, seed);
+  return pcg64u01f_random_r(&rng);
 }

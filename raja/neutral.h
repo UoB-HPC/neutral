@@ -87,7 +87,6 @@ RAJA_DEVICE double microscopic_cs_for_energy(const CrossSection* cs,
                                              const double energy,
                                              int* cs_index);
 
-RAJA_HOST_DEVICE void generate_random_numbers(const uint64_t pkey,
-                                              const uint64_t master_key,
-                                              const uint64_t counter,
-                                              double* rn0, double* rn1);
+RAJA_HOST_DEVICE double generate_random_numbers(const uint64_t pkey,
+                                      const uint64_t master_key,
+                                      const uint64_t counter);

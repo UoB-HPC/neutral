@@ -249,10 +249,12 @@ int collision_event(
   const double p_absorb = *macroscopic_cs_absorb /
                           (*macroscopic_cs_scatter + *macroscopic_cs_absorb);
 
-  double rn1[NRANDOM_NUMBERS];
-  generate_random_numbers(pp, master_key, (*counter)++, &rn1[0], &rn1[1]);
+  double rn0;
+  double rn1;
+  generate_random_numbers(pp, master_key, *counter, &rn0, &rn1);
+  (*counter)++;
 
-  if (rn1[0] < p_absorb) {
+  if (rn0 < p_absorb) {
     /* Model particle absorption */
 
     // Find the new particle weight after absorption, saving the energy change
@@ -278,7 +280,7 @@ int collision_event(
     // the full set of directional cosines, allowing scattering between planes.
 
     // Choose a random scattering angle between -1 and 1
-    const double mu_cm = 1.0 - 2.0 * rn1[1];
+    const double mu_cm = 1.0 - 2.0 * rn1;
 
     // Calculate the new energy based on the relation to angle of incidence
     const double e_new = p_energy[pp] *
@@ -312,8 +314,9 @@ int collision_event(
   *macroscopic_cs_absorb = *number_density * (*microscopic_cs_absorb) * BARNS;
 
   // Re-sample number of mean free paths to collision
-  generate_random_numbers(pp, master_key, (*counter)++, &rn[0], &rn[1]);
-  p_mfp_to_collision[pp] = -log(rn[0]) / *macroscopic_cs_scatter;
+  generate_random_numbers(pp, master_key, *counter, &rn0, &rn1);
+  (*counter)++;
+  p_mfp_to_collision[pp] = -log(rn0) / *macroscopic_cs_scatter;
   p_dt_to_census[pp] -= distance_to_collision / *speed;
   *speed = sqrt((2.0 * p_energy[pp] * eV_TO_J) / PARTICLE_MASS);
 
@@ -567,9 +570,9 @@ void microscopic_cs_for_energy(const double* keys,
 }
 
 void generate_random_numbers(const uint64_t pkey,
-                                           const uint64_t master_key,
-                                           const uint64_t counter, double* rn0,
-                                           double* rn1) {
+    const uint64_t master_key,
+    const uint64_t counter, double* rn0,
+    double* rn1) {
 
   const int nrns = 2;
   threefry2x64_ctr_t ctr;
