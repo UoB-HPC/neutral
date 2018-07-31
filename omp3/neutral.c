@@ -206,7 +206,7 @@ void handle_particles(const int global_nx, const int global_ny, const int nx,
 }
 
 // Handles a collision event
-static inline int collision_event(
+inline int collision_event(
     const int global_nx, const int nx, const int x_off, const int y_off,
     const uint64_t pkey, const uint64_t master_key,
     const double inv_ntotal_particles, const double distance_to_collision,
@@ -300,7 +300,7 @@ static inline int collision_event(
 }
 
 // Handle facet event
-static inline int
+inline int
 facet_event(const int global_nx, const int global_ny, const int nx,
             const int ny, const int x_off, const int y_off,
             const double inv_ntotal_particles, const double distance_to_facet,
@@ -380,7 +380,7 @@ facet_event(const int global_nx, const int global_ny, const int nx,
 }
 
 // Handles the census event
-static inline void
+inline void
 census_event(const int global_nx, const int nx, const int x_off,
              const int y_off, const double inv_ntotal_particles,
              const double distance_to_census, const double cell_mfp,
@@ -405,7 +405,7 @@ census_event(const int global_nx, const int nx, const int x_off,
 }
 
 // Tallies the energy deposition in the cell
-static inline void update_tallies(const int nx, const int x_off,
+inline void update_tallies(const int nx, const int x_off,
                                   const int y_off, Particle* particle,
                                   const double inv_ntotal_particles,
                                   const double energy_deposition,
@@ -420,7 +420,7 @@ static inline void update_tallies(const int nx, const int x_off,
 }
 
 // Calculate the distance to the next facet
-static inline void
+inline void
 calc_distance_to_facet(const int global_nx, const double x, const double y,
                        const int pad, const int x_off, const int y_off,
                        const double omega_x, const double omega_y,
@@ -471,7 +471,7 @@ calc_distance_to_facet(const int global_nx, const double x, const double y,
 }
 
 // Calculate the energy deposition in the cell
-static inline double calculate_energy_deposition(
+inline double calculate_energy_deposition(
     const int global_nx, const int nx, const int x_off, const int y_off,
     Particle* particle, const double inv_ntotal_particles,
     const double path_length, const double number_density,
@@ -495,7 +495,7 @@ static inline double calculate_energy_deposition(
 }
 
 // Fetch the cross section for a particular energy value
-static inline double microscopic_cs_for_energy(const CrossSection* cs,
+inline double microscopic_cs_for_energy(const CrossSection* cs,
                                                const double energy,
                                                int* cs_index) {
 
