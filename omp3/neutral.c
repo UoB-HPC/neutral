@@ -335,7 +335,7 @@ void handle_particles(
 }
 
 // Handles a collision event
-static inline void collision_event(
+inline void collision_event(
     const int ip, const int global_nx, const int nx, const int x_off, const int y_off,
     const double inv_ntotal_particles, const double distance_to_collision,
     const double local_density, const CrossSection* cs_scatter_table,
@@ -423,10 +423,10 @@ static inline void collision_event(
   }
 
   // Energy has changed so update the cross-sections
-  *microscopic_cs_scatter = microscopic_cs_for_energy_linear(
-      cs_scatter_table, p_energy[ip], scatter_cs_index, found);
-  *microscopic_cs_absorb = microscopic_cs_for_energy_linear(
-      cs_absorb_table, p_energy[ip], absorb_cs_index, found);
+  *microscopic_cs_scatter = microscopic_cs_for_energy_binary(
+      cs_scatter_table, p_energy[ip], scatter_cs_index);
+  *microscopic_cs_absorb = microscopic_cs_for_energy_binary(
+      cs_absorb_table, p_energy[ip], absorb_cs_index);
   *number_density = (local_density * AVOGADROS / MOLAR_MASS);
   *macroscopic_cs_scatter = *number_density * (*microscopic_cs_scatter) * BARNS;
   *macroscopic_cs_absorb = *number_density * (*microscopic_cs_absorb) * BARNS;
@@ -439,7 +439,7 @@ static inline void collision_event(
 }
 
 // Handle facet event
-static inline void facet_event(
+inline void facet_event(
     const int global_nx, const int global_ny, const int nx, const int ny, 
     const int x_off, const int y_off, const double inv_ntotal_particles, 
     const double* distance_to_facet, const double* speed, const double* cell_mfp, 
@@ -491,7 +491,7 @@ static inline void facet_event(
 }
 
 // Handles the census event
-static inline void census_event(const int global_nx, const int nx, const int x_off,
+inline void census_event(const int global_nx, const int nx, const int x_off,
     const int y_off, const double inv_ntotal_particles,
     const double distance_to_census, const double cell_mfp,
     const int ip, double* energy_deposition,
@@ -517,7 +517,7 @@ static inline void census_event(const int global_nx, const int nx, const int x_o
 }
 
 // Tallies the energy deposition in the cell
-static inline void update_tallies(const int nx, const int x_off, const int y_off,
+inline void update_tallies(const int nx, const int x_off, const int y_off,
     const int ip, const double inv_ntotal_particles,
     const double energy_deposition, double* energy_deposition_tally, 
     int* p_cellx, int* p_celly) {
@@ -553,7 +553,7 @@ static inline void update_tallies(const int nx, const int x_off, const int y_off
 void send_and_mark_particle(const int destination, Particle* particle) {}
 
 // Calculate the distance to the next facet
-static inline void calc_distance_to_facet(
+inline void calc_distance_to_facet(
     const int global_nx, const double x, const double y,
     const int pad, const int x_off, const int y_off,
     const double omega_x, const double omega_y,
@@ -590,7 +590,7 @@ static inline void calc_distance_to_facet(
 }
 
 // Calculate the energy deposition in the cell
-static inline double calculate_energy_deposition(
+inline double calculate_energy_deposition(
     const int global_nx, const int nx, const int x_off, const int y_off,
     const int ip, const double inv_ntotal_particles,
     const double path_length, const double number_density,
@@ -615,36 +615,7 @@ static inline double calculate_energy_deposition(
 }
 
 // Fetch the cross section for a particular energy value
-static inline double microscopic_cs_for_energy_linear(
-    const CrossSection* cs, const double energy, int* cs_index, int* found) {
-
-  double* keys = cs->keys;
-  double* values = cs->values;
-
-  // Determine the correct search direction required to move towards the
-  // new energy
-  const int direction = (energy > keys[*cs_index]) ? 1 : -1;
-
-  // This search will move in the correct direction towards the new energy group
-  int ind = 0;
-  for (ind = *cs_index; ind >= 0 && ind < cs->nentries; ind += direction) {
-    // Check if we have found the new energy group index
-    if (energy >= keys[ind] && energy < keys[ind + 1]) {
-      *found = 1;
-      break;
-    }
-  }
-
-  *cs_index = ind;
-
-  // Return the value linearly interpolated
-  return values[ind] +
-    ((energy - keys[ind]) / (keys[ind + 1] - keys[ind])) *
-    (values[ind + 1] - values[ind]);
-}
-
-// Fetch the cross section for a particular energy value
-static inline double microscopic_cs_for_energy_binary(
+inline double microscopic_cs_for_energy_binary(
     const CrossSection* cs, const double energy, int* cs_index) {
 
   double* keys = cs->keys;
