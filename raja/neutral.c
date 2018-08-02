@@ -505,35 +505,16 @@ RAJA_DEVICE double microscopic_cs_for_energy(const CrossSection* cs,
                                              const double energy,
                                              int* cs_index) {
 
-  int ind = 0;
   double* keys = cs->keys;
   double* values = cs->values;
 
-  if (*cs_index > -1) {
-    // Determine the correct search direction required to move towards the
-    // new energy
-    const int direction = (energy > keys[*cs_index]) ? 1 : -1;
-
-    // This search will move in the correct direction towards the new energy
-    // group
-    for (ind = *cs_index; ind >= 0 && ind < cs->nentries; ind += direction) {
-      // Check if we have found the new energy group index
-      if (energy >= keys[ind] && energy < keys[ind + 1]) {
-        break;
-      }
-    }
-
-  } else {
-    // Use a simple binary search to find the energy group
-    ind = cs->nentries / 2;
-    int width = ind / 2;
-    while (energy < keys[ind] || energy >= keys[ind + 1]) {
-      ind += (energy < keys[ind]) ? -width : width;
-      width = max(1, width / 2); // To handle odd cases, allows one extra walk
-    }
+  // Use a simple binary search to find the energy group
+  int ind = cs->nentries / 2;
+  int width = ind / 2;
+  while (energy < keys[ind] || energy >= keys[ind + 1]) {
+    ind += (energy < keys[ind]) ? -width : width;
+    width = max(1, width / 2); // To handle odd cases, allows one extra walk
   }
-
-  *cs_index = ind;
 
   // Return the value linearly interpolated
   return values[ind] +

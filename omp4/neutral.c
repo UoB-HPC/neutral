@@ -535,33 +535,13 @@ void microscopic_cs_for_energy(const double* keys,
                                                const double p_energy,
                                                int* cs_index, double* cs) {
 
-  int ind = 0;
-  if (*cs_index > -1) {
-    // Determine the correct search direction required to move towards the
-    // new energy
-    const int direction = (p_energy > keys[*cs_index]) ? 1 : -1;
-
-    // This search will move in the correct direction towards the new energy
-    // group
-    int found = 0;
-    for (ind = *cs_index; ind >= 0 && ind < nentries; ind += direction) {
-      // Check if we have found the new energy group index
-      if (p_energy >= keys[ind] && p_energy < keys[ind + 1]) {
-        found = 1;
-        break;
-      }
-    }
-  } else {
-    // Use a simple binary search to find the energy group
-    ind = nentries / 2;
-    int width = ind / 2;
-    while (p_energy < keys[ind] || p_energy >= keys[ind + 1]) {
-      ind += (p_energy < keys[ind]) ? -width : width;
-      width = max(1, width / 2); // To handle odd cases, allows one extra walk
-    }
+  // Use a simple binary search to find the energy group
+  int ind = nentries / 2;
+  int width = ind / 2;
+  while (p_energy < keys[ind] || p_energy >= keys[ind + 1]) {
+    ind += (p_energy < keys[ind]) ? -width : width;
+    width = max(1, width / 2); // To handle odd cases, allows one extra walk
   }
-
-  *cs_index = ind;
 
   // Return the value linearly interpolated
   *cs = values[ind] +

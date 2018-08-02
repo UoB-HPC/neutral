@@ -28,8 +28,7 @@ int collision_event(
     uint64_t* counter, double* energy_deposition, double* number_density,
     double* microscopic_cs_scatter, double* microscopic_cs_absorb,
     double* macroscopic_cs_scatter, double* macroscopic_cs_absorb,
-    double* energy_deposition_tally, int* scatter_cs_index,
-    int* absorb_cs_index, double rn[NRANDOM_NUMBERS], double* speed);
+    double* energy_deposition_tally, double rn[NRANDOM_NUMBERS], double* speed);
 
 // Handle facet event
 int facet_event(const int global_nx, const int global_ny, const int nx,
@@ -90,13 +89,11 @@ double calculate_energy_deposition(const int global_nx, const int nx,
 
 // Fetch the cross section for a particular energy value
 double microscopic_cs_for_energy_binary(double* keys, double* values,
-                                        const int nentries, const double energy,
-                                        int* cs_index);
+                                        const int nentries, const double energy);
 
 // Fetch the cross section for a particular energy value
 double microscopic_cs_for_energy_linear(double* keys, double* values,
-                                        const int nentries, const double energy,
-                                        int* cs_index);
+                                        const int nentries, const double energy);
 
 // Validates the results of the simulation
 void validate(const int nx, const int ny, const char* params_filename,

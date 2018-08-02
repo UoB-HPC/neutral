@@ -119,8 +119,6 @@ void handle_particles(const int global_nx, const int global_ny, const int nx,
     nparticles++;
 
     int x_facet = 0;
-    int absorb_cs_index = -1;
-    int scatter_cs_index = -1;
     double cell_mfp = 0.0;
 
     // Determine the current cell
@@ -130,11 +128,9 @@ void handle_particles(const int global_nx, const int global_ny, const int nx,
 
     // Fetch the cross sections and prepare related quantities
     double microscopic_cs_scatter = microscopic_cs_for_energy_binary(
-        cs_scatter_keys, cs_scatter_values, cs_scatter_nentries, p_energy[pp],
-        &scatter_cs_index);
+        cs_scatter_keys, cs_scatter_values, cs_scatter_nentries, p_energy[pp]);
     double microscopic_cs_absorb = microscopic_cs_for_energy_binary(
-        cs_absorb_keys, cs_absorb_values, cs_absorb_nentries, p_energy[pp],
-        &absorb_cs_index);
+        cs_absorb_keys, cs_absorb_values, cs_absorb_nentries, p_energy[pp]);
     double number_density = (local_density * AVOGADROS / MOLAR_MASS);
     double macroscopic_cs_scatter =
         number_density * microscopic_cs_scatter * BARNS;
@@ -187,7 +183,7 @@ void handle_particles(const int global_nx, const int global_ny, const int nx,
             p_dt_to_census, p_mfp_to_collision, &counter, &energy_deposition,
             &number_density, &microscopic_cs_scatter, &microscopic_cs_absorb,
             &macroscopic_cs_scatter, &macroscopic_cs_absorb,
-            energy_deposition_tally, &scatter_cs_index, &absorb_cs_index, rn,
+            energy_deposition_tally, rn,
             &speed);
 
         if (result != PARTICLE_CONTINUE) {
@@ -249,8 +245,7 @@ inline int collision_event(
     uint64_t* counter, double* energy_deposition, double* number_density,
     double* microscopic_cs_scatter, double* microscopic_cs_absorb,
     double* macroscopic_cs_scatter, double* macroscopic_cs_absorb,
-    double* energy_deposition_tally, int* scatter_cs_index,
-    int* absorb_cs_index, double rn[NRANDOM_NUMBERS], double* speed) {
+    double* energy_deposition_tally,  double rn[NRANDOM_NUMBERS], double* speed) {
 
   // Energy deposition stored locally for collision, not in tally mesh
   *energy_deposition += calculate_energy_deposition(
@@ -317,12 +312,10 @@ inline int collision_event(
   }
 
   // Energy has changed so update the cross-sections
-  *microscopic_cs_scatter = microscopic_cs_for_energy_linear(
-      cs_scatter_keys, cs_scatter_values, cs_scatter_nentries, p_energy[pp],
-      scatter_cs_index);
-  *microscopic_cs_absorb = microscopic_cs_for_energy_linear(
-      cs_absorb_keys, cs_absorb_values, cs_absorb_nentries, p_energy[pp],
-      absorb_cs_index);
+  *microscopic_cs_scatter = microscopic_cs_for_energy_binary(
+      cs_scatter_keys, cs_scatter_values, cs_scatter_nentries, p_energy[pp]);
+  *microscopic_cs_absorb = microscopic_cs_for_energy_binary(
+      cs_absorb_keys, cs_absorb_values, cs_absorb_nentries, p_energy[pp]);
   *number_density = (local_density * AVOGADROS / MOLAR_MASS);
   *macroscopic_cs_scatter = *number_density * (*microscopic_cs_scatter) * BARNS;
   *macroscopic_cs_absorb = *number_density * (*microscopic_cs_absorb) * BARNS;
@@ -542,37 +535,9 @@ inline double calculate_energy_deposition(
 }
 
 // Fetch the cross section for a particular energy value
-inline double microscopic_cs_for_energy_linear(double* keys, double* values,
-                                               const int nentries,
-                                               const double energy,
-                                               int* cs_index) {
-
-  // Determine the correct search direction required to move towards the
-  // new energy
-  const int direction = (energy > keys[*cs_index]) ? 1 : -1;
-
-  // This search will move in the correct direction towards the new energy group
-  int ind = 0;
-  for (ind = *cs_index; ind >= 0 && ind < nentries; ind += direction) {
-    // Check if we have found the new energy group index
-    if (energy >= keys[ind] && energy < keys[ind + 1]) {
-      break;
-    }
-  }
-
-  *cs_index = ind;
-
-  // Return the value linearly interpolated
-  return values[ind] +
-         ((energy - keys[ind]) / (keys[ind + 1] - keys[ind])) *
-             (values[ind + 1] - values[ind]);
-}
-
-// Fetch the cross section for a particular energy value
 inline double microscopic_cs_for_energy_binary(double* keys, double* values,
                                                const int nentries,
-                                               const double energy,
-                                               int* cs_index) {
+                                               const double energy) {
 
   // Use a simple binary search to find the energy group
   int ind = nentries / 2;
@@ -581,8 +546,6 @@ inline double microscopic_cs_for_energy_binary(double* keys, double* values,
     ind += (energy < keys[ind]) ? -width : width;
     width = max(1, width / 2); // To handle odd cases, allows one extra walk
   }
-
-  *cs_index = ind;
 
   // Return the value linearly interpolated
   return values[ind] +
