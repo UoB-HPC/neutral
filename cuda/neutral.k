@@ -20,36 +20,6 @@ __device__ double atomicAdd(double* address, double val) {
 }
 #endif
 
-// Fetch the cross section for a particular energy value
-__device__ double microscopic_cs_for_energy_linear(const double* key,
-                                            const double* value,
-                                            const int nentries,
-                                            const double energy,
-                                            int* cs_index) {
-
-  int ind = 0;
-
-  // Determine the correct search direction required to move towards the
-  // new energy
-  const int direction = (energy > key[*cs_index]) ? 1 : -1;
-
-  // This search will move in the correct direction towards the new energy
-  // group
-  for (ind = *cs_index; ind >= 0 && ind < nentries; ind += direction) {
-    // Check if we have found the new energy group index
-    if (energy >= key[ind] && energy < key[ind + 1]) {
-      break;
-    }
-  }
-
-  *cs_index = ind;
-
-  // Return the value linearly interpolated
-  return value[ind] +
-    ((energy - key[ind]) / (key[ind + 1] - key[ind])) *
-    (value[ind + 1] - value[ind]);
-}
-
 __device__ double microscopic_cs_for_energy_binary(
     const double* key, const double* value, const int nentries, const double energy, int* cs_index) {
 
@@ -60,8 +30,6 @@ __device__ double microscopic_cs_for_energy_binary(
     ind += (energy < key[ind]) ? -width : width;
     width = max(1, width / 2); // To handle odd cases, allows one extra walk
   }
-
-  *cs_index = ind;
 
   // Return the value linearly interpolated
   return value[ind] +
@@ -359,11 +327,11 @@ __global__ void handle_particles_kernel(
         }
 
         // Energy has changed so update the cross-sections
-        microscopic_cs_scatter = microscopic_cs_for_energy_linear(
+        microscopic_cs_scatter = microscopic_cs_for_energy_binary(
             cs_scatter_keys, cs_scatter_values, cs_scatter_nentries, e,
             &scatter_cs_index);
         microscopic_cs_absorb =
-          microscopic_cs_for_energy_linear(cs_absorb_keys, cs_absorb_values,
+          microscopic_cs_for_energy_binary(cs_absorb_keys, cs_absorb_values,
               cs_absorb_nentries, e, &absorb_cs_index);
         macroscopic_cs_scatter =
           number_density * microscopic_cs_scatter * BARNS;
