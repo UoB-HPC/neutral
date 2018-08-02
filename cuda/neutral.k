@@ -26,35 +26,12 @@ __device__ double microscopic_cs_for_energy(const double* key,
                                             const double energy,
                                             int* cs_index) {
 
-  int ind = 0;
-
-  if (*cs_index > -1) {
-    // Determine the correct search direction required to move towards the
-    // new energy
-    const int direction = (energy > key[*cs_index]) ? 1 : -1;
-
-    // This search will move in the correct direction towards the new energy
-    // group
-    int found = 0;
-    for (ind = *cs_index; ind >= 0 && ind < nentries; ind += direction) {
-      // Check if we have found the new energy group index
-      if (energy >= key[ind] && energy < key[ind + 1]) {
-        found = 1;
-        break;
-      }
-    }
-
-    if (!found) {
-      // TODO: ADD AN ERROR HANDLER HERE...
-    }
-  } else {
-    // Use a simple binary search to find the energy group
-    ind = nentries / 2;
-    int width = ind / 2;
-    while (energy < key[ind] || energy >= key[ind + 1]) {
-      ind += (energy < key[ind]) ? -width : width;
-      width = max(1, width / 2); // To handle odd cases, allows one extra walk
-    }
+  // Use a simple binary search to find the energy group
+  int ind = nentries / 2;
+  int width = ind / 2;
+  while (energy < key[ind] || energy >= key[ind + 1]) {
+    ind += (energy < key[ind]) ? -width : width;
+    width = max(1, width / 2); // To handle odd cases, allows one extra walk
   }
 
   *cs_index = ind;
