@@ -13,7 +13,9 @@
 #endif
 #endif // if 0
 
+#ifndef BLOCK_SIZE
 #define BLOCK_SIZE 16
+#endif
 
 #ifndef M_PI
 #define M_PI (3.14159265358979323846)
@@ -77,17 +79,17 @@ typedef struct {
 
 // Represents an individual particle
 typedef struct {
-  double x[BLOCK_SIZE];                // x position in space
-  double y[BLOCK_SIZE];                // y position in space
-  double omega_x[BLOCK_SIZE];          // x direction
-  double omega_y[BLOCK_SIZE];          // y direction
-  double energy[BLOCK_SIZE];           // energy
-  double weight[BLOCK_SIZE];           // weight of the particle
-  double dt_to_census[BLOCK_SIZE];     // the time until census is reached
-  double mfp_to_collision[BLOCK_SIZE]; // the mean free paths until a collision
-  int cellx[BLOCK_SIZE];               // x position in mesh
-  int celly[BLOCK_SIZE];               // y position in mesh
-  int dead[BLOCK_SIZE];                // particle is dead
+  double* x;                // x position in space
+  double* y;                // y position in space
+  double* omega_x;          // x direction
+  double* omega_y;          // y direction
+  double* energy;           // energy
+  double* weight;           // weight of the particle
+  double* dt_to_census;     // the time until census is reached
+  double* mfp_to_collision; // the mean free paths until a collision
+  int* cellx;               // x position in mesh
+  int* celly;               // y position in mesh
+  int* dead;                // particle is dead
 
 } Particle;
 

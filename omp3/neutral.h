@@ -41,7 +41,7 @@ static inline void collision_event(
     double* p_y, int* p_dead, double* p_energy, 
     double* p_omega_x, double* p_omega_y, const uint64_t pid,
     double* p_mfp_to_collision, double* p_dt_to_census, double* p_weight, 
-    int* p_cellx, int* p_celly, int* found, pcg64si_random_t* rng);
+    int* p_cellx, int* p_celly, pcg64si_random_t* rng);
 
 // Handles the census event
 void census_event(const int global_nx, const int nx, const int x_off,

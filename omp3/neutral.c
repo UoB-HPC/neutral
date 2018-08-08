@@ -84,20 +84,21 @@ void handle_particles(
     // Calculate the particles block offset, accounting for some remainder
     const int thread_block_off = tid * nb_per_thread;
 
-    __attribute__((aligned(64))) int x_facet[BLOCK_SIZE];
-    __attribute__((aligned(64))) int absorb_cs_index[BLOCK_SIZE];
-    __attribute__((aligned(64))) int scatter_cs_index[BLOCK_SIZE];
-    __attribute__((aligned(64))) double cell_mfp[BLOCK_SIZE];
-    __attribute__((aligned(64))) double local_density[BLOCK_SIZE];
-    __attribute__((aligned(64))) double microscopic_cs_scatter[BLOCK_SIZE];
-    __attribute__((aligned(64))) double microscopic_cs_absorb[BLOCK_SIZE];
-    __attribute__((aligned(64))) double number_density[BLOCK_SIZE];
-    __attribute__((aligned(64))) double macroscopic_cs_scatter[BLOCK_SIZE];
-    __attribute__((aligned(64))) double macroscopic_cs_absorb[BLOCK_SIZE];
-    __attribute__((aligned(64))) double speed[BLOCK_SIZE];
-    __attribute__((aligned(64))) double energy_deposition[BLOCK_SIZE];
-    __attribute__((aligned(64))) double distance_to_facet[BLOCK_SIZE];
-    __attribute__((aligned(64))) int next_event[BLOCK_SIZE];
+    int* x_facet = _mm_malloc(sizeof(int)*BLOCK_SIZE, 64);
+    int* absorb_cs_index = _mm_malloc(sizeof(int)*BLOCK_SIZE, 64);
+    int* scatter_cs_index = _mm_malloc(sizeof(int)*BLOCK_SIZE, 64);
+    int* next_event = _mm_malloc(sizeof(int)*BLOCK_SIZE, 64);
+    double* cell_mfp = _mm_malloc(sizeof(double)*BLOCK_SIZE, 64);
+    double* local_density = _mm_malloc(sizeof(double)*BLOCK_SIZE, 64);
+    double* microscopic_cs_scatter = _mm_malloc(sizeof(double)*BLOCK_SIZE, 64);
+    double* microscopic_cs_absorb = _mm_malloc(sizeof(double)*BLOCK_SIZE, 64);
+    double* number_density = _mm_malloc(sizeof(double)*BLOCK_SIZE, 64);
+    double* macroscopic_cs_scatter = _mm_malloc(sizeof(double)*BLOCK_SIZE, 64);
+    double* macroscopic_cs_absorb = _mm_malloc(sizeof(double)*BLOCK_SIZE, 64);
+    double* speed = _mm_malloc(sizeof(double)*BLOCK_SIZE, 64);
+    double* energy_deposition = _mm_malloc(sizeof(double)*BLOCK_SIZE, 64);
+    double* distance_to_facet = _mm_malloc(sizeof(double)*BLOCK_SIZE, 64);
+    pcg64si_random_t* rng = (pcg64si_random_t*)_mm_malloc(sizeof(pcg64si_random_t)*BLOCK_SIZE, 64);
 
     // Loop over the blocks this thread is responsible for
     for (int b = 0; b < nb_per_thread; ++b) {
@@ -116,8 +117,6 @@ void handle_particles(
       double* p_omega_y = &particle_block->omega_y[0];
       double* p_weight = &particle_block->weight[0];
 
-      __attribute((aligned(64))) pcg64si_random_t rng[BLOCK_SIZE];
-
       __assume_aligned(p_dead, 64);
       __assume_aligned(p_cellx, 64);
       __assume_aligned(p_celly, 64);
@@ -133,7 +132,7 @@ void handle_particles(
       START_PROFILING(&tp);
 
       // Initialise cached particle data
-#pragma omp simd simdlen(16) reduction(+: nparticles)
+#pragma omp simd reduction(+: nparticles) simdlen(BLOCK_SIZE)
       for (int ip = 0; ip < BLOCK_SIZE; ++ip) {
         if (p_dead[ip]) {
           continue;
@@ -188,7 +187,7 @@ void handle_particles(
         uint64_t nc = 0;
 
         START_PROFILING(&tp);
-#pragma omp simd simdlen(16) reduction(+: nc, nf)
+#pragma omp simd reduction(+: nc, nf) simdlen(BLOCK_SIZE)
         for (int ip = 0; ip < BLOCK_SIZE; ++ip) {
           if (p_dead[ip]) {
             next_event[ip] = PARTICLE_DEAD;
@@ -231,8 +230,7 @@ void handle_particles(
         }
 
         START_PROFILING(&tp);
-        int found[BLOCK_SIZE];
-#pragma omp simd simdlen(16)
+#pragma omp simd  simdlen(BLOCK_SIZE)
         for (int ip = 0; ip < BLOCK_SIZE; ++ip) {
           if (next_event[ip] != PARTICLE_COLLISION) {
             continue;
@@ -252,16 +250,9 @@ void handle_particles(
               energy_deposition_tally, &scatter_cs_index[ip],
               &absorb_cs_index[ip], &speed[ip],p_x, p_y, p_dead, p_energy, 
               p_omega_x, p_omega_y, pid, p_mfp_to_collision, p_dt_to_census, 
-              p_weight, p_cellx, p_celly, &found[ip], &rng[ip]);
+              p_weight, p_cellx, p_celly, &rng[ip]);
         }
         STOP_PROFILING(&tp, "collision");
-
-        // Check if any of the table lookups failed
-        for(int ip = 0; ip < BLOCK_SIZE; ++ip) {
-          if (!found) {
-            TERMINATE("No key for energy %.12e in cross sectional lookup.\n", p_energy[ip]);
-          }
-        }
 
         // Assume that the maximum of three random numbers were generated
         counter += 3;
@@ -288,7 +279,7 @@ void handle_particles(
 #endif
 
         START_PROFILING(&tp);
-#pragma omp simd simdlen(16)
+#pragma omp simd  simdlen(BLOCK_SIZE)
         for (int ip = 0; ip < BLOCK_SIZE; ++ip) {
           if (next_event[ip] != PARTICLE_FACET) {
             continue;
@@ -307,7 +298,7 @@ void handle_particles(
       }
 
       START_PROFILING(&tp);
-#pragma omp simd simdlen(16)
+#pragma omp simd simdlen(BLOCK_SIZE)
       for (int ip = 0; ip < BLOCK_SIZE; ++ip) {
         if (next_event[ip] != PARTICLE_CENSUS) {
           continue;
@@ -348,7 +339,7 @@ inline void collision_event(
     double* p_y, int* p_dead, double* p_energy, 
     double* p_omega_x, double* p_omega_y, const uint64_t pid,
     double* p_mfp_to_collision, double* p_dt_to_census, double* p_weight, 
-    int* p_cellx, int* p_celly, int* found, pcg64si_random_t* p_rng) {
+    int* p_cellx, int* p_celly, pcg64si_random_t* p_rng) {
 
   // Energy deposition stored locally for collision, not in tally mesh
   *energy_deposition += calculate_energy_deposition(
@@ -657,8 +648,8 @@ void validate(const int nx, const int ny, const char* params_filename,
   printf("\nFinal global_energy_tally %.15e\n", global_energy_tally);
 
   int nresults = 0;
-  char* keys = (char*)malloc(sizeof(char) * MAX_KEYS * (MAX_STR_LEN + 1));
-  double* values = (double*)malloc(sizeof(double) * MAX_KEYS);
+  char* keys = (char*)_mm_malloc(sizeof(char) * MAX_KEYS * (MAX_STR_LEN + 1), 64);
+  double* values = (double*)_mm_malloc(sizeof(double) * MAX_KEYS, 64);
   if (!get_key_value_parameter(params_filename, NEUTRAL_TESTS, keys, values,
         &nresults)) {
     printf("Warning. Test entry was not found, could NOT validate.\n");
@@ -673,8 +664,8 @@ void validate(const int nx, const int ny, const char* params_filename,
     printf("FAILED validation.\n");
   }
 
-  free(keys);
-  free(values);
+  _mm_free(keys);
+  _mm_free(values);
 }
 
 // Initialises a new particle ready for tracking
@@ -695,7 +686,7 @@ size_t inject_particles(const int nparticles, const int global_nx,
   const int nb = nparticles / BLOCK_SIZE;
 
   const int allocation_in_bytes = sizeof(Particle)*nb;
-  *particles = (Particle*)malloc(allocation_in_bytes);
+  *particles = (Particle*)_mm_malloc(allocation_in_bytes, 64);
   if (!*particles) {
     TERMINATE("Could not allocate particle array.\n");
   }
@@ -704,7 +695,19 @@ size_t inject_particles(const int nparticles, const int global_nx,
   for(int b = 0; b < nb; ++b) {
     Particle* p = &(*particles)[b];
 
-#pragma omp simd
+    p->x = _mm_malloc(sizeof(double)*BLOCK_SIZE, 64);
+    p->y = _mm_malloc(sizeof(double)*BLOCK_SIZE, 64);
+    p->omega_x = _mm_malloc(sizeof(double)*BLOCK_SIZE, 64);
+    p->omega_y = _mm_malloc(sizeof(double)*BLOCK_SIZE, 64);
+    p->energy = _mm_malloc(sizeof(double)*BLOCK_SIZE, 64);
+    p->weight = _mm_malloc(sizeof(double)*BLOCK_SIZE, 64);
+    p->dt_to_census = _mm_malloc(sizeof(double)*BLOCK_SIZE, 64);
+    p->mfp_to_collision = _mm_malloc(sizeof(double)*BLOCK_SIZE, 64);
+    p->cellx = _mm_malloc(sizeof(int)*BLOCK_SIZE, 64);
+    p->celly = _mm_malloc(sizeof(int)*BLOCK_SIZE, 64);
+    p->dead = _mm_malloc(sizeof(int)*BLOCK_SIZE, 64);
+
+#pragma omp simd simdlen(BLOCK_SIZE)
     for (int k = 0; k < BLOCK_SIZE; ++k) {
       const int pid = b*BLOCK_SIZE + k;
       pcg64si_random_t rng;
