@@ -118,7 +118,7 @@ void handle_particles(
       uint64_t counter = 0;
 
       // Initialise cached particle data
-#pragma omp simd simdlen(16) reduction(+: nparticles)
+#pragma omp simd simdlen(BLOCK_SIZE) reduction(+: nparticles)
       for (int ip = 0; ip < BLOCK_SIZE; ++ip) {
         if (p_dead[ip]) {
           continue;
@@ -174,7 +174,7 @@ void handle_particles(
         uint64_t nc = 0;
 
         START_PROFILING(&tp);
-#pragma omp simd simdlen(16) reduction(+: ncompleted, nfacets, ncollisions)
+#pragma omp simd simdlen(BLOCK_SIZE) reduction(+: ncompleted, nfacets, ncollisions)
         for (int ip = 0; ip < BLOCK_SIZE; ++ip) {
           if (p_dead[ip]) {
             next_event[ip] = PARTICLE_DEAD;
@@ -218,7 +218,7 @@ void handle_particles(
 
         START_PROFILING(&tp);
         int found[BLOCK_SIZE];
-//#pragma omp simd simdlen(16)
+//#pragma omp simd simdlen(BLOCK_SIZE)
         for (int ip = 0; ip < BLOCK_SIZE; ++ip) {
           if (next_event[ip] != PARTICLE_COLLISION) {
             continue;
@@ -272,7 +272,7 @@ void handle_particles(
 #endif
 
         START_PROFILING(&tp);
-#pragma omp simd simdlen(16)
+#pragma omp simd simdlen(BLOCK_SIZE)
         for (int ip = 0; ip < BLOCK_SIZE; ++ip) {
           if (next_event[ip] != PARTICLE_FACET) {
             continue;
@@ -291,7 +291,7 @@ void handle_particles(
       }
 
       START_PROFILING(&tp);
-#pragma omp simd simdlen(16)
+#pragma omp simd simdlen(BLOCK_SIZE)
       for (int ip = 0; ip < BLOCK_SIZE; ++ip) {
         if (next_event[ip] != PARTICLE_CENSUS) {
           continue;
