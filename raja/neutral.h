@@ -33,8 +33,10 @@ RAJA_DEVICE int collision_event(
     const int global_nx, const int nx, const int x_off, const int y_off,
     const uint64_t pkey, const uint64_t master_key,
     const double inv_ntotal_particles, const double distance_to_collision,
-    const double local_density, const CrossSection* cs_scatter_table,
-    const CrossSection* cs_absorb_table, Particle* particle, uint64_t* counter,
+    const double local_density, const double* cs_scatter_keys, 
+    const double* cs_scatter_values, const int cs_scatter_nentries, 
+    const double* cs_absorb_keys, const double* cs_absorb_values, 
+    const int cs_absorb_nentries, Particle* particle, uint64_t* counter,
     double* energy_deposition, double* number_density,
     double* microscopic_cs_scatter, double* microscopic_cs_absorb,
     double* macroscopic_cs_scatter, double* macroscopic_cs_absorb,
@@ -83,7 +85,8 @@ RAJA_DEVICE double calculate_energy_deposition(
     const double microscopic_cs_absorb, const double microscopic_cs_total);
 
 // Fetch the cross section for a particular energy value
-RAJA_DEVICE double microscopic_cs_for_energy(const CrossSection* cs,
+RAJA_DEVICE double microscopic_cs_for_energy(const double* keys, 
+    const double* values, const int nentries,
                                              const double energy,
                                              int* cs_index);
 

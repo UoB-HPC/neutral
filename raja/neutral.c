@@ -60,6 +60,13 @@ void handle_particles(const int global_nx, const int global_ny, const int nx,
                       CrossSection* cs_absorb_table,
                       double* energy_deposition_tally) {
 
+  const double* cs_scatter_keys = cs_scatter_table->keys;
+  const double* cs_scatter_values = cs_scatter_table->values;
+  const int cs_scatter_nentries = cs_scatter_table->nentries;
+  const double* cs_absorb_keys = cs_absorb_table->keys;
+  const double* cs_absorb_values = cs_absorb_table->values;
+  const int cs_absorb_nentries = cs_absorb_table->nentries;
+
   RAJA::ReduceSum<reduce_policy, uint64_t> nfacets(0);
   RAJA::ReduceSum<reduce_policy, uint64_t> ncollisions(0);
   RAJA::ReduceSum<reduce_policy, uint64_t> nparticles(0);
@@ -96,9 +103,11 @@ void handle_particles(const int global_nx, const int global_ny, const int nx,
 
           // Fetch the cross sections and prepare related quantities
           double microscopic_cs_scatter = microscopic_cs_for_energy(
-              cs_scatter_table, particle->energy, &scatter_cs_index);
+              cs_scatter_keys, cs_scatter_values, cs_scatter_nentries, 
+              particle->energy, &scatter_cs_index);
           double microscopic_cs_absorb = microscopic_cs_for_energy(
-              cs_absorb_table, particle->energy, &absorb_cs_index);
+              cs_absorb_keys, cs_absorb_values, cs_absorb_nentries, 
+              particle->energy, &absorb_cs_index);
           double number_density = (local_density * AVOGADROS / MOLAR_MASS);
           double macroscopic_cs_scatter =
               number_density * microscopic_cs_scatter * BARNS;
@@ -147,7 +156,8 @@ void handle_particles(const int global_nx, const int global_ny, const int nx,
               result = collision_event(
                   global_nx, nx, x_off, y_off, pid, master_key,
                   inv_ntotal_particles, distance_to_collision, local_density,
-                  cs_scatter_table, cs_absorb_table, particle, &counter,
+                  cs_scatter_keys, cs_scatter_values, cs_scatter_nentries, cs_absorb_keys, 
+                  cs_absorb_values, cs_absorb_nentries, particle, &counter,
                   &energy_deposition, &number_density, &microscopic_cs_scatter,
                   &microscopic_cs_absorb, &macroscopic_cs_scatter,
                   &macroscopic_cs_absorb, energy_deposition_tally,
@@ -204,8 +214,10 @@ RAJA_DEVICE int collision_event(
     const int global_nx, const int nx, const int x_off, const int y_off,
     const uint64_t pkey, const uint64_t master_key,
     const double inv_ntotal_particles, const double distance_to_collision,
-    const double local_density, const CrossSection* cs_scatter_table,
-    const CrossSection* cs_absorb_table, Particle* particle, uint64_t* counter,
+    const double local_density, const double* cs_scatter_keys, 
+    const double* cs_scatter_values, const int cs_scatter_nentries, 
+    const double* cs_absorb_keys, const double* cs_absorb_values, 
+    const int cs_absorb_nentries, Particle* particle, uint64_t* counter,
     double* energy_deposition, double* number_density,
     double* microscopic_cs_scatter, double* microscopic_cs_absorb,
     double* macroscopic_cs_scatter, double* macroscopic_cs_absorb,
@@ -277,9 +289,9 @@ RAJA_DEVICE int collision_event(
 
   // Energy has changed so update the cross-sections
   *microscopic_cs_scatter = microscopic_cs_for_energy(
-      cs_scatter_table, particle->energy, scatter_cs_index);
+      cs_scatter_keys, cs_scatter_values, cs_scatter_nentries, particle->energy, scatter_cs_index);
   *microscopic_cs_absorb = microscopic_cs_for_energy(
-      cs_absorb_table, particle->energy, absorb_cs_index);
+      cs_absorb_keys, cs_absorb_values, cs_absorb_nentries, particle->energy, absorb_cs_index);
   *number_density = (local_density * AVOGADROS / MOLAR_MASS);
   *macroscopic_cs_scatter = *number_density * (*microscopic_cs_scatter) * BARNS;
   *macroscopic_cs_absorb = *number_density * (*microscopic_cs_absorb) * BARNS;
@@ -501,15 +513,11 @@ RAJA_DEVICE double calculate_energy_deposition(
 }
 
 // Fetch the cross section for a particular energy value
-RAJA_DEVICE double microscopic_cs_for_energy(const CrossSection* cs,
-                                             const double energy,
-                                             int* cs_index) {
-
-  double* keys = cs->keys;
-  double* values = cs->values;
+RAJA_DEVICE double microscopic_cs_for_energy(const double* keys, 
+    const double* values, const int nentries, const double energy, int* cs_index) {
 
   // Use a simple binary search to find the energy group
-  int ind = cs->nentries / 2;
+  int ind = nentries / 2;
   int width = ind / 2;
   while (energy < keys[ind] || energy >= keys[ind + 1]) {
     ind += (energy < keys[ind]) ? -width : width;
@@ -527,10 +535,12 @@ void validate(const int nx, const int ny, const char* params_filename,
               const int rank, double* energy_deposition_tally) {
 
   // Reduce the entire energy deposition tally locally
-  double local_energy_tally = 0.0;
-  for (int ii = 0; ii < nx * ny; ++ii) {
+  RAJA::ReduceSum<reduce_policy, double> local_energy_tally(0.0);
+
+  RAJA::forall<exec_policy>(
+      RAJA::RangeSegment(0, nx * ny), [=] RAJA_DEVICE(int ii) {
     local_energy_tally += energy_deposition_tally[ii];
-  }
+  });
 
   // Finalise the reduction globally
   double global_energy_tally = reduce_all_sum(local_energy_tally);
