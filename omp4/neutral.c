@@ -80,12 +80,11 @@ void handle_particles(const int global_nx, const int global_ny, const int nx,
   double* cs_absorb_table_values = cs_absorb_table->values;
   int cs_absorb_table_nentries = cs_absorb_table->nentries;
 
-  int nt = nparticles_to_process/128+1;
+  //int nt = nparticles_to_process/128+1;
 
-#pragma omp target teams distribute parallel for \
+#pragma omp target teams distribute parallel for simd \
   map(tofrom: nfacets, ncollisions, nparticles) \
-  reduction(+: nfacets, ncollisions, nparticles) \
-  num_teams(nt)
+  reduction(+: nfacets, ncollisions, nparticles)
   for (int pp = 0; pp < nparticles_to_process; ++pp) {
     // (1) particle can stream and reach census
     // (2) particle can collide and either
