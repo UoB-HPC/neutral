@@ -391,9 +391,9 @@ static inline void collision_event(
 
   // Energy has changed so update the cross-sections
   *microscopic_cs_scatter = microscopic_cs_for_energy_binary(
-      cs_scatter_table, particle->energy, scatter_cs_index, failed_energy);
+      cs_scatter_table, particle->energy, scatter_cs_index);
   *microscopic_cs_absorb = microscopic_cs_for_energy_binary(
-      cs_absorb_table, particle->energy, absorb_cs_index, failed_energy);
+      cs_absorb_table, particle->energy, absorb_cs_index);
   *number_density = (local_density * AVOGADROS / MOLAR_MASS);
   *macroscopic_cs_scatter = *number_density * (*microscopic_cs_scatter) * BARNS;
   *macroscopic_cs_absorb = *number_density * (*microscopic_cs_absorb) * BARNS;
