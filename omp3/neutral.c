@@ -405,10 +405,10 @@ static inline void collision_event(
   }
 
   // Energy has changed so update the cross-sections
-  *microscopic_cs_scatter = microscopic_cs_for_energy_linear(
-      cs_scatter_table, p_energy[ip], scatter_cs_index, failed_energy);
-  *microscopic_cs_absorb = microscopic_cs_for_energy_linear(
-      cs_absorb_table, p_energy[ip], absorb_cs_index, failed_energy);
+  *microscopic_cs_scatter = microscopic_cs_for_energy_binary(
+      cs_scatter_table, p_energy[ip], scatter_cs_index);
+  *microscopic_cs_absorb = microscopic_cs_for_energy_binary(
+      cs_absorb_table, p_energy[ip], absorb_cs_index);
   *number_density = (local_density * AVOGADROS / MOLAR_MASS);
   *macroscopic_cs_scatter = *number_density * (*microscopic_cs_scatter) * BARNS;
   *macroscopic_cs_absorb = *number_density * (*microscopic_cs_absorb) * BARNS;
@@ -600,41 +600,6 @@ static inline double calculate_energy_deposition(
     (p_energy[ip] - scattering_heating - absorption_heating);
   return p_weight[ip] * path_length * (microscopic_cs_total * BARNS) *
     heating_response * number_density;
-}
-
-// Fetch the cross section for a particular energy value
-static inline double microscopic_cs_for_energy_linear(
-    const CrossSection* cs, const double energy, int* cs_index, double* failed_energy) {
-
-  int ind = 0;
-  double* keys = cs->keys;
-  double* values = cs->values;
-
-  // Determine the correct search direction required to move towards the
-  // new energy
-  const int direction = (energy > keys[*cs_index]) ? 1 : -1;
-
-  // This search will move in the correct direction towards the new energy
-  // group
-  int found = 0;
-  for (ind = *cs_index; ind >= 0 && ind < cs->nentries; ind += direction) {
-    // Check if we have found the new energy group index
-    if (energy >= keys[ind] && energy < keys[ind + 1]) {
-      found = 1;
-      break;
-    }
-  }
-
-  if (!found){
-    *failed_energy = energy;
-  }
-
-  *cs_index = ind;
-
-  // Return the value linearly interpolated
-  return values[ind] +
-    ((energy - keys[ind]) / (keys[ind + 1] - keys[ind])) *
-    (values[ind + 1] - values[ind]);
 }
 
 // Fetch the cross section for a particular energy value
