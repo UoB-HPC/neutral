@@ -621,13 +621,21 @@ inline double microscopic_cs_for_energy_binary(
   double* keys = cs->keys;
   double* values = cs->values;
 
-  // Use a simple binary search to find the energy group
+  int ntrips = log2(cs->nentries);
   int ind = cs->nentries / 2;
   int width = ind / 2;
-  while (energy < keys[ind] || energy >= keys[ind + 1]) {
+  for(int i = 0; i < ntrips; ++i) {
     ind += (energy < keys[ind]) ? -width : width;
-    width = max(1, width / 2); // To handle odd cases, allows one extra walk
+    width = max(1, width / 2);
   }
+
+  //// Use a simple binary search to find the energy group
+  //int ind = cs->nentries / 2;
+  //int width = ind / 2;
+  //while (energy < keys[ind] || energy >= keys[ind + 1]) {
+  //  ind += (energy < keys[ind]) ? -width : width;
+  //  width = max(1, width / 2); // To handle odd cases, allows one extra walk
+  //}
 
   *cs_index = ind;
 
