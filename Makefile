@@ -10,7 +10,7 @@ ARCH_COMPILER_CPP  = icpc
 CFLAGS_INTEL			 = -O3 -qopenmp -no-prec-div -std=gnu99 \
 										 -DINTEL -Wall -qopt-report=5 -xCORE-AVX512 -qopt-zmm-usage=high
 CFLAGS_INTEL_KNL	 = -O3 -qopenmp -no-prec-div -std=gnu99 -DINTEL \
-										 -xMIC-AVX512 -Wall -qopt-report=5
+										 -xMIC-AVX512 -Wall -qopt-report=5 -qopt-zmm-usage=high
 CFLAGS_GCC				 = -std=gnu99 -fopenmp -march=native -Wall
 CFLAGS_GCCTX2				 = -std=gnu99 -fopenmp -Wall
 CFLAGS_GCC_KNL   	 = -O3 -fopenmp -std=gnu99 \
