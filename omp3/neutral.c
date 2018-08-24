@@ -218,7 +218,7 @@ void handle_particles(
 
         START_PROFILING(&tp);
         int found[BLOCK_SIZE];
-//#pragma omp simd simdlen(BLOCK_SIZE)
+#pragma omp simd simdlen(BLOCK_SIZE)
         for (int ip = 0; ip < BLOCK_SIZE; ++ip) {
           if (next_event[ip] != PARTICLE_COLLISION) {
             continue;
@@ -603,20 +603,19 @@ inline double microscopic_cs_for_energy_binary(
   double* keys = cs->keys;
   double* values = cs->values;
 
-  // Use a simple binary search to find the energy group
+  int ntrips = log2(cs->nentries);
   int ind = cs->nentries / 2;
   int width = ind / 2;
-  while (energy < keys[ind] || energy >= keys[ind + 1]) {
+  for(int i = 0; i < ntrips; ++i) {
     ind += (energy < keys[ind]) ? -width : width;
-    width = max(1, width / 2); // To handle odd cases, allows one extra walk
+    width = max(1, width / 2);
   }
-
-  *cs_index = ind;
 
   // Return the value linearly interpolated
   return values[ind] +
     ((energy - keys[ind]) / (keys[ind + 1] - keys[ind])) *
     (values[ind + 1] - values[ind]);
+
 }
 
 // Validates the results of the simulation
