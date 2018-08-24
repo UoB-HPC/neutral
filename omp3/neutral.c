@@ -218,7 +218,7 @@ void handle_particles(
         double failed_energy = -1.0;
 
         START_PROFILING(&tp);
-        //#pragma omp simd
+#pragma omp simd
         for (int ip = 0; ip < BLOCK_SIZE; ++ip) {
           if (next_event[ip] != PARTICLE_COLLISION) {
             continue;
