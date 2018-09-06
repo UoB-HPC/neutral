@@ -510,10 +510,15 @@ inline double microscopic_cs_for_energy(const CrossSection* cs,
     width = max(1, width / 2); // To handle odd cases, allows one extra walk
   }
 
+  double cs_t = 0.0;
+  for(int i = 0; i < NNUCLIDES; ++i) {
+    cs_t += values[ind*NNUCLIDES] +
+      ((energy - keys[ind]) / (keys[ind + 1] - keys[ind])) *
+      (values[(ind + 1)*NNUCLIDES] - values[ind*NNUCLIDES]);
+  }
+
   // Return the value linearly interpolated
-  return values[ind] +
-         ((energy - keys[ind]) / (keys[ind + 1] - keys[ind])) *
-             (values[ind + 1] - values[ind]);
+  return cs_t / NNUCLIDES;
 }
 
 // Validates the results of the simulation
