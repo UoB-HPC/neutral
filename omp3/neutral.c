@@ -512,13 +512,13 @@ inline double microscopic_cs_for_energy(const CrossSection* cs,
 
   double cs_t = 0.0;
   for(int i = 0; i < NNUCLIDES; ++i) {
-    cs_t += values[ind*NNUCLIDES] +
+    cs_t += values[ind*NNUCLIDES+i] +
       ((energy - keys[ind]) / (keys[ind + 1] - keys[ind])) *
-      (values[(ind + 1)*NNUCLIDES] - values[ind*NNUCLIDES]);
+      (values[(ind + 1)*NNUCLIDES+i] - values[ind*NNUCLIDES+i]);
   }
 
   // Return the value linearly interpolated
-  return cs_t / NNUCLIDES;
+  return cs_t/NNUCLIDES;
 }
 
 // Validates the results of the simulation
@@ -620,7 +620,8 @@ size_t inject_particles(const int nparticles, const int global_nx,
 
     // This approximation sets mono-energetic initial state for source
     // particles
-    particle->energy = initial_energy;
+    double e = 2.e0 + rn[1]*(9.9e2-2e0);
+    particle->energy = e;
 
     // Set a weight for the particle to track absorption
     particle->weight = 1.0;

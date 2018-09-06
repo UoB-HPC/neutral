@@ -172,6 +172,8 @@ void read_cs_file(const char* filename, CrossSection* cs, Mesh* mesh) {
 
   move_host_buffer_to_device(cs->nentries, &h_keys, &cs->keys);
   move_host_buffer_to_device(cs->nentries*NNUCLIDES, &h_values, &cs->values);
+
+  printf("lookup table size %.12f MiB\n", cs->nentries*NNUCLIDES*sizeof(double)/1024.0/1024.0);
 }
 
 // Initialises the state
