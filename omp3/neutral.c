@@ -620,7 +620,7 @@ size_t inject_particles(const int nparticles, const int global_nx,
 
     // This approximation sets mono-energetic initial state for source
     // particles
-    double e = 2.e0 + rn[1]*(9.9e2-2e0);
+    double e = 2.e1 + rn[1]*(9.9e2-2e1);
     particle->energy = e;
 
     // Set a weight for the particle to track absorption
