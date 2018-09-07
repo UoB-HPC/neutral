@@ -629,20 +629,15 @@ inline double microscopic_cs_for_energy_binary(
     width = max(1, width / 2);
   }
 
-  //// Use a simple binary search to find the energy group
-  //int ind = cs->nentries / 2;
-  //int width = ind / 2;
-  //while (energy < keys[ind] || energy >= keys[ind + 1]) {
-  //  ind += (energy < keys[ind]) ? -width : width;
-  //  width = max(1, width / 2); // To handle odd cases, allows one extra walk
-  //}
-
-  *cs_index = ind;
+  double cs_t = 0.0;
+  for(int i = 0; i < NNUCLIDES; ++i) {
+    cs_t += values[ind*NNUCLIDES+i] +
+      ((energy - keys[ind]) / (keys[ind + 1] - keys[ind])) *
+      (values[(ind + 1)*NNUCLIDES+i] - values[ind*NNUCLIDES+i]);
+  }
 
   // Return the value linearly interpolated
-  return values[ind] +
-    ((energy - keys[ind]) / (keys[ind + 1] - keys[ind])) *
-    (values[ind + 1] - values[ind]);
+  return cs_t/NNUCLIDES;
 }
 
 // Validates the results of the simulation
@@ -755,7 +750,9 @@ size_t inject_particles(const int nparticles, const int global_nx,
 
       // This approximation sets mono-energetic initial state for source
       // particles
-      p->energy[k] = initial_energy;
+      double rn3 = generate_random_number(&rng);
+      double e = 2.e1 + rn3*(9.9e2-2e1);
+      p->energy[k] = e;
 
       // Set a weight for the particle to track absorption
       p->weight[k] = 1.0;

@@ -31,6 +31,7 @@
 #define TAG_SEND_RECV 100
 #define TAG_PARTICLE 1
 #define VALIDATE_TOLERANCE 1.0e-3
+#define NNUCLIDES 300
 
 /* Data tables */
 #define CS_SCATTER_FILENAME "elastic_scatter.cs" // Elastic scattering cs file

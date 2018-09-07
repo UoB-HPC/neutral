@@ -153,7 +153,7 @@ void read_cs_file(const char* filename, CrossSection* cs, Mesh* mesh) {
   double* h_keys;
   double* h_values;
   allocate_host_data(&h_keys, cs->nentries);
-  allocate_host_data(&h_values, cs->nentries);
+  allocate_host_data(&h_values, cs->nentries*NNUCLIDES);
 
   for (int ii = 0; ii < cs->nentries; ++ii) {
     // Skip whitespace tokens
@@ -171,11 +171,17 @@ void read_cs_file(const char* filename, CrossSection* cs, Mesh* mesh) {
     while ((ch = fgetc(fp)) == ' ') {
     };
     ungetc(ch, fp);
-    fscanf(fp, "%lf", &h_values[ii]);
+    double hv;
+    fscanf(fp, "%lf", &hv);
+
+    for(int jj = 0; jj < NNUCLIDES; ++jj) {
+      h_values[ii*NNUCLIDES+jj] = hv;
+    }
   }
 
   move_host_buffer_to_device(cs->nentries, &h_keys, &cs->keys);
-  move_host_buffer_to_device(cs->nentries, &h_values, &cs->values);
+  move_host_buffer_to_device(cs->nentries*NNUCLIDES, &h_values, &cs->values);
+  printf("lookup table size %.12f MiB\n", cs->nentries*NNUCLIDES*sizeof(double)/1024.0/1024.0);
 }
 
 // Initialises the state

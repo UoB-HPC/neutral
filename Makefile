@@ -1,6 +1,6 @@
 # User defined parameters
 KERNELS  					 = omp3
-COMPILER 					 = INTEL_KNL
+COMPILER 					 = INTEL
 MPI      					 = no
 OPTIONS  					+= -DTILES -DAoSoA -DMANUAL_ATOMIC #-DTALLY_OUT #-DENABLE_PROFILING
 ARCH_COMPILER_CC   = icc
