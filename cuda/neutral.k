@@ -34,12 +34,15 @@ __device__ double microscopic_cs_for_energy(const double* key,
     width = max(1, width / 2); // To handle odd cases, allows one extra walk
   }
 
-  *cs_index = ind;
+  double cs_t = 0.0;
+  for(int i = 0; i < NNUCLIDES; ++i) {
+    cs_t += value[ind*NNUCLIDES+i] +
+      ((energy - key[ind]) / (key[ind + 1] - key[ind])) *
+      (value[(ind + 1)*NNUCLIDES+i] - value[ind*NNUCLIDES+i]);
+  }
 
   // Return the value linearly interpolated
-  return value[ind] +
-         ((energy - key[ind]) / (key[ind + 1] - key[ind])) *
-             (value[ind + 1] - value[ind]);
+  return cs_t/NNUCLIDES;
 }
 
 // Calculate the energy deposition in the cell
@@ -136,7 +139,7 @@ __global__ void inject_particles_kernel(
   omega_y[gid] = sin(theta);
 
   // This approximation sets mono-energetic initial state for source particles
-  e[gid] = initial_energy;
+  e[gid] = 2.e0 + rn[1]*(9.9e2-2e0);
 
   // Set a weight for the particle to track absorption
   weight[gid] = 1.0;
