@@ -15,7 +15,7 @@ CFLAGS_GCCTX2			 = -O3 -std=gnu99 -fopenmp -Wall
 CFLAGS_GCC_KNL   	 = -O3 -fopenmp -std=gnu99 \
 										 -mavx512f -mavx512cd -mavx512er -mavx512pf
 CFLAGS_GCC_POWER   = -O3 -mcpu=power8 -mtune=power8 -fopenmp -std=gnu99
-CFLAGS_CRAY				 = -lrt -hlist=a
+CFLAGS_CRAY				 = -hfp3
 CFLAGS_XL					 = -O3 -qsmp=omp
 CFLAGS_XL_OMP4		 = -qsmp -qoffload
 CFLAGS_CLANG			 = -std=gnu99 -fopenmp=libiomp5 -march=native -Wall
