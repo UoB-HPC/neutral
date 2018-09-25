@@ -115,6 +115,7 @@ int main(int argc, char** argv) {
     printf("Facets     %lu\n", facet_events);
     printf("Collisions %lu\n", collision_events);
 
+    // Note that this metric is only valid in the single event case
     printf("Facet Events / s %.2e\n", facet_events / step_time);
     printf("Collision Events / s %.2e\n", collision_events / step_time);
 
