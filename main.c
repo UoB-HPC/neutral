@@ -78,6 +78,10 @@ int main(int argc, char** argv) {
   int tt;
   double wallclock = 0.0;
   double elapsed_sim_time = 0.0;
+
+  struct Profile profile;
+
+ 
   for (tt = 1; tt <= mesh.niters; ++tt) {
 
     if (mesh.rank == MASTER) {
@@ -91,9 +95,8 @@ int main(int argc, char** argv) {
 
     uint64_t facet_events = 0;
     uint64_t collision_events = 0;
-
-    double w0 = omp_get_wtime();
-
+     
+    profiler_start_timer(&profile);
     // Begin the main solve step
     solve_transport_2d(
         mesh.local_nx - 2 * mesh.pad, mesh.local_ny - 2 * mesh.pad,
@@ -107,8 +110,10 @@ int main(int argc, char** argv) {
         &facet_events, &collision_events);
 
     barrier();
-
-    double step_time = omp_get_wtime() - w0;
+    
+    const char p = '0' + tt;
+    profiler_end_timer(&profile, &p);
+    step_time = profile.profiler_entries[tt-1].time;
     wallclock += step_time;
     printf("Step time  %.4fs\n", step_time);
     printf("Wallclock  %.4fs\n", wallclock);
