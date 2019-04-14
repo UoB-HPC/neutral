@@ -113,7 +113,7 @@ int main(int argc, char** argv) {
     
     const char p = '0' + tt;
     profiler_end_timer(&profile, &p);
-    step_time = profile.profiler_entries[tt-1].time;
+    double step_time = profile.profiler_entries[tt-1].time;
     wallclock += step_time;
     printf("Step time  %.4fs\n", step_time);
     printf("Wallclock  %.4fs\n", wallclock);
