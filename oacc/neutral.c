@@ -453,7 +453,7 @@ inline void update_tallies(const int nx, const int x_off, const int y_off,
   const int cellx = p_cellx - x_off;
   const int celly = p_celly - y_off;
 
-#pragma omp atomic update
+#pragma acc atomic
   energy_deposition_tally[celly * nx + cellx] +=
       energy_deposition * inv_ntotal_particles;
 }
