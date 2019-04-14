@@ -2,7 +2,7 @@
 KERNELS  					 = omp3
 COMPILER 					 = INTEL
 MPI      					 = no
-OPTIONS  					+= -DTILES -g#-DENABLE_PROFILING 
+OPTIONS  					+= -DTILES -g -DENABLE_PROFILING 
 ARCH_COMPILER_CC   = icc
 
 # Compiler-specific flags
